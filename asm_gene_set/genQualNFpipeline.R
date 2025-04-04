@@ -3,19 +3,21 @@ library(tidyr)
 library(readr)
 library(ggplot2)
 
-merged <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/final2_20250314_allSp_VX_fixed-assembly/selfing.final.tsv")
-single <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/merge_qual_test/LMO_WI_asm_stats_20250306.tsv") %>%
+merged <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/20250314_PacBio-assembly/20250314_PacBio_all_stats.txt")
+single <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/merge_qual_test/WI_assembly_stats_20250321.tsv") %>%
   dplyr::filter(!(Genome_size==103831705 | Genome_size==105349000))
 
 n50_new <- merged %>% dplyr::select(species,strain, ctg_N50, species) %>% dplyr::filter(species == "CE")
 n50_old <- single %>% dplyr::select(sp,strain, N50, run, mean_read_len,yield) %>% dplyr::filter(sp == "CE")
 
-
 n50 <- n50_old %>%
   dplyr::left_join(n50_new,by="strain") %>%
   dplyr::mutate(qual=ifelse(N50 <= 1e6,"bad_qual","good_qual")) %>%
-  dplyr::rename(single_N50=N50,merged_N50=ctg_N50) #%>% 
-  dplyr::filter(strain =="CB4856" | strain == "CX11264")
+  dplyr::rename(single_N50=N50,merged_N50=ctg_N50) %>%
+  # dplyr::mutate(single_N50 = ifelse(is.na(single_N50), merged_N50, single_N50)) %>%
+  # dplyr::mutate(run = ifelse(is.na(run), "20250305", run)) %>%
+  dplyr::select(species, strain, single_N50, merged_N50, run) %>%
+  dplyr::filter(!is.na(merged_N50))
 
 lines <- n50 %>% 
   dplyr::select(strain,merged_N50,single_N50) %>%
@@ -116,6 +118,6 @@ p3 <- ggplot(data1) +
 p3
 
 
-ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/n50n90_ce.png", p1, dpi = 600)
-ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/n50n90_ce_subset.png", p2, dpi = 600)
-ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/foldcovn50_ce.png", p3, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/n50n90_ce.png", p1, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/n50n90_ce_subset.png", p2, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/foldcovn50_ce.png", p3, dpi = 600)

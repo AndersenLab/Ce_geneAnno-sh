@@ -5,20 +5,21 @@ library(ggplot2)
 library(readr)
 library(cowplot)
 library(ape)
-#library(runner)
 library(grid)
 
+
+
+##### This section of code is taken from Nic's old haplotypePlotter R script ####
 setwd("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/glc1_variation/HDR_haplotypePlotter")
 
 #read collapsed reference HDRs
 collapsed_ff <- readr::read_tsv("./input/HDR_5kbclust_collapsed_wFreq.tsv")
 
 #read strain-specific HDRs
-all_SR_calls <- readr::read_tsv("./input/HDR_allStrain_5kbclust_1IBfilt.tsv")
-#all_LR_calls <- readr::read_tsv("/projects/b1059/projects/Nicolas/hyperdivergent_regions/elegans/HDR_LRcalls_95idy.tsv")
+# all_SR_calls <- readr::read_tsv("./input/HDR_allStrain_5kbclust_1IBfilt.tsv")
 
 #read all pairwise genome coordinate comparisons
-#transformed_coords <- readr::read_tsv("./input/all_hifi_nucmer_CE.coords",col_names = F)
+### This will need to eventually change to all pairwise alignments among all WSs to the reference
 transformed_coords <- readr::read_tsv("/vast/eande106/projects/Nicolas/c.elegans/reference_genealn/N2vCB/N2_hifi_transformed2.tsv",col_names = F) %>% dplyr::mutate(STRAIN="CB4856")
 
 colnames(transformed_coords) <- c("S1","E1","S2","E2","L1","L2","IDY","LENR","LENQ","REF","HIFI","STRAIN")
@@ -28,12 +29,15 @@ gffCat <- ape::read.gff("./input/all_LRiso.gff")
 gffCat1 <- ape::read.gff("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/braker_runs/gff/CB4856.braker.gff3") %>% dplyr::mutate(STRAIN="CB4856")
 gffCat2 <- ape::read.gff("/vast/eande106/projects/Nicolas/c.elegans/N2/wormbase/WS283/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
 gffCat <- rbind(gffCat1,gffCat2)
+
 #read ortholog relationships among gene models
 #orthos <- readr::read_tsv("./input/Orthogroups.tsv")
 orthos <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/N2xCB/OrthoFinder/Results_Mar17/Orthogroups/Orthogroups.tsv")
 strainCol <- colnames(orthos)
 strainCol_c1 <- gsub(".braker.protein","",strainCol)
 strainCol_c2 <- gsub("_WS283.protein","",strainCol_c1)
+
+
 #set your target  coordinates
 #GLC-1
 hdr_chrom = "V"
@@ -41,10 +45,10 @@ hdr_start_pos = 16115967
 hdr_end_pos = 16276907
 
 #offset lets you explore adjacent regions
-offset = 30000
+offset = 0
 hap_chrom = hdr_chrom
 hap_start = hdr_start_pos - offset
-hap_end = hdr_end_pos + offset + 10000
+hap_end = hdr_end_pos + offset #+ 10000
 
 #use reference coordinates from g2g alginments to pull the contigs that contain the alt haplotypes for the HDR
 hap_coords <- transformed_coords %>%
@@ -156,9 +160,6 @@ aliases <- N2_genes %>%
 #minor diagnostic plot to visualize the REF loci captured by the HDR
 #this is your REF haplotype
 ggplot(N2_genes) + geom_rect(aes(xmin=start,xmax=end,ymin=1,ymax=2))
-
-
-test<- "CB4856.g4242.t1, CB4856.g4250.t1"
 
 #filter orthologous groups using REF genes
 #this will establish your orthology relationships between REF and WILD haplotypes
@@ -320,6 +321,16 @@ N2ad <- N2_genes %>%
   dplyr::mutate(sp = ifelse(strand == "+", 2.25,1.75)) 
 
 
+
+
+
+
+
+
+
+
+
+######## Here is where the TSVs you create in bash will be directly loaded in and used ######## 
 # Load in SV and SNV calls by paftools
 df = readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/paftools/vcf/elegans.merged.1kbCOV.5kbALIGN.annotated.final.vcf")
 
@@ -334,10 +345,10 @@ plot_df <- CB4856var %>%
     lenDEL = case_when(INFO == "DEL" ~ (end - start), TRUE ~ NA_real_),
     lenINS = case_when(INFO == "INS" ~ (end - start), TRUE ~ NA_real_))
 
-SNPs <- plot_df %>%
-  dplyr::filter(INFO == "SNP") %>%
-  dplyr::select(CHROM,start,end,REF,ALT,INFO,CB4856) %>%
-  dplyr::filter(!grepl(",", ALT))
+# SNPs <- plot_df %>%
+#   dplyr::filter(INFO == "SNP") %>%
+#   dplyr::select(CHROM,start,end,REF,ALT,INFO,CB4856) %>%
+#   dplyr::filter(!grepl(",", ALT))
 
 deletions <- plot_df %>%
   dplyr::filter(INFO == "DEL") %>%
@@ -532,27 +543,27 @@ combined_plot2
 
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/glc_1_wGenes_updated.jpg", combined_plot2, dpi=600, width = 7.5, height = 1.8)
 
-gfirst <- "N2.F44G3.11"
-glast <- "T13F3.7"
-
-#store the N2 coordinate shift
-N2_shift <- c("N2",unique(N2ad$shift))
-#remove it from DF
-N2ad <- N2ad %>% dplyr::select(-shift)
-
-# get SR HVR calls
-hd_reg <- all_SR_calls %>%
-  dplyr::filter(CHROM==hap_chrom) %>%
-  dplyr::filter((minStart >= hap_start & minStart<= hap_end) | (maxEnd<= hap_end & maxEnd >= hap_start)) %>%
-  dplyr::group_by(STRAIN) %>%
-  dplyr::filter(divSize==max(divSize))
-
-#get reference-collapsed calls
-hd_collapse <- collapsed_ff %>%
-  dplyr::filter(CHROM==hap_chrom) %>%
-  dplyr::filter((minStart >= hap_start & minStart<= hap_end) | (maxEnd<= hap_end & maxEnd >= hap_start)) %>%
-  dplyr::mutate(minStart=minStart-as.numeric(N2_shift[2]),maxEnd=maxEnd-as.numeric(N2_shift[2])) %>%
-  dplyr::mutate(STRAIN="N2")
+# gfirst <- "N2.F44G3.11"
+# glast <- "T13F3.7"
+# 
+# #store the N2 coordinate shift
+# N2_shift <- c("N2",unique(N2ad$shift))
+# #remove it from DF
+# N2ad <- N2ad %>% dplyr::select(-shift)
+# 
+# # get SR HVR calls
+# hd_reg <- all_SR_calls %>%
+#   dplyr::filter(CHROM==hap_chrom) %>%
+#   dplyr::filter((minStart >= hap_start & minStart<= hap_end) | (maxEnd<= hap_end & maxEnd >= hap_start)) %>%
+#   dplyr::group_by(STRAIN) %>%
+#   dplyr::filter(divSize==max(divSize))
+# 
+# #get reference-collapsed calls
+# hd_collapse <- collapsed_ff %>%
+#   dplyr::filter(CHROM==hap_chrom) %>%
+#   dplyr::filter((minStart >= hap_start & minStart<= hap_end) | (maxEnd<= hap_end & maxEnd >= hap_start)) %>%
+#   dplyr::mutate(minStart=minStart-as.numeric(N2_shift[2]),maxEnd=maxEnd-as.numeric(N2_shift[2])) %>%
+#   dplyr::mutate(STRAIN="N2")
 
 
 # ggplot() +
@@ -571,89 +582,89 @@ hd_collapse <- collapsed_ff %>%
 
 ########################### PLOT ALL POSSIBLE HAP ##############################
 
-#gene positions
-plotCoords2 <- rbind(as_tibble(N2ad %>% dplyr::select(-sp)), plotCoords) %>%
-  dplyr::filter(STRAIN=="N2" | STRAIN=="CB4856") %>%
-  dplyr::group_by(STRAIN) %>%
-  dplyr::mutate(minStart=min(newstart,na.rm = T),maxEnd=max(newend,na.rm = T)) %>%
-  dplyr::ungroup() %>%
-  dplyr::mutate(midpoint=(minStart+maxEnd)/2) %>%
-  dplyr::mutate(centeredStart=newstart-midpoint,centeredEnd=newend-midpoint) %>%
-  dplyr::filter(!is.na(seqid)) %>%
-  dplyr::left_join(aliases,by=c("N2"="seqname")) %>%
-  dplyr::mutate(y=ifelse(STRAIN=="N2",2,1))
+# #gene positions
+# plotCoords2 <- rbind(as_tibble(N2ad %>% dplyr::select(-sp)), plotCoords) %>%
+#   dplyr::filter(STRAIN=="N2" | STRAIN=="CB4856") %>%
+#   dplyr::group_by(STRAIN) %>%
+#   dplyr::mutate(minStart=min(newstart,na.rm = T),maxEnd=max(newend,na.rm = T)) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::mutate(midpoint=(minStart+maxEnd)/2) %>%
+#   dplyr::mutate(centeredStart=newstart-midpoint,centeredEnd=newend-midpoint) %>%
+#   dplyr::filter(!is.na(seqid)) %>%
+#   dplyr::left_join(aliases,by=c("N2"="seqname")) %>%
+#   dplyr::mutate(y=ifelse(STRAIN=="N2",2,1))
+# 
+# #center line positions
+# hlines <- plotCoords2 %>%
+#   dplyr::group_by(STRAIN) %>%
+#   dplyr::mutate(hlineStart=min(centeredStart)-1000,
+#                 hlineEnd=max(centeredEnd)+1000) %>%
+#   dplyr::select(STRAIN,hlineStart,hlineEnd,y)
+# 
+# #lab positions
+# labs <- plotCoords2 %>%
+#   dplyr::mutate(labStart=min(centeredStart)+0.2*(min(centeredStart))) %>%
+#   dplyr::select(STRAIN,labStart,seqid,y) %>%
+#   dplyr::distinct(seqid,.keep_all = T) 
+# 
+# regDef_WI <- plotCoords2 %>%
+#   #dplyr::filter((!STRAIN=="N2") & (N2=="N2.F19B10.9" | N2=="N2.F40H7.5")) %>%
+#   dplyr::group_by(STRAIN) %>%
+#   dplyr::mutate(regStart=min(centeredStart)+offset,regEnd=max(centeredEnd)-offset) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::distinct(STRAIN,.keep_all = T) %>%
+#   dplyr::select(STRAIN,regStart,regEnd)
+# 
+# 
+# segments <- plotCoords2 %>%
+#   dplyr::filter(STRAIN=="N2") %>%
+#   dplyr::mutate(x=((centeredEnd-centeredStart)/2)+centeredStart,y=y-0.2) %>%
+#   dplyr::select(N2,x,y,locus_name) %>%
+#   dplyr::left_join(plotCoords2 %>%
+#                      dplyr::filter(STRAIN=="CB4856") %>%
+#                      dplyr::mutate(xend=((centeredEnd-centeredStart)/2)+centeredStart,yend=y+0.2) %>%
+#                      dplyr::select(N2,xend,yend,locus_name),by="N2") %>%
+#   dplyr::filter(!is.na(xend)) %>%
+#   dplyr::distinct() %>%
+#   dplyr::group_by(locus_name.x) %>%
+#   dplyr::mutate(n1=n()) %>%
+#   dplyr::mutate(col1=ifelse(n1>1,"grey","black")) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::group_by(locus_name.y) %>%
+#   dplyr::mutate(n2=n()) %>%
+#   dplyr::mutate(col2=ifelse(n2>1,"grey","black")) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::mutate(col=ifelse(col1 == "grey" | col2=="grey","grey","black"))
+#   
+# 
+# cbgenes <- plotCoords2 %>%dplyr::filter(STRAIN=="CB4856")  %>% dplyr::select(locus_name)
+# 
+# plotCoords3 <- plotCoords2 %>% 
+#   dplyr::mutate(N2_color=ifelse(locus_name %in% cbgenes$locus_name,"grey","orange")) %>%
+#   dplyr::mutate(N2_color=ifelse(locus_name=="glc-1","green",N2_color))
+# #plot
+# allhap<- ggplot() +
+#   #geom_rect(data=regDef_WI,aes(xmin=regStart,xmax=regEnd,ymin=1-0.5,ymax=1+0.5),fill='lightblue')+
+#   geom_segment(data=segments,aes(x=x,y=y,xend=xend,yend=yend,color=col)) +
+#   geom_segment(data=hlines,aes(x=hlineStart,xend=hlineEnd,y=y,yend=y),color="black") +
+#   geom_rect(data=plotCoords3 %>% dplyr::filter(ortho_status==T),aes(xmin=centeredStart,xmax=centeredEnd,ymin=y-0.2,ymax=y+0.2,fill=N2_color),color="black") +
+#   geom_rect(data=plotCoords2 %>% dplyr::filter(ortho_status==F),aes(xmin=centeredStart,xmax=centeredEnd,ymin=y-0.2,ymax=y+0.2,fill="blue"),color='black') +
+#   geom_text(data=labs,aes(x=labStart,y=y,label=STRAIN)) +
+#  
+#   #facet_wrap(~factor(STRAIN, levels=c('N2','NIC2','ECA36','ECA396', 'MY2693', 'EG4725','JU2600','JU310','MY2147','JU1400','NIC526','JU2526','QX1794','CB4856','XZ1516','DL238')),ncol=1) +
+#   #facet_wrap(~factor(STRAIN, levels=c('N2','NIC2','ECA36' ,'DL238',"CB4856",'EG4725','MY2147','NIC526','JU2600','JU310','JU1400','XZ1516','JU2526',"QX1794","MY2693","ECA396")),ncol=1) +
+#   theme(strip.text = element_blank(),
+#         axis.title = element_blank(),
+#         axis.ticks = element_blank(),
+#         axis.text = element_blank(),
+#         legend.position = 'none',
+#         panel.background = element_blank()) +
+#   scale_color_manual(values = c('blue'='blue',"black"="grey","grey"="black")) +
+#   scale_fill_manual(values=c("orange"="#DB6333","blue"="blue","grey"="grey","lightgrey"="lightgrey","green"="green"))
+#   #guides(fill = guide_legend(override.aes = list(size = 0.5))) +
+#   #labs(fill='Locus name') 
+# allhap
 
-#center line positions
-hlines <- plotCoords2 %>%
-  dplyr::group_by(STRAIN) %>%
-  dplyr::mutate(hlineStart=min(centeredStart)-1000,
-                hlineEnd=max(centeredEnd)+1000) %>%
-  dplyr::select(STRAIN,hlineStart,hlineEnd,y)
 
-#lab positions
-labs <- plotCoords2 %>%
-  dplyr::mutate(labStart=min(centeredStart)+0.2*(min(centeredStart))) %>%
-  dplyr::select(STRAIN,labStart,seqid,y) %>%
-  dplyr::distinct(seqid,.keep_all = T) 
-
-regDef_WI <- plotCoords2 %>%
-  #dplyr::filter((!STRAIN=="N2") & (N2=="N2.F19B10.9" | N2=="N2.F40H7.5")) %>%
-  dplyr::group_by(STRAIN) %>%
-  dplyr::mutate(regStart=min(centeredStart)+offset,regEnd=max(centeredEnd)-offset) %>%
-  dplyr::ungroup() %>%
-  dplyr::distinct(STRAIN,.keep_all = T) %>%
-  dplyr::select(STRAIN,regStart,regEnd)
-
-
-segments <- plotCoords2 %>%
-  dplyr::filter(STRAIN=="N2") %>%
-  dplyr::mutate(x=((centeredEnd-centeredStart)/2)+centeredStart,y=y-0.2) %>%
-  dplyr::select(N2,x,y,locus_name) %>%
-  dplyr::left_join(plotCoords2 %>%
-                     dplyr::filter(STRAIN=="CB4856") %>%
-                     dplyr::mutate(xend=((centeredEnd-centeredStart)/2)+centeredStart,yend=y+0.2) %>%
-                     dplyr::select(N2,xend,yend,locus_name),by="N2") %>%
-  dplyr::filter(!is.na(xend)) %>%
-  dplyr::distinct() %>%
-  dplyr::group_by(locus_name.x) %>%
-  dplyr::mutate(n1=n()) %>%
-  dplyr::mutate(col1=ifelse(n1>1,"grey","black")) %>%
-  dplyr::ungroup() %>%
-  dplyr::group_by(locus_name.y) %>%
-  dplyr::mutate(n2=n()) %>%
-  dplyr::mutate(col2=ifelse(n2>1,"grey","black")) %>%
-  dplyr::ungroup() %>%
-  dplyr::mutate(col=ifelse(col1 == "grey" | col2=="grey","grey","black"))
-  
-
-cbgenes <- plotCoords2 %>%dplyr::filter(STRAIN=="CB4856")  %>% dplyr::select(locus_name)
-
-plotCoords3 <- plotCoords2 %>% 
-  dplyr::mutate(N2_color=ifelse(locus_name %in% cbgenes$locus_name,"grey","orange")) %>%
-  dplyr::mutate(N2_color=ifelse(locus_name=="glc-1","green",N2_color))
-#plot
-allhap<- ggplot() +
-  #geom_rect(data=regDef_WI,aes(xmin=regStart,xmax=regEnd,ymin=1-0.5,ymax=1+0.5),fill='lightblue')+
-  geom_segment(data=segments,aes(x=x,y=y,xend=xend,yend=yend,color=col)) +
-  geom_segment(data=hlines,aes(x=hlineStart,xend=hlineEnd,y=y,yend=y),color="black") +
-  geom_rect(data=plotCoords3 %>% dplyr::filter(ortho_status==T),aes(xmin=centeredStart,xmax=centeredEnd,ymin=y-0.2,ymax=y+0.2,fill=N2_color),color="black") +
-  geom_rect(data=plotCoords2 %>% dplyr::filter(ortho_status==F),aes(xmin=centeredStart,xmax=centeredEnd,ymin=y-0.2,ymax=y+0.2,fill="blue"),color='black') +
-  geom_text(data=labs,aes(x=labStart,y=y,label=STRAIN)) +
- 
-  #facet_wrap(~factor(STRAIN, levels=c('N2','NIC2','ECA36','ECA396', 'MY2693', 'EG4725','JU2600','JU310','MY2147','JU1400','NIC526','JU2526','QX1794','CB4856','XZ1516','DL238')),ncol=1) +
-  #facet_wrap(~factor(STRAIN, levels=c('N2','NIC2','ECA36' ,'DL238',"CB4856",'EG4725','MY2147','NIC526','JU2600','JU310','JU1400','XZ1516','JU2526',"QX1794","MY2693","ECA396")),ncol=1) +
-  theme(strip.text = element_blank(),
-        axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        axis.text = element_blank(),
-        legend.position = 'none',
-        panel.background = element_blank()) +
-  scale_color_manual(values = c('blue'='blue',"black"="grey","grey"="black")) +
-  scale_fill_manual(values=c("orange"="#DB6333","blue"="blue","grey"="grey","lightgrey"="lightgrey","green"="green"))
-  #guides(fill = guide_legend(override.aes = list(size = 0.5))) +
-  #labs(fill='Locus name') 
-allhap
-
-
-ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/glc1_QTL_CBxN2_CNVPAV.png",allhap, device = 'png',dpi=900,width = 13,height = 1.7,units = 'in')
-save.image(file="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/scripts/Ce_geneAnno-sh/asm_gene_set/glc1_vis_image.Rda")
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/glc1_QTL_CBxN2_CNVPAV.png",allhap, device = 'png',dpi=900,width = 13,height = 1.7,units = 'in')
+# save.image(file="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/scripts/Ce_geneAnno-sh/asm_gene_set/glc1_vis_image.Rda")
