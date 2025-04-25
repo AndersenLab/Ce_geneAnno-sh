@@ -332,7 +332,7 @@ N2ad <- N2_genes %>%
 
 ######## Here is where the TSVs you create in bash will be directly loaded in and used ######## 
 # Load in SV and SNV calls by paftools
-df = readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/paftools/vcf/elegans.merged.1kbCOV.5kbALIGN.annotated.final.vcf")
+df = readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/paftools/elegans/vcf/elegans.merged.1kbCOV.5kbALIGN.annotated.final.vcf")
 
 CB4856var <- df %>%
   dplyr::rename(CHROM = '#CHROM', start = POS) %>%
@@ -363,7 +363,7 @@ insertions <- plot_df %>%
 
 
 # Load in SNPs called by GATK pipeline with SR data
-SR = readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/paftools/vcf/SR.GATK.CB4856.final.vcf")
+SR = readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/paftools/elegans/vcf/SR.GATK.CB4856.final.vcf")
 
 GATK <- SR %>%
   dplyr::filter(POS >= 16115967 & POS <= 16276907) %>%
@@ -371,18 +371,22 @@ GATK <- SR %>%
   dplyr::mutate(end = start+1) %>%
   dplyr::filter(CB4856 != './.' & CB4856 != '0/0')
 
-indels = readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/paftools/vcf/SR.GATK.CB4856.indels.final.vcf")
+indels = readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/paftools/elegans/vcf/SR.GATK.CB4856.indels.final.vcf")
+
+test <- indels %>%
+  dplyr::filter(START >= 16115967 & START <= 16276907) # 2665 INDELs (no filter for genotype of INDEL size)
 
 G_del <- indels %>%
   dplyr::filter(START >= 16115967 & START <= 16276907) %>%
   dplyr::filter(ANNO == "DEL") %>%
-  dplyr::filter() %>%
-  dplyr::filter((END - START) < 50)
+  dplyr::filter(CB4856 != './.' & CB4856 != '0/0') %>%
+  dplyr::filter((END - START) < 50) # 145 
 
 G_ins <- indels %>%
   dplyr::filter(START >= 16115967 & START <= 16276907) %>%
   dplyr::filter(ANNO == "INS") %>%
-  dplyr::filter((END - START) < 50)
+  dplyr::filter(CB4856 != './.' & CB4856 != '0/0') %>%
+  dplyr::filter((END - START) < 50) # 113
 
 hist_data <- ggplot_build(
   ggplot(GATK, aes(x = start / 1e6)) + geom_histogram(binwidth = 0.0002)
@@ -508,9 +512,9 @@ plot3
 plot4 <- ggplot() +
   geom_rect(data = GATK, aes(xmin = start/1e6 - 0.00001, xmax = end/1e6, ymin = 0.6, ymax = 0.85, fill = 'SNVs (GATK)')) + 
   geom_rect(data = deletions, aes(xmin = start/1e6, xmax = end/1e6, ymin = 0.25, ymax = 0.5, fill = 'Deletions')) +
+  geom_rect(data = insertions, aes(xmin = start/1e6, xmax = end/1e6, ymin = 0.25, ymax = 0.5, fill = 'Insertions')) +
   geom_rect(data = G_del, aes(xmin = START/1e6, xmax = END/1e6, ymin = 0.25, ymax = 0.5, fill = 'Deletions')) +
   geom_rect(data = G_ins, aes(xmin = START/1e6, xmax = END/1e6, ymin = 0.25, ymax = 0.5, fill = 'Insertions')) +
-  geom_rect(data = insertions, aes(xmin = start/1e6, xmax = end/1e6, ymin = 0.25, ymax = 0.5, fill = 'Insertions')) +
   
   scale_x_continuous(name = "Genomic position (Mb)", labels = scales::number_format(scale = 1, accuracy = 0.01)) +
   

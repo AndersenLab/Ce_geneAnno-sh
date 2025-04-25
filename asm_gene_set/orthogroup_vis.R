@@ -5,39 +5,117 @@ library(ggplot2)
 library(stringr)
 library(ape)
 library(tidyr)
-library(valr)
+library(purrr)
+# library(valr)
 library(data.table)
 # install.packages("nls2")
-library(nls2)
+# library(nls2)
 
 
 gff <- ape::read.gff("/vast/eande106/projects/Nicolas/c.elegans/N2/wormbase/WS283/N2.WBonly.WS283.PConly.gff3")
+all_gff <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/20250423_116_N2_allWS_geneAndmRNA_gff.tsv", col_names = c("type", "start", "end", "strand", "attributes"))
 
-# NEED TO FIX ISOFORMS OF THE SAME GENE
-orthogroups <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot/OrthoFinder/Results_Mar26/Phylogenetic_Hierarchical_Orthogroups/N0.tsv")
-strainCol <- colnames(orthogroups)
+all_gff_formatted <- all_gff %>%
+  dplyr::mutate(attributes = gsub("ID=","", attributes)) %>%
+  dplyr::mutate(attributes_new = str_extract(attributes, "transcript:[^;]+"), parent = str_extract(attributes, "Parent=gene:[^;]+")
+  ) %>%
+  dplyr::mutate(attributes_new = ifelse(is.na(attributes_new),attributes,attributes_new)) %>%
+  dplyr::mutate(parent = ifelse(is.na(parent),attributes,parent)) %>%
+  dplyr::select(-attributes) %>%
+  dplyr::mutate(parent = gsub("Parent=gene:","",parent)) %>%
+  dplyr::mutate(attributes_new = gsub("transcript:","",attributes_new)) %>%
+  dplyr::mutate(attributes_new = sub(";P.*", "", attributes_new), parent = sub(".*Parent=([^;]+);?.*", "\\1", parent)) %>%
+  dplyr::mutate(parent = sub(".*gene:(WBGene[0-9]+).*", "\\1", parent), attributes_new = sub(".*gene:(WBGene[0-9]+).*", "\\1", attributes_new)) %>%
+  dplyr::mutate(parent = gsub(";","",parent), attributes_new = gsub(";","",attributes_new))
+
+transcript_key <- all_gff_formatted %>%
+  dplyr::filter(type == "mRNA") %>%
+  dplyr::select(attributes_new,parent) %>%
+  dplyr::rename(transcript = attributes_new, gene = parent)
+
+# write.table(transcript_key,"/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/transcripts_gene_115WI_N2.tsv", quote = F, row.names = F, col.names = F, sep = '\t')
+
+orthogroups_tran <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_115/OrthoFinder/Results_Apr22/Phylogenetic_Hierarchical_Orthogroups/N0.tsv")
+# orthogroups <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_78/OrthoFinder/Results_Mar26/Phylogenetic_Hierarchical_Orthogroups/N0.tsv")
+strCol <- colnames(orthogroups_tran)
+strCol_c1 <- gsub(".braker.protein","",strCol)
+strCol_c2 <- gsub("_WS283.protein","",strCol_c1)
+colnames(orthogroups_tran) <- strCol_c2
+
+# print(nrow(orthogroups_tran)) # 64377
+
+#### Counting number of transcripts per orthogroup for each strain #### 
+ortho_count_tran <- orthogroups_tran
+
+strCol_c2_u <- strCol_c2[!strCol_c2 %in% c("OG", "HOG", "Gene Tree Parent Clade")]
+
+for (i in 1:length(strCol_c2_u)) {
+  print(paste0(i,"out of", length(strCol_c2_u)))
+  temp_colname = paste0(strCol_c2_u[i], "_count")
+
+  ortho_count_tran <- ortho_count_tran %>%
+    dplyr::mutate(!!sym(temp_colname) := stringr::str_count(!!sym(strCol_c2_u[i]),", ") + 1)
+}
+
+
+all_relations_tran <- ortho_count_tran %>%
+  dplyr::select(HOG, dplyr::contains("_count"))
+
+
+#### Transcripts converted to genes #### see script: /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/tran_gene.sh
+ortho_genes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/N0_0422_genes.tsv")
+
+stCol <- colnames(ortho_genes)
+stCol_c1 <- gsub(".braker.protein","",stCol)
+stCol_c2 <- gsub("_WS283.protein","",stCol_c1)
+colnames(ortho_genes) <- stCol_c2
+
+ortho_count <- ortho_genes
+
+stCol_c2_u <- stCol_c2[!stCol_c2 %in% c("OG", "HOG", "Gene Tree Parent Clade")]
+
+for (i in 1:length(stCol_c2_u)) {
+  print(paste0(i,"out of", length(stCol_c2_u)))
+  temp_colname = paste0(stCol_c2_u[i], "_count")
+  
+  ortho_count <- ortho_count %>%
+    dplyr::mutate(!!sym(temp_colname) := stringr::str_count(!!sym(stCol_c2_u[i]),", ") + 1)
+}
+
+all_relations_duplicated_genes <- ortho_count %>%
+  dplyr::select(HOG, dplyr::contains("_count"))
+
+## all_relations and all_relations_g should be identical
+identical(all_relations_tran, all_relations_duplicated_genes) # TRUE
+
+# Remove all duplicate genes in a dataframe cell - see script: /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/tran_gene.sh
+ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/N0_0422_genes_dedup.tsv")
+
+strainCol <- colnames(ortho_genes)
 strainCol_c1 <- gsub(".braker.protein","",strainCol)
 strainCol_c2 <- gsub("_WS283.protein","",strainCol_c1)
-colnames(orthogroups) <- strainCol_c2
+colnames(ortho_genes) <- strainCol_c2
 
-# print(nrow(orthogroups)) # 41457
-
-ortho_count <- orthogroups
+ortho_count <- ortho_genes
 
 strainCol_c2_u <- strainCol_c2[!strainCol_c2 %in% c("OG", "HOG", "Gene Tree Parent Clade")]
 
 for (i in 1:length(strainCol_c2_u)) {
-  print(paste0(i,"out of", length(strainCol_c2_u))) 
+  print(paste0(i,"out of", length(strainCol_c2_u)))
   temp_colname = paste0(strainCol_c2_u[i], "_count")
   
   ortho_count <- ortho_count %>%
     dplyr::mutate(!!sym(temp_colname) := stringr::str_count(!!sym(strainCol_c2_u[i]),", ") + 1)
 }
 
-
-all_relations <- ortho_count %>%
+all_relations_duplicated_genes <- ortho_count %>%
   dplyr::select(HOG, dplyr::contains("_count"))
 
+
+
+
+
+##### Fix for plotting genes and not transcripts
 count <- ortho_count %>%
   dplyr::select(HOG, dplyr::contains("_count")) %>%
   dplyr::filter(if_all(-1, ~ . %in% "1" | is.na(.))) %>%
@@ -68,7 +146,7 @@ n2_tran <- gff %>%
   dplyr::rename(locus = L2) %>%
   dplyr::select(seqname,everything())
 
-n2_table <- orthogroups %>% 
+n2_table <- ortho_genes %>% 
   dplyr::select(HOG,N2) %>%
   dplyr::mutate(N2 = gsub("Transcript_","",N2))
 
@@ -88,8 +166,7 @@ classification <- all_relations %>%
   dplyr::mutate(
     class = case_when(
       freq == 1 ~ "core",
-      freq >= 0.95 & freq < 1 ~ "soft-core",
-      freq > private_freq & freq < 0.95 ~ "accessory",
+      freq > private_freq & freq < 1 ~ "accessory",
       freq == private_freq ~ "private",
       TRUE ~ "undefined"
     )
@@ -98,21 +175,21 @@ classification <- all_relations %>%
   dplyr::mutate(percent = (n / sum(n)) * 100) 
 
 
-ggplot(data = classification, aes(x = freq * 100, y = percent, fill = class)) + 
+gs_allOrtho <- ggplot(data = classification, aes(x = freq * 100, y = percent, fill = class)) + 
   geom_bar(stat = "identity", color = "black", alpha = 0.5) + 
   scale_fill_manual(values = c(
-    "core" = "steelblue4",
-    "soft-core" = "steelblue1",
-    "accessory" = "seagreen2",
-    "private" = "seagreen4"
+    "core" = "green4",
+    "accessory" = "#DB6333",
+    "private" = "magenta3"
   ), 
-  limits = c("core", "soft-core", "accessory", "private"),  # Manually ordering legend items
+  limits = c("core", "accessory", "private"),  # Manually ordering legend items
   guide = guide_legend(title = NULL) 
   ) +
   ylab("Percent of orthogroups") +
-  xlab("Frequency (%)") +
-  ggtitle("All orthogroups") +
-  scale_y_continuous(labels = scales::percent_format(scale = 1)) +  # Ensure y-axis is in percentage format
+  xlab("Frequency") +
+  # ggtitle("All orthogroups") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) + 
+  scale_x_continuous(labels = scales::percent_format(scale = 1)) +
   theme_classic() +
   theme(
     axis.title = element_text(size = 16),
@@ -121,44 +198,47 @@ ggplot(data = classification, aes(x = freq * 100, y = percent, fill = class)) +
     legend.text = element_text(size=13, color = 'black'),
     axis.text = element_text(size=12, color = 'black')
   )
+gs_allOrtho
+
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/gene_set_allOrtho_115.png", gs_allOrtho, height = 6, width = 12, dpi = 600)
 
 #### Plotting classification based on 1to1 orthogroups ####
-classification_onetoone <- count %>%
-  dplyr::mutate(
-  class = case_when(
-    freq == 1 ~ "core",
-    freq >= 0.95 & freq < 1 ~ "soft-core",
-    freq > private_freq & freq < 0.95 ~ "accessory",
-    freq == private_freq ~ "private",
-    TRUE ~ "undefined"
-  )
-) %>%
-  dplyr::count(freq, class) %>%
-  dplyr::mutate(percent = (n / sum(n)) * 100)  
-  
-ggplot(data = classification_onetoone,aes(x = freq * 100, y = percent, fill = class)) + 
-  geom_bar(stat = "identity", color = "black", alpha = 0.5) + 
-  scale_fill_manual(values = c(
-    "core" = "steelblue4",
-    "soft-core" = "steelblue1",
-    "accessory" = "seagreen2",
-    "private" = "seagreen4"
-  ), 
-  limits = c("core", "soft-core", "accessory", "private"),  # Manually ordering legend items
-  guide = guide_legend(title = NULL) 
-  ) +
-  ylab("Percent of orthogroups") +
-  xlab("Frequency (%)") +
-  ggtitle("1-to-1 orthogroups") +
-  scale_y_continuous(labels = scales::percent_format(scale = 1)) +  # Ensure y-axis is in percentage format
-  theme_classic() +
-  theme(
-    axis.title = element_text(size = 16),
-    legend.position = c(0.85, 0.8),
-    plot.title = element_text(size=18, face = 'bold', hjust=0.5),
-    legend.text = element_text(size=13, color = 'black'),
-    axis.text = element_text(size=12, color = 'black')
-  )
+# classification_onetoone <- count %>%
+#   dplyr::mutate(
+#   class = case_when(
+#     freq == 1 ~ "core",
+#     freq >= 0.95 & freq < 1 ~ "soft-core",
+#     freq > private_freq & freq < 0.95 ~ "accessory",
+#     freq == private_freq ~ "private",
+#     TRUE ~ "undefined"
+#   )
+# ) %>%
+#   dplyr::count(freq, class) %>%
+#   dplyr::mutate(percent = (n / sum(n)) * 100)  
+#   
+# ggplot(data = classification_onetoone,aes(x = freq * 100, y = percent, fill = class)) + 
+#   geom_bar(stat = "identity", color = "black", alpha = 0.5) + 
+#   scale_fill_manual(values = c(
+#     "core" = "steelblue4",
+#     "soft-core" = "steelblue1",
+#     "accessory" = "seagreen2",
+#     "private" = "seagreen4"
+#   ), 
+#   limits = c("core", "soft-core", "accessory", "private"),  # Manually ordering legend items
+#   guide = guide_legend(title = NULL) 
+#   ) +
+#   ylab("Percent of orthogroups") +
+#   xlab("Frequency (%)") +
+#   ggtitle("1-to-1 orthogroups") +
+#   scale_y_continuous(labels = scales::percent_format(scale = 1)) +  # Ensure y-axis is in percentage format
+#   theme_classic() +
+#   theme(
+#     axis.title = element_text(size = 16),
+#     legend.position = c(0.85, 0.8),
+#     plot.title = element_text(size=18, face = 'bold', hjust=0.5),
+#     legend.text = element_text(size=13, color = 'black'),
+#     axis.text = element_text(size=12, color = 'black')
+#   )
 
 
 
@@ -310,11 +390,11 @@ for (i in 2:length(strainCol_c2_u)) {
    rarefaction <- rbind(rarefaction, data.frame(num_strains = i-1, num_private_orthogroups = private_count))
 }
 
-ggplot(data = rarefaction) +
-  geom_point(aes(x=num_strains, y = num_private_orthogroups), size=3, color = 'seagreen4', alpha=0.8) +
-  xlab("Number of genomes") +
-  ylab("Number of private orthogroups") +
-  coord_cartesian(ylim = c(200,1500)) +
+rfc <- ggplot(data = rarefaction) +
+  geom_point(aes(x=num_strains, y = num_private_orthogroups), size=2.5, color = 'magenta3', alpha=0.8) +
+  xlab("Genomes") +
+  ylab("Private orthogroups") +
+  # coord_cartesian(ylim = c(200,1500)) +
   theme(
     panel.background = element_blank(),
     axis.title = element_text(size=14, color = 'black'),
@@ -322,8 +402,12 @@ ggplot(data = rarefaction) +
     panel.border = element_rect(fill = NA),
   )
 
+rfc
 
-### Fitting a michaelis-menten model to the data ###
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/rarefaction_115.png", height = 5, width = 9, rfc, dpi = 600)
+
+
+# Fitting a michaelis-menten model to the data ###
 m_model <- nls(num_private_orthogroups ~ Smax * (1 - exp(-k * num_strains)), 
                data = rarefaction,
                start = list(Smax = max(rarefaction$num_private_orthogroups), k = 0.01))
@@ -357,4 +441,3 @@ ggplot(data = rarefaction) +
     axis.text = element_text(size = 12, color = 'black'),
     panel.border = element_rect(fill = NA)
   )
-
