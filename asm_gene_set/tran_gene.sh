@@ -25,7 +25,7 @@
 #            }
 #        }
 #        print
-#    }' transcripts_gene_115WI_N2.tsv N0.tsv > N0_0422_genes.tsv
+#    }' /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/transcripts_gene_115WI_N2.tsv /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/N0.tsv > /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/N0_0422_genes.tsv
 
 awk -F'\t' 'BEGIN {OFS="\t"}
 NR == 1 {print; next}
@@ -43,4 +43,4 @@ NR == 1 {print; next}
     $i = out
   }
   print
-}' N0_0422_genes.tsv > N0_0422_genes_dedup.tsv
+}' /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/N0_0422_genes.tsv > /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/N0_0422_genes_dedup.tsv
