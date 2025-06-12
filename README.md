@@ -1,2 +1,2 @@
 # Ce_geneAnno-sh
-This repository contains the scripts used to assess PAVs and CNVs among Caenorhabditis elegans wild strains using PacBio HiFi assemblies. Additionally, we create a pangenome gene set where genes are classified as "core", "soft-core", "rare", or "private" based on the frequency at which they occur in wild strains.
+This repository contains the scripts used for pangneome gene set analysis and visualization, syntelog matrix creation, synteny visualization, SV calling, and other misc analyses using PacBio HiFi assemblies created using assembly-nf
