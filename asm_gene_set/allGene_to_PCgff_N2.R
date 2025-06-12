@@ -48,3 +48,33 @@ PC_gff <- rbind(
 
 
 write.table(PC_gff,"/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.gff3", quote = F, row.names = F, col.names = F, sep = '\t')
+
+
+
+
+### LOAD IN LONGEST-ISOFORM OUTPUT FROM AGAT ###
+# ^^^^^^^^^^^^^^ NOT NEEDED!!!! AGAT IS FINE - it keeps multiple transcripts if the mRNA is the same length, but one entry won't have CDSs but the other does... so when you 
+# translate it only translates one of the transcripts
+# longestIso_gff <- ape::read.gff("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.gff3")
+# 
+# 
+# grouping <- longestIso_gff %>%
+#   dplyr::mutate(id = str_extract(attributes, "WBGene[0-9]+"), tran_id = str_extract(attributes, "transcript:[^;]+") %>% str_remove("transcript:")) %>%
+#   dplyr::mutate(mRNA_len = ifelse(type == "mRNA", (end - start), NA))
+# 
+# longest_transcripts <- grouping %>%
+#   dplyr::filter(type == "mRNA") %>%
+#   dplyr::group_by(id) %>%
+#   dplyr::slice_max(order_by = mRNA_len, n = 1, with_ties = FALSE) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::select(id, tran_id)
+# 
+# longest_gff <- grouping %>%
+#   dplyr::filter(tran_id %in% longest_transcripts$tran_id | (type == "gene" & id %in% longest_transcripts$id)) %>%
+#   dplyr::mutate(score=".") %>%
+#   dplyr::mutate(phase=as.character(phase)) %>%
+#   dplyr::mutate(phase=ifelse(is.na(phase),".", phase)) %>%
+#   dplyr::select(-id, -tran_id, -mRNA_len)
+# 
+# 
+# write.table(longest_gff,"/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.gff3", quote = F, row.names = F, col.names = F, sep = '\t')
