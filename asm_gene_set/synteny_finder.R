@@ -10,9 +10,9 @@ library(cowplot)
 # ======================================================================================================================================================================================== #
 # Loading N0.tsv with transcripts converted to genes and plotting gene set classification #
 # ======================================================================================================================================================================================== #
-ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/N0_0504_genes.tsv")
+ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N0_0504_genes.tsv")
 
-strainCol <- colnames(ortho_genes_dd)
+strainCol <- colnames(ortho_genes_dd)s
 strainCol_c1 <- gsub(".braker.longest.protein","",strainCol)
 strainCol_c2 <- gsub(".longest.protein","",strainCol_c1)
 colnames(ortho_genes_dd) <- strainCol_c2
@@ -113,31 +113,63 @@ complex_rowids <- all_relations_rowid %>%
 simple_HOGS <- ortho_genes_dd_rowid %>% dplyr::filter(rowid %in% simple_rowids)
 complex_HOGS <- ortho_genes_dd_rowid %>% dplyr::filter(rowid %in% complex_rowids) ### further decompress into only complex orthogroups that have ONE N2 gene
 
+# noN2_complex_HOG <- complex_HOGS %>% dplyr::filter(is.na(N2))
+
+# Creating a subset dataframe for BWC
+# complex_rowids <- all_relations_rowid %>%
+#   dplyr::mutate(row_sum = rowSums(dplyr::across(2:ncol(.)), na.rm = TRUE)) %>%
+#   dplyr::filter(if_any(2:ncol(.), ~ . > 1)) %>%
+#   dplyr::arrange(dplyr::desc(row_sum)) %>%
+#   dplyr::slice_head(n = 10) %>%
+#   dplyr::pull(rowid)
+# 
+# complex_HOGS <- ortho_genes_dd_rowid %>% dplyr::filter(rowid %in% complex_rowids) ### further decompress into only complex orthogroups that have ONE N2 gene
+# 
+# vis <- complex_HOGS %>%
+#   dplyr::rename(HOG = rowid) %>%
+#   dplyr::select(HOG,ECA1413,JU2617,XZ1515) %>%
+#   dplyr::rename(Orthogroups = HOG)
+
 n2_goi <- complex_HOGS%>%
   dplyr::select(N2) %>%
   tidyr::separate_rows(N2, sep = ",\\s*") %>%
   dplyr::filter(!is.na(N2)) 
 
 n2_genes <- all_genes_strain %>% dplyr::filter(strain == "N2") %>% dplyr::rename(chrom = contig) %>%
-  dplyr::filter(reduce(n2_goi$N2, ~ .x | str_detect(attributes, fixed(.y)), .init = FALSE))
+  dplyr::filter(reduce(n2_goi$N2, ~ .x | str_detect(attributes, fixed(.y)), .init = FALSE)) %>%
+  data.table::as.data.table() # 10,370
 
 # ======================================================================================================================================================================================== #
 # Extracting the longest WS contig alignment for every N2 gene coordinate #
 # ======================================================================================================================================================================================== #
 nucmer_ranges <- nucmer %>%
   dplyr::rename(start = N2S, end = N2E, chrom = N2_chr) %>%
-  dplyr::select(chrom, start, end, L1, contig, WSS, WSE, L2, LENQ, strain)
+  dplyr::select(chrom, start, end, L1, contig, WSS, WSE, L2, LENQ, strain) %>%
+  data.table::as.data.table()
 
-# Join where an N2 gene is fully contained within an alignment
-n2_genes_align <- fuzzyjoin::interval_inner_join(
+data.table::setkey(nucmer_ranges, chrom, start, end)
+data.table::setkey(n2_genes, chrom, start, end)
+
+n2_genes_align <- data.table::foverlaps(
   x = n2_genes,
   y = nucmer_ranges,
-  by = c("start", "end"),
-  type = "within" 
+  type = "any" # if the start/end of any alignment is within an N2 gene
 ) %>%
-  dplyr::filter(chrom.x == chrom.y) %>%
-  dplyr::rename(start_gene = start.x, end_gene = end.x, start_aln = start.y, end_aln = end.y, n2_gene = attributes, strain = strain.y, N2 = strain.x)
+  dplyr::rename(N2 = i.strain, n2_gene = attributes, start_aln = start, end_aln = end, start_gene = i.start, end_gene = i.end) %>%
+  dplyr::select(-type, -strand)
+# 10,370 N2 genes 
 
+
+# Join where an N2 gene is fully contained within an alignment
+# n2_genes_align <- fuzzyjoin::interval_inner_join(
+#   x = n2_genes,
+#   y = nucmer_ranges,
+#   by = c("start", "end"),
+#   type = "within"
+# ) %>%
+#   dplyr::filter(chrom.x == chrom.y) %>%
+#   dplyr::rename(start_gene = start.x, end_gene = end.x, start_aln = start.y, end_aln = end.y, n2_gene = attributes, strain = strain.y, N2 = strain.x)
+# # 10,284 N2 genes
 
 nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlotter.R
   dplyr::group_by(strain, n2_gene) %>%
@@ -145,8 +177,8 @@ nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlott
   dplyr::ungroup() %>%
   dplyr::group_by(n2_gene, contig, strain) %>%
   dplyr::mutate(ntig= n()) %>%
-  dplyr::mutate(tigsize=sum(L2)) %>% #summing the number of alignments that overlap with an N2 gene... some contigs align to a single gene many times... does this mean it is a "better" alignment?
-  dplyr::ungroup() %>% ##### ADD AN ARGUMENT FOR IF TWO CONTIGS HAVE THE SAME ALINGMENT, TO CHOOSE THE LONGEST LENQ
+  dplyr::mutate(tigsize=sum(L2)) %>% # summing the number of alignments that overlap with an N2 gene... some contigs align to a single gene many times
+  dplyr::ungroup() %>% 
   dplyr::group_by(strain, n2_gene) %>%
   dplyr::filter(tigsize == max(tigsize)) %>%
   dplyr::ungroup() %>%
@@ -155,15 +187,48 @@ nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlott
   dplyr::filter(LENQ == max(LENQ)) %>% # to filter out alignments that are the same size, but from different contigs
   dplyr::ungroup()
 
+# manyAln <- ggplot(nucmer_longest %>% dplyr::filter(n2_gene == "WBGene00008623")) + 
+#   facet_wrap(~strain, scales = 'free', strip.position = "right") +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.05) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = longest_contig), linewidth = 1) +
+#   theme(
+#         legend.position = 'none',
+#         axis.text = element_blank(),
+#         axis.ticks = element_blank(),
+#         axis.title = element_blank(),
+#         panel.background = element_blank(),
+#         panel.grid = element_blank(),
+#         panel.border = element_rect(fill = NA),
+#         plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
+#   ggtitle("WBGene00008623 : IV")
+# manyAln
+
+
+
 # #### Testing how selection of "best" contig works with dot plots ####
-# all_ctg_align <- n2_genes_align %>%
-#   dplyr::group_by(strain, n2_gene) %>%
-#   dplyr::mutate(nalign = n()) %>%
-#   dplyr::ungroup() %>%
-#   dplyr::group_by(n2_gene,contig, strain) %>%
-#   dplyr::mutate(ntig= n()) %>%
-#   dplyr::mutate(tigsize=sum(L2)) %>%
-#   dplyr::ungroup() 
+all_ctg_align <- n2_genes_align %>%
+  dplyr::group_by(strain, n2_gene) %>%
+  dplyr::mutate(nalign = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(n2_gene,contig, strain) %>%
+  dplyr::mutate(ntig= n()) %>%
+  dplyr::mutate(tigsize=sum(L2)) %>%
+  dplyr::ungroup()
+
+all_test <- ggplot(nucmer_longest %>% dplyr::filter(strain == "ECA36" & n2_gene == "WBGene00010415")) +
+  geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.05) +
+  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = longest_contig), linewidth = 1) +
+  theme(
+    legend.position = 'none',
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    axis.text = element_text(size = 14, color = 'black'),
+    plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
+  labs(y = "STRAIN genome position (Mb)", x = "N2 genome position (Mb)", title = "GENE : CHOROM")
+all_test
+                     
 
 # all_ctg_gene <- ggplot(all_ctg_align %>% dplyr::filter(n2_gene == "WBGene00013172" & strain == "ECA923")) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = min(WSS) / 1e6, ymax = max(WSE) / 1e6), fill = "darkolivegreen4", alpha = 0.05) +
@@ -242,7 +307,7 @@ nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlott
 ###### Visualizing jumps for non single exon genes (>1kb) ###### 
 # onekb <- nucmer_longest %>%
 #   dplyr::filter((end_gene - start_gene) > 1000) # filtering for multi-exonic genes (>1kb)
-
+# 
 # g1plt <- ggplot(onekb %>% dplyr::filter(n2_gene == "WBGene00013300" & strain == "ECA369")) +
 #     geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = min(WSS) / 1e6, ymax = max(WSE) / 1e6), fill = "darkolivegreen4", alpha = 0.3) +
 #     geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = longest_contig), linewidth = 1) +
@@ -277,7 +342,7 @@ nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlott
 #   theme_bw() +
 #   labs(y = "NIC195 coord", x = "N2 coord", title = "WBGene00004159 : IV")
 # g5plt
-# 
+#
 # 
 # g6plt <- ggplot(onekb %>% dplyr::filter(n2_gene == "WBGene00004159")) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
@@ -297,7 +362,7 @@ nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlott
 # g6plt
 # 
 # 
-# new <- onekb %>% dplyr::filter(n2_gene == "WBGene00011254")
+# new <- nucmer_longest %>% dplyr::filter(n2_gene == "WBGene00011254")
 # g7plt <- ggplot(new) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.05) +
 #   facet_wrap(~strain, scales = "free", strip.position = "right") +
@@ -312,7 +377,7 @@ nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlott
 #         panel.grid = element_blank(),
 #         panel.border = element_rect(fill = NA),
 #         plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
-#   ggtitle("WBGene00011254")
+#   ggtitle("WBGene00011254 : V")
 # g7plt
 
 # 
@@ -325,7 +390,7 @@ nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlott
 # g9plt
 # 
 # 
-# g10plt <- ggplot(onekb %>% dplyr::filter(n2_gene == "WBGene00044801")) +
+# g10plt <- ggplot(nucmer_longest %>% dplyr::filter(n2_gene == "WBGene00044801")) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
 #   facet_wrap(~strain, scales = "free", strip.position = "right") +
 #   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = longest_contig), linewidth = 1) +
@@ -339,7 +404,7 @@ nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlott
 #     panel.grid = element_blank(),
 #     panel.border = element_rect(fill = NA),
 #     plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
-#   ggtitle("WBGene00044801")
+#   ggtitle("WBGene00044801 : III")
 # g10plt
 
 
@@ -360,10 +425,25 @@ nucmer_longest_jump <- nucmer_longest %>%
 #   geom_vline(xintercept = 4.5E5) +
 #   geom_vline(xintercept = -4.5E5) +
 #   # geom_vline(xintercept = -1.5E5) +
-#   # coord_cartesian(x = c(-300000, 300000)) + 
+#   # coord_cartesian(x = c(-300000, 300000)) +
 #   #scale_y_log10() +
-#   theme_bw() 
-#   # xlim(-6E5,6E5)
+#   theme_bw() +
+#   xlim(-6E5,6E5)
+
+
+# jmp <- ggplot(nucmer_longest_jumps %>% dplyr::filter(n2_gene == "WBGene00000838") %>% dplyr::filter(strain == "ECA2417")) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
+#   # geom_text(data = nucmer_longest_jump %>% dplyr::filter(n2_gene == "WBGene00000838") %>% dplyr::filter(strain == "ECA2417") %>% dplyr::filter(leadDiff == max(leadDiff, na.rm = TRUE)),
+#   # aes(x =  end_aln / 1e6 , y = Et2 / 1e6, label = paste0("Jump: ", leadDiff)), vjust = -1, color = 'blue', fontface = 'bold') +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     plot.title = element_text(size = 14, color = 'black')) +
+#   labs(y = "ECA2417 coord", x = "N2 coord", title = "WBGene00000838 : V")
+# jmp
 
 
 # jumpPlt <- ggplot(nucmer_longest_jump %>% dplyr::filter(n2_gene == "WBGene00020754") %>% dplyr::filter(strain == "ECA2529")) +
@@ -483,8 +563,8 @@ nucmer_longest_jumpRemoved <- nucmer_longest_jump %>%
 #     panel.background = element_blank(),
 #     panel.grid = element_blank(),
 #     panel.border = element_rect(fill = NA),
-#     plot.title = element_text(size = 14, color = 'black')) + 
-#   labs(y = "ECA369 coord", x = "N2 coord", title = "WBGene00013300 : IV") 
+#     plot.title = element_text(size = 14, color = 'black')) +
+#   labs(y = "ECA369 coord", x = "N2 coord", title = "WBGene00013300 : IV")
 # rmJumpPlt2
 
 
@@ -550,10 +630,36 @@ nucmer_longest_jumpRemoved <- nucmer_longest_jump %>%
 #     panel.grid = element_blank(),
 #     panel.border = element_rect(fill = NA))
 # ctg_len_dist2
-  
-  
 
-
+# ggplot(nucmer_longest_jumpRemoved %>% dplyr::filter(n2_gene == "WBGene00011875")) + 
+#   facet_wrap(~strain, scales = 'free', strip.position = "right") +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.05) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = longest_contig), linewidth = 1) +
+#   theme(
+#     legend.position = 'none',
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank(),
+#     axis.title = element_blank(),
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
+#   ggtitle("WBGene00011875 : III")
+# 
+# ggplot(nucmer_longest_jumpRemoved %>% dplyr::filter(n2_gene == "WBGene00011875" & strain == "ECA1208")) + 
+#   # facet_wrap(~strain, Cscales = 'free', strip.position = "right") +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.05) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = longest_contig), linewidth = 1) +
+#   theme(
+#     legend.position = 'none',
+#     # axis.text = element_blank(),
+#     # axis.ticks = element_blank(),
+#     # axis.title = element_blank(),
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
+#   ggtitle("WBGene00011875 : III")
 
 
 # ======================================================================================================================================================================================== #
@@ -566,7 +672,7 @@ diff <- nucmer_longest_jumpRemoved %>%
   dplyr::group_by(n2_gene, strain) %>%
   dplyr::filter(dplyr::n() == 2) %>%
   dplyr::arrange(L2, .by_group = TRUE) %>%
-  dplyr::mutate(diff = abs(diff(L2)[1])) %>%
+  dplyr::mutate(diff = abs(diff(L2)[1])) %>% 
   dplyr::mutate(diff_fraction = 1 - (min(L2) / max(L2))) %>%
   dplyr::arrange(St2, .by_group = TRUE) %>%
   dplyr::mutate(jumptwo = abs(lead(St2) - Et2)) %>%
@@ -589,6 +695,20 @@ diff_dist_plotjumps <- ggplot(data = diff) +
   theme_bw() +
   xlab("Difference in alignment jumps (absolute value) (Mb)")
 diff_dist_plotjumps
+
+
+
+# try_k <- ggplot(diff %>% dplyr::filter(n2_gene == "WBGene00000864") %>% dplyr::filter(strain == "ECA768")) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     plot.title = element_text(size = 14, color = 'black')) +
+#   labs(y = "ECA768 coord", x = "N2 coord", title = "WBGene00000864 : II")
+# try_k
 
 # negJump <- ggplot(diff %>% dplyr::filter(n2_gene == "WBGene00009423") %>% dplyr::filter(strain == "JU310")) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
@@ -665,104 +785,139 @@ diff_info <- diff %>%
   dplyr::mutate(WS_n2_middleGene = ((slope * n2_gene_middle) + intercept)) %>%
   dplyr::arrange(St2) %>%
   dplyr::group_by(n2_gene, strain) %>% 
-  dplyr::mutate(local_dup = ifelse((min(Et2) < max(St2)) & (max(St2) > min(Et2)) & (min(L1) > (end_gene - start_gene + 11000)), TRUE, FALSE)) %>% #only calculate the difference in WS coordinates at N2 gene locus if the two alingments don't overlap in WS coordinate space
+  
+  # dplyr::mutate(local_dup = ifelse((min(Et2) < max(St2)) & (max(St2) > min(Et2)) & (min(L1) > (end_gene - start_gene + 11000)), TRUE, FALSE)) %>% #only calculate the difference in WS coordinates at N2 gene locus if the two alingments don't overlap in WS coordinate space
+  # dplyr::mutate(local_dup = ifelse((min(Et2) < max(St2)) & (max(St2) > min(Et2)) & (St2 < (start_gene - 6000)) & (Et2 > (end_gene + 6000)), TRUE, FALSE)) %>% #only calculate the difference in WS coordinates at N2 gene locus if the two alingments don't overlap in WS coordinate space
+  dplyr::mutate(local_dup = ifelse((min(Et2) < max(St2)) & (max(St2) > min(Et2)) & ( (L1 == min(L1) & start_aln < (start_gene - 6000) & end_aln > (end_gene + 6000)) ), TRUE, FALSE)) %>%
+  # dplyr::mutate(local_dup = {
+  #   minL1_idx <- which.min(L1)
+  #   flag <- start_aln[minL1_idx] > min(start_aln) &
+  #     end_aln[minL1_idx] < max(start_aln) &
+  #     start_aln[minL1_idx] < (start_gene[minL1_idx] - 6000) &
+  #     end_aln[minL1_idx] > (end_gene[minL1_idx] + 6000)
+  #   rep(flag, n()) }) %>%
   # dplyr::mutate(WS_n2_middleGene_diff = ifelse((min(WS_n2_middleGene) < max(St2)) & (max(WS_n2_middleGene) > min(Et2)), (max(WS_n2_middleGene) - min(WS_n2_middleGene)), NA)) %>% #only calculate the difference in WS coordinates at N2 gene locus if the two alingments don't overlap in WS coordinate space
   dplyr::mutate(WS_n2_middleGene_diff = max(WS_n2_middleGene) - min(WS_n2_middleGene)) %>% # want to include this data, because we probably don't want to keep massive jumps in duplication coordinates
   dplyr::ungroup() 
 
 
-dist <- ggplot(diff_info) + 
-  scale_y_continuous(expand = c(0.01, 0)) +
-  scale_x_continuous(expand = c(0.005,0)) +
-  geom_vline(xintercept = 100, color = "darkseagreen4", size = 2, linetype="dashed") + 
-  geom_rect(xmin = -Inf, xmax = 100, ymin = -Inf, ymax = Inf, fill = 'darkseagreen') + 
-  geom_hline(yintercept = 0.05, color = "darkseagreen4", size = 2, linetype="dashed") +
-  geom_rect(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0.05, fill = 'darkseagreen') +
-  geom_point(aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
-  scale_color_manual(values = c("TRUE" = "blue", "FALSE" = "red")) +
-  theme(
-    legend.position = 'none',
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    # axis.title = element_blank(),
-    axis.text = element_text(size = 14, color = 'black'),
-    axis.title = element_text(size = 14, color = 'black', face = 'bold'),
-    panel.border = element_rect(fill = NA)) + 
-  labs(x = "WS alignment coordinate difference at N2 gene locus (kb)", y = "Proportional difference in size of WS alignments (1 - (min(L2) / max(L2)))")
-dist
-
-# How many are local (contained in longer WS contig alignment) duplications?
-local_dup_counts <- diff_info %>%
-  dplyr::count(local_dup) # 17,062 are local, 38,290 are outside of WS coordinates for the other alignment
-
-gene_jump_dist <- ggplot(data = diff_info) +
-  geom_histogram(aes(x = WS_n2_middleGene_diff / 1e3), bins = 200, fill = 'gray30') + 
-  scale_y_continuous(expand = c(0.001, 0)) +
-  scale_x_continuous(expand = c(0.001,0)) +
-  theme(
-    legend.position = 'none',
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    # axis.ticks.x = element_blank(),
-    axis.text = element_text(size = 14, color = 'black'),
-    # axis.text.x = element_blank(),
-    axis.title = element_blank(),
-    plot.margin = margin(r = 10, t = 10, l = 10),
-    axis.line = element_line(color = "black"),           
-    axis.line.y.right = element_blank(),                 
-    axis.line.x.top = element_blank()) 
-gene_jump_dist  
-
-L2_diff_dist <- ggplot(data = diff_info) +
-  geom_histogram(aes( y= diff_fraction), bins = 200, fill = 'gray30') + 
-  scale_y_continuous(expand = c(0.001, 0), position = "right") +
-  # scale_x_reverse(expand = c(0, 0.001)) +
-  theme(
-    legend.position = 'none',
-    panel.background = element_blank(),
-    # axis.ticks.x = element_blank(),    
-    axis.text = element_text(size = 14, color = 'black'),
-    panel.grid = element_blank(),
-    # axis.text.x = element_blank(),
-    axis.title = element_blank(),
-    plot.margin = margin( l = 20, t = 10, r = 10, b = 23),
-    axis.line = element_line(color = "black"),           
-    axis.line.y.right = element_blank(),                 
-    axis.line.x.bottom = element_blank()) 
-L2_diff_dist 
-
-
-gene_jump_dist_clean <- gene_jump_dist + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
-
-L2_diff_dist_clean <- L2_diff_dist + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
-
-top_row <- plot_grid(gene_jump_dist_clean, NULL, ncol = 2, rel_widths = c(0.82, 0.19))
-middle_row <- plot_grid(dist, L2_diff_dist_clean, ncol = 2, rel_widths = c(0.82, 0.18)) + theme(plot.margin = margin(t = 20))
-
-final_plot <- plot_grid(top_row, middle_row, nrow = 2, rel_heights = c(0.2, 0.8))
-
-# labs(x = "WS alignment difference at N2 gene (kb)", y = "Difference in size of alignments (kb)")
-final_plot
-
-
-# # example of local duplication that is not a point on the plot
-# pltExL2 <- diff_info %>% dplyr::filter(n2_gene == "WBGene00000638") %>% dplyr::filter(strain == "ECA2607")
-# dfFilt_gene <- ggplot(pltExL2) +
-#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
-#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
+# dist <- ggplot(diff_info) +
+#   scale_y_continuous(expand = c(0.005, 0)) +
+#   scale_x_continuous(expand = c(0.005,0)) +
+#   geom_point(data = diff_info %>% dplyr::filter(local_dup == FALSE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
+#   geom_point(data = diff_info %>% dplyr::filter(local_dup == TRUE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
+#   geom_vline(xintercept = 100, color = "gray30", size = 2, linetype="dashed") +
+#   geom_rect(xmin = -Inf, xmax = 100, ymin = -Inf, ymax = Inf, fill = 'gray', alpha = 0.008) +
+#   geom_hline(yintercept = 0.05, color = "gray30", size = 2, linetype="dashed") +
+#   geom_rect(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0.05, fill = 'gray', alpha = 0.008) +
+#   scale_color_manual(values = c("TRUE" = "red", "FALSE" = "blue")) +
 #   theme(
 #     legend.position = 'none',
 #     panel.background = element_blank(),
 #     panel.grid = element_blank(),
-#     panel.border = element_rect(fill = NA),
-#     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+#     # axis.title = element_blank(),
 #     axis.text = element_text(size = 14, color = 'black'),
-#     plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
-#   labs(y = "ECA2607 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00000638 : I")  
-#   # coord_cartesian(xlim = c(7.4,7.408), ylim = c(3,3.05))
-# dfFilt_gene
+#     axis.title = element_text(size = 14, color = 'black', face = 'bold'),
+#     panel.border = element_rect(fill = NA)) +
+#   labs(x = "WS alignment coordinate difference at N2 gene locus (kb)", y = "Proportional difference in size of WS alignments (1 - (min(L2) / max(L2)))")
+# dist
+
+# How many are local (contained in longer WS contig alignment) duplications?
+# local_dup_counts <- diff_info %>%
+#   dplyr::count(local_dup) # 175 are local, or should be kept due to syntenic context, and 232,000 do not meet the criteria
 # 
-# # Example of two alignments of the same length from the same contig that are very far apart
+# gene_jump_dist <- ggplot(data = diff_info) +
+#   geom_histogram(aes(x = WS_n2_middleGene_diff / 1e3), bins = 200, fill = 'gray30') +
+#   scale_y_continuous(expand = c(0.001, 0), labels = scales::label_number(scale = 1e-3)) +
+#   scale_x_continuous(expand = c(0.001,0)) +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     axis.ticks.x = element_blank(),
+#     axis.text.y = element_text(size = 14, color = 'black'),
+#     axis.text.x = element_blank(),
+#     axis.title.x = element_blank(),
+#     axis.title.y = element_text(size = 16, color ='black'),
+#     # plot.margin = margin(r = 10, t = 10, l = 10),
+#     axis.line = element_line(color = "black"),
+#     axis.line.y.right = element_blank(),
+#     axis.line.x.top = element_blank()) +
+#   ylab("Count (thousands)")
+# gene_jump_dist
+# 
+# L2_diff_dist <- ggplot(data = diff_info) +
+#   geom_histogram(aes( y= diff_fraction), bins = 200, fill = 'gray30') +
+#   scale_y_continuous(expand = c(0.001, 0), position = "right") +
+#   scale_x_continuous(labels = scales::label_number(scale = 1e-3)) +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     axis.ticks.y = element_blank(),
+#     axis.text.x = element_text(size = 14, color = 'black'),
+#     panel.grid = element_blank(),
+#     axis.text.y = element_blank(),
+#     axis.title.y = element_blank(),
+#     axis.title.x = element_text(size = 16, color = 'black'),
+#     # plot.margin = margin(l = 20, t = 10, r = 10, b = 23),
+#     axis.line = element_line(color = "black"),
+#     axis.line.y.right = element_blank(),
+#     axis.line.x.bottom = element_blank()) +
+#   xlab("Count (thousands)")
+# L2_diff_dist
+# 
+# 
+# gene_jump_dist_clean <- gene_jump_dist + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+# 
+# L2_diff_dist_clean <- L2_diff_dist + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+# 
+# top_row <- plot_grid(gene_jump_dist_clean, NULL, ncol = 2, rel_widths = c(0.8, 0.20))
+# middle_row <- plot_grid(dist, L2_diff_dist_clean, ncol = 2, rel_widths = c(0.8, 0.20)) #+ theme(plot.margin = margin(t = 20))
+# 
+# final_plot <- plot_grid(top_row, middle_row, nrow = 2, rel_heights = c(0.2, 0.8))
+# 
+# final_plot
+
+
+# # example of local duplication that is not a point on the plot
+asdf <- diff_info %>% dplyr::filter(WS_n2_middleGene_diff > 400000 & diff_fraction > 0.75 & local_dup == T)
+boo <- ggplot(diff_info %>% dplyr::filter(n2_gene == "WBGene00012012" & strain == "ECA1887")) +
+  geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
+  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
+  theme(
+    legend.position = 'none',
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    axis.text = element_text(size = 14, color = 'black'),
+    plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
+  labs(y = "ECA1887 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00012012 : IV")
+# coord_cartesian(xlim = c(7.4,7.408), ylim = c(3,3.05))
+boo
+
+
+
+pltExL2 <- diff_info %>% dplyr::filter(n2_gene == "WBGene00000638") %>% dplyr::filter(strain == "ECA2607")
+dfFilt_gene <- ggplot(pltExL2) +
+  geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
+  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
+  theme(
+    legend.position = 'none',
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    axis.text = element_text(size = 14, color = 'black'),
+    plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
+  labs(y = "ECA2607 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00000638 : I")
+  # coord_cartesian(xlim = c(7.4,7.408), ylim = c(3,3.05))
+dfFilt_gene
+
+
+
+# 
+# Example of two alignments of the same length from the same contig that are very far apart
 # pltExL3 <- diff_info %>% dplyr::filter(n2_gene == "WBGene00012066") %>% dplyr::filter(strain == "CB4856")
 # dfFilt_gene2 <- ggplot(pltExL3) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
@@ -777,9 +932,9 @@ final_plot
 #     plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
 #   labs(y = "CB4856 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00012066 : V")
 # dfFilt_gene2
-# 
+
 # second largest on x-axis
-# pltExL4 <- diff_info %>% dplyr::filter(n2_gene == "WBGene00010874" & strain == "CB4852") 
+# pltExL4 <- diff_info %>% dplyr::filter(n2_gene == "WBGene00010874" & strain == "CB4852")
 # dfFilt_gene4 <- ggplot(pltExL4) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
 #   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
@@ -853,7 +1008,7 @@ final_plot
 # 
 # # >20 is where is really starts to fall off and the alignments are barely expanding past the N2 gene coordinates
 # 
-# pltExL6 <- diff_info_diff_cutoffparsing %>% dplyr::filter(n2_gene == "WBGene00003466" & strain == "CB4856") 
+# pltExL6 <- diff_info_diff_cutoffparsing %>% dplyr::filter(n2_gene == "WBGene00003466" & strain == "CB4856")
 # dfFilt_gene5 <- ggplot(pltExL6) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
 #   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
@@ -865,9 +1020,9 @@ final_plot
 #     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
 #     axis.text = element_text(size = 14, color = 'black'),
 #     plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
-#   labs(y = "CB4856 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00003466 : IV") 
+#   labs(y = "CB4856 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00003466 : IV")
 # dfFilt_gene5
-# 
+
 # 
 # 
 # plotdf <- diff_info %>% dplyr::filter(n2_gene == "WBGene00022590") %>% dplyr::filter(strain == "AB1")
@@ -891,13 +1046,16 @@ final_plot
 
 diff_filtered <- diff_info %>%
   dplyr::group_by(n2_gene, strain) %>%
-  dplyr::filter(
-    if (any(WS_n2_middleGene_diff > 100000 & diff_fraction > 0.05)) {
-      L1 == max(L1, na.rm = TRUE)
+  dplyr::mutate(
+    drop_smaller = if (
+      any(WS_n2_middleGene_diff > 100000 & diff_fraction > 0.05 & local_dup == FALSE)
+    ) {
+      (L1 != max(L1, na.rm = TRUE)) & (local_dup == FALSE)
     } else {
-      TRUE  # keep both alignments if the condition is not met
+      FALSE  # keep both
     }
   ) %>%
+  dplyr::filter(!drop_smaller) %>%
   dplyr::ungroup()
 
 diff_filtered_twos <- diff_filtered %>%
@@ -905,25 +1063,26 @@ diff_filtered_twos <- diff_filtered %>%
   dplyr::filter(dplyr::n() == 2) %>%
   dplyr::ungroup()
   
-dist_filt <- ggplot(diff_filtered_twos) + 
-  scale_y_continuous(expand = c(0.01, 0)) +
-  scale_x_continuous(expand = c(0.005,0)) +
-  geom_vline(xintercept = 100, color = "darkseagreen4", size = 2, linetype="dashed") + 
-  geom_rect(xmin = -Inf, xmax = 100, ymin = -Inf, ymax = Inf, fill = 'darkseagreen') + 
-  geom_hline(yintercept = 0.05, color = "darkseagreen4", size = 2, linetype="dashed") +
-  geom_rect(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0.05, fill = 'darkseagreen') +
-  geom_point(aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
-  scale_color_manual(values = c("TRUE" = "blue", "FALSE" = "red")) +
-  theme(
-    legend.position = 'none',
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    # axis.title = element_blank(),
-    axis.text = element_text(size = 14, color = 'black'),
-    axis.title = element_text(size = 14, color = 'black', face = 'bold'),
-    panel.border = element_rect(fill = NA)) + 
-  labs(x = "WS alignment coordinate difference at N2 gene locus (kb)", y = "Proportional difference in size of WS alignments (1 - (min(L2) / max(L2)))")
-dist_filt
+# dist_filt <- ggplot(diff_filtered_twos) +
+#   scale_y_continuous(expand = c(0.005, 0)) +
+#   scale_x_continuous(expand = c(0.005,0)) +
+#   geom_point(data = diff_filtered_twos %>% dplyr::filter(local_dup == FALSE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
+#   geom_point(data = diff_filtered_twos %>% dplyr::filter(local_dup == TRUE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
+#   geom_vline(xintercept = 100, color = "gray30", size = 2, linetype="dashed") +
+#   geom_rect(xmin = -Inf, xmax = 100, ymin = -Inf, ymax = Inf, fill = 'gray', alpha = 0.008) +
+#   geom_hline(yintercept = 0.05, color = "gray30", size = 2, linetype="dashed") +
+#   geom_rect(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0.05, fill = 'gray', alpha = 0.008) +
+#   scale_color_manual(values = c("TRUE" = "red", "FALSE" = "blue")) +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     # axis.title = element_blank(),
+#     axis.text = element_text(size = 14, color = 'black'),
+#     axis.title = element_text(size = 14, color = 'black', face = 'bold'),
+#     panel.border = element_rect(fill = NA)) +
+#   labs(x = "WS alignment coordinate difference at N2 gene locus (kb)", y = "Proportional difference in size of WS alignments (1 - (min(L2) / max(L2)))")
+# dist_filt
 
 
 # testplt <- diff_filtered %>% dplyr::filter(n2_gene == "WBGene00010874" & strain == "CB4852") 
@@ -948,17 +1107,91 @@ nucmer_longest_jumpRemoved_doublesGone <- nucmer_longest_jumpRemoved %>%
   dplyr::filter(!row_id %in% rows_to_remove)
 
 add_to_nucmerLongest <- diff_filtered %>%
-  dplyr::select(chrom.x,type,start_gene,end_gene,strand,n2_gene,N2,chrom.y,start_aln,end_aln,L1,longest_contig,WSS,WSE,L2,LENQ,strain,nalign,ntig,tigsize,inv,St2,Et2,leadDiff,jump,run_id,len,sumlen,row_id)
+  dplyr::select(chrom,start_aln,end_aln,L1,longest_contig,WSS,WSE,L2,LENQ,strain,start_gene,end_gene,n2_gene,N2,nalign,ntig,tigsize,inv,St2,Et2,leadDiff,jump,run_id,len)
 
 nucmer_longest_jumpRemoved_updated <- nucmer_longest_jumpRemoved_doublesGone %>%
   dplyr::bind_rows(add_to_nucmerLongest)
 
 
-
+# okay <- diff_filtered %>%
+#   dplyr::filter(local_dup == TRUE & diff_fraction > 0.05 & WS_n2_middleGene_diff > 100000)
+# # A smaller alignment that we would want to keep
+# yup <- diff_filtered %>% dplyr::filter(n2_gene == "WBGene00021707") %>% dplyr::filter(strain == "ECA923")  #%>% dplyr::filter(L1 == min(L1))
+# yupidk <- ggplot(yup) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+#     axis.text = element_text(size = 14, color = 'black'),
+#     plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
+#   labs(y = "ECA923 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00021707 : V")
+# # coord_cartesian(xlim = c(7.4,7.408), ylim = c(3,3.05))
+# yupidk
 
 # ======================================================================================================================================================================================== #
 # Trimming alignment(s) to ROI (N2 gene) 
 # ======================================================================================================================================================================================== #
+# # ============= use trim spacer on dataset needed for faceting extreme CNVs genes and plotting trimmed alignments ========================== #
+subset <- nucmer_longest_jumpRemoved_updated %>%
+  dplyr::filter(n2_gene == "WBGene00044801" | n2_gene == "WBGene00011254" | n2_gene == "WBGene00022486")
+
+trim_spacer = 5e3 # trimming to 5kb on either side of the N2 gene
+tigTrim_subset <- subset %>%
+  dplyr::arrange(n2_gene,strain,start_aln) %>%
+  dplyr::mutate(unchanged_start_aln = start_aln, unchanged_end_aln = end_aln) %>%
+  dplyr::group_by(n2_gene,strain) %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(
+    scale_distortion = ((L2 - L1)/L1), # get the distortion of the WS to N2 coordinate transformation - is the slope one?
+    rboundDist = max(start_aln, end_aln) - end_gene,
+    WSE = ifelse(rboundDist > trim_spacer & inv == F, WSE + (round(scale_distortion*rboundDist)) - (rboundDist - trim_spacer), WSE),
+    WSE = ifelse(rboundDist > trim_spacer & inv == T, WSE - (round(scale_distortion*rboundDist)) + (rboundDist - trim_spacer), WSE),
+    end_aln = ifelse(rboundDist > trim_spacer,end_aln - (rboundDist - trim_spacer), end_aln),
+    lboundDist = start_gene - min(start_aln, end_aln),
+    WSS = ifelse(lboundDist > trim_spacer & inv == F, WSS + (round(scale_distortion*lboundDist)) + (lboundDist - trim_spacer), WSS),
+    WSS = ifelse(lboundDist > trim_spacer & inv == T, WSS - (round(scale_distortion*lboundDist)) - (lboundDist - trim_spacer), WSS),
+    start_aln = ifelse(lboundDist > trim_spacer, start_aln + (lboundDist - trim_spacer), start_aln)) %>%
+  dplyr::ungroup()
+
+gene1 <- tigTrim_subset %>% dplyr::filter(n2_gene == "WBGene00011254")
+g7plt <- ggplot(gene1) +
+  geom_rect(data = gene1 %>% dplyr::distinct(strain, .keep_all = T), aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.5) +
+  facet_wrap(~strain, scales = "free") + #strip.position = "right") +
+  # geom_segment(data = nucmer_longest %>% dplyr::filter(n2_gene == "WBGene00011254"), aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = 'black', linewidth = 1) +
+  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = "blue", linewidth = 1) +
+  theme_bw() +
+  theme(
+    legend.position = 'none',
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
+  ggtitle(expression(italic("R12G8.1") * ": V"))
+g7plt
+
+
+examination <- tigTrim_subset %>% dplyr::filter(n2_gene == "WBGene00022486" & strain == "JU1581")
+explot <- ggplot(examination) +
+  geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.5) +
+  # facet_wrap(~strain, scales = "free") + #strip.position = "right") +
+  # geom_segment(data = nucmer_longest %>% dplyr::filter(n2_gene == "WBGene00011254"), aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = 'black', linewidth = 1) +
+  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = "blue", linewidth = 1) +
+  theme_bw() 
+explot
+
+
+
+# ========================================================== #
+
+
+
 trim_spacer = 5e3 # trimming to 5kb on either side of the N2 gene
 tigTrim <- nucmer_longest_jumpRemoved_updated %>%
   dplyr::arrange(n2_gene,strain,start_aln) %>% 
@@ -968,11 +1201,12 @@ tigTrim <- nucmer_longest_jumpRemoved_updated %>%
   dplyr::mutate(
     scale_distortion = ((L2 - L1)/L1), # get the distortion of the WS to N2 coordinate transformation - is the slope one?
     rboundDist = max(start_aln, end_aln) - end_gene,
-    Et2 = ifelse(rboundDist > trim_spacer, Et2 + (scale_distortion*rboundDist) - (rboundDist - trim_spacer), Et2),
+    Et2 = ifelse(rboundDist > trim_spacer, Et2 + (round(scale_distortion*rboundDist)) - (rboundDist - trim_spacer), Et2),
     end_aln = ifelse(rboundDist > trim_spacer,end_aln - (rboundDist - trim_spacer),end_aln),
     lboundDist = start_gene - min(start_aln, end_aln),
-    St2 = ifelse(lboundDist > trim_spacer, St2 + (scale_distortion*lboundDist) + (lboundDist - trim_spacer), St2),
-    start_aln = ifelse(lboundDist > trim_spacer,start_aln + (lboundDist - trim_spacer),start_aln))
+    St2 = ifelse(lboundDist > trim_spacer, St2 + (round(scale_distortion*lboundDist)) + (lboundDist - trim_spacer), St2),
+    start_aln = ifelse(lboundDist > trim_spacer,start_aln + (lboundDist - trim_spacer), start_aln)) %>%
+  dplyr::ungroup()
  
 
 # Confirming tigTrim is working correctly and not distorting coordinates
@@ -1065,8 +1299,8 @@ tigTrim <- nucmer_longest_jumpRemoved_updated %>%
 wsg <- data.table::as.data.table(ws_genes)
 
 clean_tigTrim <- tigTrim %>%
-  dplyr::select(chrom.x, unchanged_start_aln, unchanged_end_aln, start_aln, end_aln, L1, start_gene, end_gene, n2_gene, WSS, WSE, inv, St2, Et2, longest_contig, L2, strain) %>%
-  dplyr::rename(chrom = chrom.x)
+  dplyr::group_by(n2_gene,strain) %>%
+  dplyr::select(chrom, unchanged_start_aln, unchanged_end_aln, start_aln, end_aln, L1, start_gene, end_gene, n2_gene, WSS, WSE, inv, St2, Et2, longest_contig, nalign, L2, strain) 
 
 filt_nucm_long <- data.table::as.data.table(clean_tigTrim)
 
@@ -1079,7 +1313,7 @@ joined <- foverlaps(
   x = wsg,
   y = filt_nucm_long,
   type = "any" # if the start/end of the gene is contained within the N2 gene space or touching the boundaries of the WS alignment coordinates
-) # - INSPECT THIS TO MAKE SURE IT IS WORKING CORRECTLY!!!!
+) 
 
 syntelog_matrix <- joined %>%
   dplyr::select(n2_gene,strain,attributes) %>%
@@ -1091,6 +1325,9 @@ syntelog_matrix <- joined %>%
     values_fn = \(x) paste(unique(x), collapse = ",")
   ) %>%
   dplyr::filter(!is.na(n2_gene)) # remove the row that contains all non-syntenic predicted WS genes
+  
+# write.table(syntelog_matrix, file = "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/syntelog_matrix.tsv", sep = '\t', col.names = T, row.names = F, quote = F)
+  
   
 
 # # Confirm this works by plotting N2 gene coordinates in x system and WS gene coordinates in y system
@@ -1108,6 +1345,112 @@ syntelog_matrix <- joined %>%
 #     plot.title = element_text(size = 14, color = 'black')) +
 #   labs(y = "AB1 coord", x = "N2 coord", title = "WBGene00015153 : V")
 # syn1
+
+# rando <- ggplot(joined %>% dplyr::filter(n2_gene == "WBGene00012259")) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
+#   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "seagreen", alpha = 0.2) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = start / 1e6, yend = end / 1e6, color = contig), linewidth = 1) +
+#   facet_wrap(~strain, scales = 'free') +
+#   # geom_text(data = joined %>% dplyr::filter(n2_gene == "WBGene00015153") %>% dplyr::filter(strain == "AB1"),
+#             # aes(x =  start_gene / 1e6 , y = (i.end  - (i.end - i.start) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = 'blue', fontface = 'bold') +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     axis.ticks = element_blank(),
+#     axis.text = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     plot.title = element_text(size = 14, color = 'black')) +
+#   labs(y = "AB1 coord", x = "N2 coord", title = "WBGene00015153 : V")
+# rando
+
+# 
+# ugh <- ggplot(joined %>% dplyr::filter(strain == "ECA1208", n2_gene == "WBGene00011875")) +
+#   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "#DB6333", alpha = 0.15) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.25) +
+#   geom_segment(aes(x = unchanged_start_aln / 1e6, xend = unchanged_end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6),color = 'blue', linewidth = 1) +
+#   geom_text(data = joined %>% dplyr::filter(n2_gene == "WBGene00011875" & strain == "ECA1208"),
+#             aes(x = 10.212, y = (i.end  - (i.end - i.start) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, size = 5, color = '#3B2F2F', fontface = 'bold') +
+#   geom_text(data = joined %>% dplyr::filter(n2_gene == "WBGene00011875" & strain == "ECA1208" & WSS == "4936031"), 
+#             aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = 4.926, label = "N2 gene: WBGene00020062"), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
+#   
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     axis.title = element_text(size = 14, color = 'black', face = 'bold'),
+#     panel.grid = element_blank(),
+#     axis.text = element_text(size = 14, color = 'black'),
+#     panel.border = element_rect(fill = NA)) +
+#     # plot.title = element_text(size = 14, color = 'black', hjust = 0.5, face = 'bold')) +
+#   labs(y = "ECA1208 coord", x = "N2 coord")
+# ugh
+# 
+# # There is only one alignment that has a predicted gene - resolves itself
+# ugh2 <- ggplot(joined %>% dplyr::filter(strain == "ECA768", n2_gene == "WBGene00000864")) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
+#   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "seagreen", alpha = 0.2) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = start / 1e6, yend = end / 1e6, color = contig), linewidth = 1) +
+#   geom_text(data = joined %>% dplyr::filter(n2_gene == "WBGene00000864") %>% dplyr::filter(strain == "ECA768"),
+#             aes(x =  start_gene / 1e6 , y = (i.end  - (i.end - i.start) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = 'blue', fontface = 'bold') +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     plot.title = element_text(size = 14, color = 'black')) +
+#   labs(y = "ECA768 coord", x = "N2 coord", title = "WBGene00000864 : II")
+# ugh2
+ 
+# hmm <- ggplot(clean_tigTrim %>% dplyr::filter(n2_gene == "WBGene00000864") %>% dplyr::filter(strain == "ECA768")) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+#     axis.text = element_text(size = 14, color = 'black'),
+#     plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
+#   labs(y = "ECA768 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00000864 : V")
+# hmm
+# 
+# ugh3 <- ggplot(joined %>% dplyr::filter(strain == "CB4856", n2_gene == "WBGene00012066")) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
+#   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "seagreen", alpha = 0.2) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = start / 1e6, yend = end / 1e6, color = contig), linewidth = 1) +
+#   geom_text(data = joined %>% dplyr::filter(n2_gene == "WBGene00012066") %>% dplyr::filter(strain == "CB4856"),
+#             aes(x =  start_gene / 1e6 , y = (i.end  - (i.end - i.start) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = 'blue', fontface = 'bold') +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     plot.title = element_text(size = 14, color = 'black')) +
+#   labs(y = "CB4856 coord", x = "N2 coord", title = "WBGene00012066 : V")
+# ugh3
+# 
+# 
+# synner <- joined %>% dplyr::filter(strain == "ECA923", n2_gene == "WBGene00021707")
+# syn0 <- ggplot(synner) +
+#   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "#DB6333", alpha = 0.3) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.7) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = start / 1e6, yend = end / 1e6), color = "blue", linewidth = 1) +
+#   # geom_text(data = syn,
+#             # aes(x =  (start_aln + 400) / 1e6 , y = (i.end  - (i.end - i.start + 225) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
+#   # geom_text(data = syn,
+#             # aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = WSS / 1e6, label = "N2 gene: WBGene00021707"), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     axis.title = element_text(size = 14, color = 'black', face = 'bold'),
+#     panel.grid = element_blank(),
+#     axis.text = element_text(size = 14, color = 'black'),
+#     panel.border = element_rect(fill = NA),
+#   plot.title = element_text(size = 16, color = 'black', hjust = 0.5, face = 'bold')) +
+#   labs(y = "ECA923 genome coordinates (Mb)", x = "N2 genome coordinates (Mb)", title = "WBGene00021707 : V")
+# syn0
+# 
 # 
 # syn2 <- ggplot(joined %>% dplyr::filter(strain == "ECA369", n2_gene == "WBGene00013300")) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
@@ -1186,16 +1529,16 @@ syntelog_matrix <- joined %>%
 #   labs(y = "AB1 coord", x = "N2 coord", title = "WBGene00022590 : V")
 # syntest
 
-
+# 
 syn <- joined %>% dplyr::filter(strain == "AB1", n2_gene == "WBGene00020062")
 syn6 <- ggplot(syn) +
   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "#DB6333", alpha = 0.3) +
   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.7) +
   geom_segment(aes(x = unchanged_start_aln / 1e6, xend = unchanged_end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = "blue", linewidth = 1) +
   geom_text(data = syn,
-            aes(x =  (start_aln + 400) / 1e6 , y = (i.end  - (i.end - i.start + 225) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
+            aes(x =  (start_aln + 475) / 1e6 , y = (i.end  - (i.end - i.start + 550) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 9, fontface = 'bold') +
   geom_text(data = syn,
-            aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = WSS / 1e6, label = "N2 gene: WBGene00020062"), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
+            aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = WSS / 1e6, label = "N2 gene: nhr-270"), vjust = -1, color = '#3B2F2F', size = 9, fontface = 'bold') +
   theme(
     legend.position = 'none',
     panel.background = element_blank(),
@@ -1204,20 +1547,44 @@ syn6 <- ggplot(syn) +
     axis.text = element_text(size = 14, color = 'black'),
     panel.border = element_rect(fill = NA)) +
     # plot.title = element_text(size = 16, color = 'black', hjust = 0.5, face = 'bold')) +
-  labs(y = "AB1 genome coordinates (Mb)", x = "N2 genome coordinates (Mb)")
+  labs(y = "AB1 contig coordinates (Mb)", x = "N2 genome coordinates (Mb)")
 syn6
-# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/syntenicGene.png", dpi = 600, syn6, width = 14, height = 12)
+# 
+# syn2 <- joined %>% dplyr::filter(strain == "ECA1887", n2_gene == "WBGene00011257")
+# syn123 <- ggplot(syn2) +
+#   # geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "#DB6333", alpha = 0.3) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.7) +
+#   geom_segment(data = diff_filtered %>% dplyr::filter(strain == "ECA1887" & n2_gene == "WBGene00011257"), aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6), color = "blue", linewidth = 1) +
+#   # geom_text(data = syn2,
+#             # aes(x =  (start_aln + 400) / 1e6 , y = (i.end  - (i.end - i.start + 225) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
+#   # geom_text(data = syn2,
+#             # aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = start / 1e6, label = "N2 gene: npax-3"), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     axis.title = element_text(size = 20, color = 'black', face = 'bold'),
+#     panel.grid = element_blank(),
+#     axis.text = element_text(size = 14, color = 'black'),
+#     panel.border = element_rect(fill = NA)) +
+#   # plot.title = element_text(size = 16, color = 'black', hjust = 0.5, face = 'bold')) +
+#   labs(y = "ECA1887 genome coordinates (Mb)", x = "N2 genome coordinates (Mb)")
+# syn123
 
+
+
+
+# # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/syntenicGene.png", dpi = 600, syn6, width = 14, height = 12)
+# 
 syn2 <- joined %>% dplyr::filter(strain == "ECA1260", n2_gene == "WBGene00011254")
 syn7 <- ggplot(syn2) +
   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "#DB6333", alpha = 0.3) +
   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.15) +
   geom_segment(aes(x = unchanged_start_aln / 1e6, xend = unchanged_end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = 'blue', linewidth = 1) +
   geom_text(data = syn2,
-            aes(x =  17.745, y = ((i.start / 1e6) + (i.end / 1e6)) / 2.0083, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
+            aes(x =  17.7455, y = ((i.start / 1e6) + (i.end / 1e6)) / 2.0087, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 7, fontface = 'bold') +
   geom_text(data = syn2 %>% dplyr::filter(L2 == "5151"),
-            aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = 0.31, label = "N2 gene: WBGene00011254"), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
-  
+            aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = 0.31, label = "N2 gene: R12G8.1"), vjust = -1, color = '#3B2F2F', size = 7, fontface = 'bold') +
+
   # geom_text(data = joined %>% dplyr::filter(n2_gene == "WBGene00011254") %>% dplyr::filter(strain == "ECA1260"),
             # aes(x =  start_gene / 1e6 , y = (i.end  - (i.end - i.start) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = 'blue', fontface = 'bold') +
   theme(
@@ -1228,8 +1595,91 @@ syn7 <- ggplot(syn2) +
     axis.text = element_text(size = 14, color = 'black'),
     panel.border = element_rect(fill = NA)) +
     # plot.title = element_text(size = 16, color = 'black', hjust = 0.5, face = 'bold')) +
-  labs(y = "ECA1260 genome coordinates (Mb)", x = "N2 genome coordinates (Mb)")
+  labs(y = "ECA1260 contig coordinates (Mb)", x = "N2 genome coordinates (Mb)")
 syn7
+
+
+bwc <- joined %>% dplyr::filter(strain == "JU1581", n2_gene == "WBGene00022486")
+bwc1 <- ggplot(bwc) +
+  geom_rect(data = bwc %>% dplyr::filter(attributes == "g22825"), aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "#DB6333", alpha = 0.3) +
+  geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.15) +
+  geom_vline(xintercept = 1239412 / 1e6, color = 'black', linetype = "dashed", size = 1.5) +
+  geom_vline(xintercept = 1241124 / 1e6, color = 'black', linetype = "dashed", size = 1.5) +
+  # geom_segment(aes(x = unchanged_start_aln / 1e6, xend = unchanged_end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = 'blue', linewidth = 1) +
+  geom_segment(data = nucmer_longest %>% dplyr::filter(strain == "JU1581" & n2_gene == "WBGene00022486"), aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = "blue", linewidth = 1) +
+  geom_text(data = bwc %>% dplyr::filter(attributes == "g22825"),
+            aes(x =  1.230, y = (i.start / 1e6) - 0.001, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 7, fontface = 'bold') +
+  geom_text(data = bwc, # gunna need to fix dis shit!!
+            aes(x =  (end_gene) / 1e6 + 0.001, y = 0.05, label = "N2 gene: fbxa-61"), vjust = -1, color = '#3B2F2F', size = 7, fontface = 'bold') +
+  
+  # geom_text(data = joined %>% dplyr::filter(n2_gene == "WBGene00011254") %>% dplyr::filter(strain == "ECA1260"),
+  # aes(x =  start_gene / 1e6 , y = (i.end  - (i.end - i.start) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = 'blue', fontface = 'bold') +
+  theme(
+    legend.position = 'none',
+    panel.background = element_blank(),
+    axis.title = element_text(size = 20, color = 'black', face = 'bold'),
+    panel.grid = element_blank(),
+    axis.text = element_text(size = 14, color = 'black'),
+    panel.border = element_rect(fill = NA)) +
+  # plot.title = element_text(size = 16, color = 'black', hjust = 0.5, face = 'bold')) +
+  labs(y = "JU1581 contig coordinates (Mb)", x = "N2 genome coordinates (Mb)")
+bwc1
+
+
+# 
+# bwc_yup <- joined %>% dplyr::filter(strain == "ECA1825", n2_gene == "WBGene00044801")
+# bwc2 <- ggplot(bwc_yup) +
+#   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "#DB6333", alpha = 0.3) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.15) +
+#   geom_segment(aes(x = unchanged_start_aln / 1e6, xend = unchanged_end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = 'blue', linewidth = 1) +
+#   # geom_text(data = syn2,
+#             # aes(x =  17.7455, y = ((i.start / 1e6) + (i.end / 1e6)) / 2.0087, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 7, fontface = 'bold') +
+#   # geom_text(data = syn2 %>% dplyr::filter(L2 == "5151"), # gunna need to fix dis shit!!
+#             # aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = 0.31, label = "N2 gene: clc-30"), vjust = -1, color = '#3B2F2F', size = 7, fontface = 'bold') +
+#   
+#   # geom_text(data = joined %>% dplyr::filter(n2_gene == "WBGene00011254") %>% dplyr::filter(strain == "ECA1260"),
+#   # aes(x =  start_gene / 1e6 , y = (i.end  - (i.end - i.start) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = 'blue', fontface = 'bold') +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     axis.title = element_text(size = 20, color = 'black', face = 'bold'),
+#     panel.grid = element_blank(),
+#     axis.text = element_text(size = 14, color = 'black'),
+#     panel.border = element_rect(fill = NA)) +
+#   # plot.title = element_text(size = 16, color = 'black', hjust = 0.5, face = 'bold')) +
+#   labs(y = "ECA1825 contig coordinates (Mb)", x = "N2 genome coordinates (Mb)")
+# bwc2
+
+
+
+### Example of how plotting the inverted version messes up how the WS gene models are called
+oop <- joined %>% dplyr::filter(n2_gene == "WBGene00011254"& strain == "JU2617")
+oops <- ggplot(oop) +
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.end / 1e6, ymax = i.start / 1e6), fill = "#DB6333", alpha = 0.3) +
+  geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.15) +
+  geom_segment(aes(x = unchanged_start_aln / 1e6, xend = unchanged_end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = 'blue', linewidth = 1) +
+  # The non-inverted, trimmed alignment
+  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = start / 1e6, yend = end / 1e6), color = 'blue', linewidth = 1) +
+  facet_wrap(~strain, scales = "free") +
+  # geom_text(data = syn2,
+            # aes(x =  17.745, y = ((i.start / 1e6) + (i.end / 1e6)) / 2.0083, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
+  # geom_text(data = syn2 %>% dplyr::filter(L2 == "5151"),
+            # aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = 0.31, label = "N2 gene: WBGene00011254"), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
+
+  # geom_text(data = joined %>% dplyr::filter(n2_gene == "WBGene00011254") %>% dplyr::filter(strain == "ECA1260"),
+  # aes(x =  start_gene / 1e6 , y = (i.end  - (i.end - i.start) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = 'blue', fontface = 'bold') +
+  theme(
+    legend.position = 'none',
+    panel.background = element_blank(),
+    axis.title = element_blank(),
+    # axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    # axis.text = element_blank(),
+    panel.border = element_rect(fill = NA))
+  # plot.title = element_text(size = 16, color = 'black', hjust = 0.5, face = 'bold')) +
+  # labs(y = "ECA1260 genome coordinates (Mb)", x = "N2 genome coordinates (Mb)")
+oops
+
 
 
 
@@ -1244,8 +1694,8 @@ syn7
 #   group_list <- list()
 #   for j in 1:nrow(trimmed_final[[i]]){
 #     dplyr::filter(ws_genes$strain == strain & ws_genes$contig == contig) %>%
-#       dplyr::filter(ws_genes$start >= start & ws_genes$end <= end) 
-#     
+#       dplyr::filter(ws_genes$start >= start & ws_genes$end <= end)
+#
 #     group_list[[j]] <- list(n2_gene, ws_genes$contig, ws_genes$start, ws_genes$end, ws_genes$attributes)
 #   }
 #   output_list[[i]] <- ldply(group_list[[j]],data.frame) %>% pivot_wider(names_from = ws_genes$attributes, values_from = syntenic_gene)
