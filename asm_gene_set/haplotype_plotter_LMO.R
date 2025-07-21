@@ -10,32 +10,83 @@ library(stringr)
 
 
 # want <- c("N2","JU346","ECA2581","ECA36","ECA1825","ECA1409","ECA1761","ECA1769")
-want <- c("N2","ECA1409")
+# want <- c("N2", "ECA1769", "ECA36")
+# want <- c("N2","ECA1409")
+# want <- c("N2", "NIC195")
 
 #read all pairwise genome coordinate comparisons
 transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/nucmer_runs/115_WI_transformed_coords_FIXED.tsv",col_names = F) 
 colnames(transformed_coords) <- c("S1","E1","S2","E2","L1","L2","IDY","LENR","LENQ","REF","HIFI","STRAIN") 
-transformed_coords <- transformed_coords %>%
-  dplyr::filter(STRAIN %in% want)
+transformed_coords <- transformed_coords #%>%
+  # dplyr::filter(grepl("ECA", STRAIN))
+  # dplyr::filter(STRAIN %in% want)
 
 #read concatentated gene models of every genome
-gffCat1 <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/braker_runs/merged_gff/all_WI_braker.clean.gff", col_names = F)
+# gffCat1 <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/braker_runs/merged_gff/all_WI_braker.clean.gff", col_names = F)
+gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/ALL_GFFs_longestIso.tsv", col_names = F)
 colnames(gffCat1) <- c("seqid","source","type","start","end","score","strand","phase","attributes","STRAIN")
 gffCat2 <- ape::read.gff("/vast/eande106/projects/Nicolas/c.elegans/N2/wormbase/WS283/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
-gffCat <- rbind(gffCat1,gffCat2) %>% 
-  dplyr::filter(STRAIN %in% want)
+gffCat <- rbind(gffCat1,gffCat2) #%>% 
+  # dplyr::filter(grepl("ECA", STRAIN))
+  # dplyr::filter(STRAIN %in% want)
 
 #read ortholog relationships among gene models
-orthos <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_78/OrthoFinder/Results_Mar20/Orthogroups/Orthogroups.tsv")
+# orthos <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_78/OrthoFinder/Results_Mar20/Orthogroups/Orthogroups.tsv")
+orthos <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_115_longIso/OrthoFinder/Results_May02/Orthogroups/Orthogroups.tsv")
 strainCol <- colnames(orthos)
-strainCol_c1 <- gsub(".braker.protein","",strainCol)
-strainCol_c2 <- gsub("_WS283.protein","",strainCol_c1)
+# strainCol_c1 <- gsub(".braker.protein","", strainCol)
+# strainCol_c2 <- gsub("_WS283.protein","", strainCol_c1)
+strainCol_c1 <- gsub(".braker.longest.protein","", strainCol)
+strainCol_c2 <- gsub(".longest.protein","", strainCol_c1)
 colnames(orthos) <- strainCol_c2
 
-# contains glc-1
+
+# hdr_chrom = "V"
+# hdr_start_pos = 16067500
+# hdr_end_pos = 16153000
+
+# smaller right arm of V for BWC
+# hdr_chrom = "V"
+# hdr_start_pos = 16067500
+# hdr_end_pos = 16092500
+
+# Looking at kola genes
+# K06A9.1
+# hdr_chrom = "X"
+# hdr_start_pos = 1500000
+# hdr_end_pos = 1640000
+
+# R08E3.1
+# hdr_chrom = "X"
+# hdr_start_pos = 4800000 
+# hdr_end_pos = 4870000
+
+# C01B10.6
+# hdr_chrom = "IV"
+# hdr_start_pos = 6628000 
+# hdr_end_pos = 6660000
+
+
+# C49C3.4
+# hdr_chrom = "IV"
+# hdr_start_pos = 17300000 
+# hdr_end_pos = 17352000
+
+# K06G5.1
+# hdr_chrom = "X"
+# hdr_start_pos =  14192000
+# hdr_end_pos = 14240000
+
+# # gly-1
+# hdr_chrom = "II"
+# hdr_start_pos = 10888000
+# hdr_end_pos = 10918000
+
+# Stefan ROI
 hdr_chrom = "V"
-hdr_start_pos = 16067500 
-hdr_end_pos = 16073980
+hdr_start_pos = 19200000
+hdr_end_pos =  19300000
+
 
 #offset lets you explore adjacent regions
 offset = 0
@@ -92,7 +143,7 @@ ggplot(tigFilt) +
   ylab("WILD contig position (Mb)") +
   theme(panel.background = element_blank(),
         panel.border = element_rect(fill=NA),
-        legend.position = 'none') #+
+        legend.position = 'none') 
 
 #keep the set of alignments with the largest span (i.e. removes small distant alignments ("jumps"))
 tigFilt2 <- tigFilt %>%
@@ -140,7 +191,6 @@ tigTrim <- tigFilt2 %>%
 
 ggplot(tigTrim) +
   geom_rect(xmin=hap_start/1e6,xmax=hap_end/1e6,ymin=-Inf,ymax=Inf,fill="lightgrey")+
-  #geom_rect(xmin=16219634/1e6,xmax=16221917/1e6,ymin=-Inf,ymax=Inf,aes(fill="glc-1")) +
   geom_segment(aes(x=S1/1e6,xend=E1/1e6,y=S2/1e6,yend=E2/1e6,color=HIFI)) +
   facet_wrap(~STRAIN,scales = 'free') +
   xlab("N2 genome position (Mb)") +
@@ -188,7 +238,6 @@ N2_genes <- gffCat %>%
   dplyr::filter(grepl("biotype=protein_coding",attributes)) %>%
   tidyr::separate(attributes,into=c("pre","post"),sep=';sequence_name=') %>%
   tidyr::separate(post,into=c("seqname","post2"),sep=';biotype=') %>%
-  #dplyr::mutate(seqname=paste0(seqname)) %>%
   tidyr::separate(pre,into=c("ID","Name","rest2"),sep=";") %>%
   dplyr::mutate(Name=gsub("Name=","",Name)) %>% 
   dplyr::select(seqid,start,end,strand,Name,rest2,seqname,STRAIN,refStart,refEnd,seqname) %>%
@@ -206,7 +255,7 @@ N2_tran <- gffCat %>%
   dplyr::filter(Parent %in% N2_genes$Name) %>%
   dplyr::select(tseqname,Parent) %>%
   dplyr::rename(tranname=tseqname) %>%
-  dplyr::mutate(tranname=paste0("Transcript_",tranname)) %>%
+  dplyr::mutate(tranname=paste0("transcript_",tranname)) %>%
   dplyr::left_join(N2_genes,by=c('Parent'='Name'))
 
 
@@ -282,8 +331,7 @@ for (i in 1:length(strainCol_iter)) {
     dplyr::mutate(STRAIN=strainCol_iter[i]) %>%
     dplyr::mutate(has_any_ortho=T) %>%
     dplyr::left_join(wild_tran,by=c("STRAIN","str"="tranname"))
-  #dplyr::select(-N2)
-  
+
   orthoList_raw[[i]] <- raw_tmp
   
   print(paste0("Mapped orthologs for ",i,"/",length(strainCol_iter)," strains."))
@@ -388,9 +436,7 @@ corr_jumps <- all_ortho_pairs_bound_pre %>%
 
 
 all_ortho_pairs_bound <- all_ortho_pairs_bound_pre %>%
-  dplyr::arrange(STRAIN,start)# %>%
-#dplyr::left_join(corr_jumps %>% dplyr::select(STRAIN,Parent,keep),by=c("STRAIN","Parent")) %>%
-#dplyr::filter(!is.na(keep))
+  dplyr::arrange(STRAIN,start)
 
 all_ortho_pairs_raw <- ldply(orthoList_raw,data.frame) %>% dplyr::select(STRAIN,str,has_any_ortho) %>% dplyr::rename(tranname=str) 
 
@@ -408,7 +454,6 @@ new_boundaries_WI <-  all_ortho_pairs_bound %>%
 N2_expand <- rbind(inreg_orthos %>% 
                      dplyr::mutate(status="within"),outreg_orthos %>% 
                      dplyr::select(-refStart,-refEnd,-refChrom,-start_dist,-end_dist,-min_dist_bases,-updown)) %>%
-  #dplyr::select(Orthogroup,strainCol_iter[i],N2,seqid,seqname,start,end,og_loc,status)) %>%
   dplyr::filter(!status=="outside")
 
 new_boundaries_N2 <- N2_expand %>%
@@ -461,7 +506,9 @@ N2_ad_corr <- N2_ad %>%
 g_count <- length(unique(N2_ad_corr$Parent))
 
 # desired_order <- c("N2","ECA1409","ECA1761","JU346","ECA1769","ECA36","ECA1825","ECA2581")
-desired_order <- c("N2","ECA1409")
+# desired_order <- c("N2","ECA1769","ECA36")
+# desired_order <- c("N2","ECA1409")
+# desired_order <- c("N2", "NIC195")
 
 WI_ad <- boundGenes %>% 
   dplyr::filter(!STRAIN=="N2") %>%
@@ -483,23 +530,23 @@ WI_ad <- boundGenes %>%
   dplyr::left_join(HV_boundary %>% dplyr::select(STRAIN,inv),by="STRAIN") %>%
   dplyr::group_by(STRAIN) %>%
   dplyr::mutate(n_gene=n_distinct(Parent)) %>%
-  dplyr::mutate(start_sort = if_else(rep(first(inv), dplyr::n()), -start, start)) %>%
+  dplyr::mutate(start_sort = if_else(rep(dplyr::first(inv), dplyr::n()), -start, start)) %>%
   dplyr::arrange(start_sort, .by_group = TRUE) %>%
-  dplyr::mutate(first_gene=first(alias)) %>%
+  dplyr::mutate(first_gene=dplyr::first(alias)) %>%
   dplyr::ungroup() %>%
-  dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
+  # dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
   dplyr::group_by(STRAIN) %>%
-  arrange(first_gene, n_gene, .by_group = TRUE) %>% 
-  mutate(order_gene = first(first_gene),
-         order_num = first(n_gene)) %>% 
-  ungroup() %>%
-  # arrange(desc(order_gene), desc(order_num)) %>%
-  # arrange(desc(order_gene), order_num) %>%
-  dplyr::arrange(desc(STRAIN)) %>%
-  select(-order_gene, -order_num) %>%
+  dplyr::arrange(first_gene, n_gene, .by_group = TRUE) %>% 
+  dplyr::mutate(order_gene = dplyr::first(first_gene), order_num = dplyr::first(n_gene)) %>% 
+  dplyr::ungroup() %>%
+  # dplyr::arrange(desc(order_gene), desc(order_num)) %>%
+  dplyr::arrange(desc(order_gene), order_num) %>%
+  # dplyr::arrange(desc(STRAIN)) %>%
+  dplyr::select(-order_gene, -order_num) %>%
   dplyr::mutate(g_diff = abs(n_gene-g_count)) %>%
   dplyr::mutate(y_pos=rleid(STRAIN)) %>%
   dplyr::select(-g_diff,-start_sort,-inv,-first_gene,-n_gene) 
+
 
 N2_ad_corr <- N2_ad_corr %>%
   dplyr::mutate(y_pos=max(WI_ad$y_pos)+1)
@@ -556,32 +603,20 @@ plot_ad <- all_ad %>%
   dplyr::filter(col==max(col)) %>%
   dplyr::ungroup() %>%
   dplyr::distinct(STRAIN,Parent,.keep_all = T) %>%
-  dplyr::mutate(class=ifelse(col==0,"no_known_ortho",ifelse(col==1,"has_distal_ortho","has_local_ortho"))) #%>%
-
+  dplyr::mutate(class=ifelse(col==0,"no_known_ortho",ifelse(col==1,"has_distal_ortho","has_local_ortho"))) 
 
 all_hap <- ggplot() +
   geom_segment(data=hlines,aes(x=boundStart-shift,xend=boundEnd-shift,y=y_pos,yend=y_pos))+
   geom_rect(data=plot_ad, aes(xmin=start,xmax=end,ymin=y_pos+0.2,ymax=y_pos-0.2,fill=class),color="black") +
-  scale_y_continuous(breaks = hlines$y_pos, labels = hlines$STRAIN) +
   theme(legend.title = element_blank(),
         panel.background = element_blank(),
         axis.title = element_blank(),
         axis.text = element_blank(),
-        axis.title.x = element_blank(),
-        axis.title.y = element_text(),
         axis.ticks = element_blank()) +
   scale_fill_manual(values=c("has_local_ortho"="grey","has_distal_ortho"="black","no_known_ortho"="red","no_known_allelic_CB"="blue")) +
-  scale_x_continuous(expand = c(0.01,0)) +
-  ylab("77 isotype strains")
+  scale_x_continuous(expand = c(0.01,0))
 all_hap
 
-plot_ad <- all_ad %>%
-  dplyr::group_by(STRAIN,Parent) %>%
-  dplyr::filter(col==max(col)) %>%
-  dplyr::ungroup() %>%
-  dplyr::distinct(STRAIN,Parent,.keep_all = T) %>%
-  dplyr::mutate(class=ifelse(col==0,"no_known_ortho",ifelse(col==1,"has_distal_ortho","has_local_ortho"))) %>%
-  dplyr::mutate(alise = as.character(alias))
 
 # Exclude "non-ortho" from the trapezium joining
 plot_ad_filtered <- plot_ad %>% 
@@ -622,16 +657,14 @@ trapezium_polys <- trapeziums %>%
   ungroup()
 
 # Extract unique aliases at y_pos 77 in order of increasing start position
-
 ordered_aliases <- plot_ad %>%
-  # filter(y_pos == 77) %>%
-  filter(y_pos == max(WI_ad$y_pos)) %>%
+  filter(y_pos == max(plot_ad$y_pos)) %>%
   arrange(start) %>%
   pull(alias) %>%
   unique()
 
 # Reorder the factor levels so that the legend follows the ordered aliases
-plot_ad <- plot_ad %>%
+plot_ad2 <- plot_ad %>%
   mutate(alias = factor(alias, levels = ordered_aliases))
 
 # Also update any other data frames with alias info, e.g. trapezium_polys:
@@ -649,32 +682,247 @@ default_colors <- setNames(hcl.colors(length(shuffled_aliases), "Dark 3"), shuff
 final_colors <- default_colors[ordered_aliases]
 
 # Optionally, if you have the "non-ortho" alias (or any other), add it explicitly:
-final_colors <- c(final_colors, "non-ortho" = "black")
+final_colors <- c(final_colors, "New gene" = "darkgrey")
 
-# Then apply final_colors in your ggplot scale:
+
+plot_ad_segments <- plot_ad %>%
+  mutate(
+    # Adjust strand logic if inverted
+    strand_logic = case_when(
+      strand == "+" & !inv ~ "+",
+      strand == "-" & !inv ~ "-",
+      strand == "+" & inv  ~ "-",
+      strand == "-" & inv  ~ "+"
+    ),
+    seg_color = ifelse(strand_logic == "+", "black", "red"),
+    
+    x_start = start,
+    x_end   = end,
+    y_seg   = y_pos - 0.25  # just under the geom_rect (geom_rect is y_pos ± 0.2)
+  )
+
+
 all_hap_bg <- ggplot() +
-  geom_segment(data = hlines, 
-               aes(x = boundStart - shift, xend = boundEnd - shift, y = y_pos, yend = y_pos)) +
-  geom_polygon(data = trapezium_polys, 
-               aes(x = x, y = y, group = group, fill = alias)) +
-  geom_rect(data = plot_ad, 
-            aes(xmin = start, xmax = end, ymin = y_pos + 0.2, ymax = y_pos - 0.2, fill = alias),color="black") +
+  geom_segment(data = hlines, aes(x = boundStart - shift, xend = boundEnd - shift, y = y_pos, yend = y_pos)) +
+  geom_polygon(data = trapezium_polys,  aes(x = x, y = y, group = group, fill = alias)) +
+  geom_rect(data = plot_ad %>% dplyr::mutate(alias=ifelse(is.na(alias),"New gene", as.character(alias))), aes(xmin = start, xmax = end, ymin = y_pos + 0.2, ymax = y_pos - 0.2, fill = alias),color = "black") +
+  # geom_segment(
+  #   data = plot_ad_segments,
+  #   aes(x = x_start, xend = x_end, y = y_seg, yend = y_seg, color = seg_color),
+  #   linewidth = 0.5,
+  #   inherit.aes = FALSE
+  # ) +
+  scale_y_continuous(
+    expand = c(0.01, 0),
+    breaks = hlines$y_pos,
+    labels = hlines$STRAIN
+  ) +
+  scale_x_continuous(expand = c(0.01, 0),labels = function(x) x / 1000) +
+  scale_fill_manual(values = final_colors) +
+  scale_color_identity()  +
+  #scale_color_manual(values = c("+"="black","-"="red")) +
+  labs(fill="Reference gene")+ # "Reference\ngene"
+  xlab("Physical distance (kb)") +
   theme(
-    legend.title = element_blank(),
-    # legend.position = 'none',
     panel.background = element_blank(),
     axis.title = element_blank(),
-    axis.text.x = element_blank(),
-    axis.text.y = element_text(size = 14, color = 'black', face = 'bold'),
-    axis.ticks = element_blank()
-  ) +
-  scale_fill_manual(values = final_colors) +
-  scale_x_continuous(expand = c(0.01, 0)) +
-  scale_y_continuous(breaks = hlines$y_pos, labels = hlines$STRAIN, expand = c(0, 0)) +
-  ylab("77 isotype strains")
-
+    axis.text.y = element_text(size = 8, color = 'black', face = 'bold'),  # adjust size as needed
+    axis.ticks.y = element_blank(),
+    axis.line.x = element_line(),
+    axis.title.x = element_text())
 all_hap_bg
 
-# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/haplotype_plotter.png", dpi = 600, all_hap_bg, width = 15, height = 8)
-ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/haplotype_plotter_threeGenes.png", dpi = 600, all_hap_bg, width = 15, height = 8)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/ugh.png", dpi = 900, all_hap_bg, width = 15, height = 8)
 
+
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/haplotype_plotter.png", dpi = 600, all_hap_bg, width = 15, height = 8)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/haplotype_plotter_threeGenes.png", dpi = 600, all_hap_bg, width = 15, height = 8)
+
+
+
+# WI_genes <- plot_ad %>% dplyr::select(tranname) %>% dplyr::pull()
+# 
+# plot_filt <- plot_ad %>% dplyr::select(tranname, alias)
+# 
+# WI_ortho <- orthos %>% dplyr::select(N2, NIC195) %>% tidyr::separate_rows(NIC195, sep = ", ") %>% tidyr::separate_rows(N2, sep = ', ') %>% dplyr::filter(NIC195 %in% WI_genes | N2 %in% WI_genes) %>%
+#   dplyr::rename(tranname = N2) %>% dplyr::left_join(plot_filt, by = "tranname") %>%
+#   dplyr::mutate(N2 = ifelse(!is.na(alias),alias,tranname)) %>% dplyr::select(N2, NIC195) %>% dplyr::mutate(N2 = gsub("transcript_","",N2))
+# 
+# 
+# write.table(WI_ortho, "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/misc/NIC195_orthos.tsv", col.names = T, row.names = F, quote = F, sep = "\t")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### For BWC gene set classification plot:
+# final_colors <- c(
+#   "cyp-35D1" = "green4",
+#   "nhr-176" = "green4",
+#   "F14H3.12" = "green4",
+#   "srj-29"   = "green4",
+#   "F22B8.3"  = "#DB6333",
+#   "NA"       = "magenta3"  # for NA aliases
+# )
+# 
+# # plot_ad <- plot_ad %>%
+# #   dplyr::mutate(alias = dplyr::if_else(Parent == "K06A9.1", Parent, alias))
+# 
+# # Then apply final_colors in your ggplot scale:
+# all_hap_bg <- ggplot() +
+#   geom_segment(data = hlines, 
+#                aes(x = boundStart - shift - 1000, xend = boundEnd - shift + 16000, y = y_pos, yend = y_pos)) +
+#   geom_polygon(data = trapezium_polys,
+#                aes(x = x, y = y, group = group, fill = alias), alpha = 0.5) +
+#   geom_rect(data = plot_ad %>% mutate(alias = as.character(alias), alias = ifelse(is.na(alias), "NA", alias)) %>% dplyr::mutate(alias = ifelse(is.na(alias),"NA", alias)), 
+#             aes(xmin = start, xmax = end, ymin = y_pos + 0.2, ymax = y_pos - 0.2, fill = alias), alpha = 1, color="black") + # fill = alias)
+#   theme(
+#     legend.title = element_blank(),
+#     # legend.position = 'none',
+#     panel.background = element_blank(),
+#     axis.title = element_blank(),
+#     axis.text.x = element_blank(),
+#     axis.text.y = element_text(size = 20, color = 'black', face = 'bold'),
+#     # axis.text.y = element_blank(),
+#     axis.ticks = element_blank()
+#   ) +
+#   scale_fill_manual(values = final_colors) +
+#   scale_x_continuous(expand = c(0.01, 0)) +
+#   scale_y_continuous(breaks = hlines$y_pos, labels = hlines$STRAIN, expand = c(0, 0)) 
+# # ylab("115 isotype strains")
+# 
+# all_hap_bg
+
+
+
+
+
+##### Gene set classification #####
+# 1. Count how many strains each alias appears in (KEEP NAs for later!)
+alias_strain_counts <- plot_ad %>%
+  dplyr::filter(!is.na(alias)) %>%
+  dplyr::distinct(alias, STRAIN) %>%
+  dplyr::count(alias, name = "strain_count")
+
+# 2. Total number of genomes
+n_genomes <- plot_ad %>%
+  dplyr::pull(STRAIN) %>%
+  unique() %>%
+  length()
+
+alias_strain_counts <- alias_strain_counts %>%
+  dplyr::mutate(
+    gene_category = dplyr::case_when(
+      strain_count == n_genomes ~ "core",
+      TRUE ~ "accessory"  # Leave true-private detection to NA fallback
+    )
+  )
+
+plot_ad <- plot_ad %>%
+  dplyr::left_join(alias_strain_counts, by = "alias") %>%
+  dplyr::mutate(
+    gene_category = ifelse(is.na(gene_category), "private", gene_category)
+  )
+
+trapezium_polys <- trapezium_polys %>%
+  dplyr::left_join(alias_strain_counts %>% dplyr::select(alias, gene_category), by = "alias") %>%
+  dplyr::mutate(
+    gene_category = ifelse(is.na(gene_category), "private", gene_category)
+  )
+
+synteny_colors <- c(
+  "core" = "#BDB2E1",      # pastel red
+  "accessory" = "#92C5DE", # pastel blue
+  "private" = "#E78AC3"    # pastel purple
+)
+
+all_hap_bg <- ggplot() +
+  geom_segment(data = hlines,
+               aes(x = boundStart - shift, xend = boundEnd - shift, y = y_pos, yend = y_pos)) +
+  geom_polygon(data = trapezium_polys,
+               aes(x = x, y = y, group = group, fill = gene_category), alpha = 0.6) +
+  geom_rect(data = plot_ad,
+            aes(xmin = start, xmax = end, ymin = y_pos + 0.2, ymax = y_pos - 0.2, fill = gene_category), color = "black") +
+  theme(
+    panel.background = element_blank(),
+    legend.position = 'none',
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank()
+  ) +
+  scale_fill_manual(values = synteny_colors) +
+  scale_x_continuous(expand = c(0.01, 0)) +
+  scale_y_continuous(breaks = hlines$y_pos, labels = hlines$STRAIN, expand = c(0, 0))
+
+# Show it!
+all_hap_bg
+
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/synteny_geneSet.png", all_hap_bg, width = 11, height = 8, dpi = 600)
