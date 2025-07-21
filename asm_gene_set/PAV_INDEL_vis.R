@@ -52,7 +52,7 @@ vcf_longer <- vcf %>%
   dplyr::ungroup() %>%
   dplyr::arrange(desc(n_alt)) %>%
   dplyr::mutate(rid=rleid(n_alt)) %>%
-  dplyr::filter(genotype > 0)
+  dplyr::filter(genotype > 0) 
 
 ### Then you will need to intersect with HDRs for a particular strain and add a column to indicate if that variant is found in a HDR for that particular strain
 SV_plt <- ggplot(vcf_longer) +
@@ -73,7 +73,7 @@ SV_plt <- ggplot(vcf_longer) +
   ylab("115 wild strains")
 SV_plt
 
-ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/PAV_allStrains.png", SV_plt, width = 15, height = 12, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/PAV_allStrains.png", SV_plt, width = 15, height = 12, dpi = 600)
 
 
 
@@ -97,6 +97,33 @@ hdrs <- readr::read_tsv("/vast/eande106/data/c_elegans/WI/divergent_regions/2025
 #     axis.title = element_text(size = 13),
 #     legend.position = "none")
 # SV_plt_noHDR
+
+
+ROI <- vcf_longer %>% dplyr::filter(CHROM == "V" & POS >= 19200000 & POS <= 19300000)
+ROI_hdrs <- hdrs %>% 
+  dplyr::filter(chrom == "V") %>%
+  dplyr::filter(start > 19200000 & start < 19300000 & end > 19200000 & end < 19300000)
+
+SV_plot <- ggplot(ROI) + 
+  geom_rect(data = ROI_hdrs, aes(xmin = start / 1e6, xmax = end / 1e6, ymin = -Inf, ymax = Inf), fill = 'gray60') +
+  geom_rect(data = ROI %>% dplyr::filter(SV != "DEL"), aes(xmin = (POS - 200)/1e6, xmax = (POS + 200 + SV_length)/1e6, ymin=0.25, ymax=0.75, fill=SV)) +
+  geom_rect(data = ROI %>% dplyr::filter(SV == "DEL"), aes(xmin = (POS - 200)/1e6, xmax = (POS + 200)/1e6, ymin=0.25, ymax=0.75, fill=SV)) +
+  facet_wrap(~sample) +
+  scale_fill_manual(values = c("DEL" = "red", "INS" = "blue", "INV" = 'gold')) +
+  theme(
+    panel.background = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.y = element_blank(),
+    panel.border = element_rect(fill = NA),
+    axis.title = element_text(size = 13),
+    legend.position = "none")
+SV_plot
+
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/misc/SV_ROI_stefan.png", SV_plot, width = 25, height = 15, dpi = 600)
+
+NIC195 <- ROI %>%
+  dplyr::filter(sample == "NIC195")
+
 
 
 # Looking at specific ROI #
