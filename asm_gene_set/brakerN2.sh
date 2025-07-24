@@ -13,10 +13,13 @@ input="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/misc/N2_BRAKER_
 output="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/misc/N2_BRAKER_error/container_braker3/output"
 #busco="/vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/busco_downloads/lineages"
 container="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/software/containers/loconn13999-braker3_20250724.sif"
+augustus_path="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/misc/N2_BRAKER_error/container_braker3/augustus_config"
 
 singularity exec \
 	--bind $input:/input \
 	--bind $output:/output \
+	--bind $augustus_path:/augustus_config \
+	--env AUGUSTUS_CONFIG_PATH=/augustus_config \
 	$container \
 	braker.pl \
 	--genome /input/c_elegans.PRJNA13758.WS283.genome.fa \
