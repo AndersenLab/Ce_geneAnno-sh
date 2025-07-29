@@ -1,9 +1,8 @@
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-library(fuzzyjoin)
-library(purrr)
 library(stringr)
+library(purrr)
 library(data.table)
 library(cowplot)
 
@@ -12,7 +11,7 @@ library(cowplot)
 # ======================================================================================================================================================================================== #
 ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N0_0504_genes.tsv")
 
-strainCol <- colnames(ortho_genes_dd)s
+strainCol <- colnames(ortho_genes_dd)
 strainCol_c1 <- gsub(".braker.longest.protein","",strainCol)
 strainCol_c2 <- gsub(".longest.protein","",strainCol_c1)
 colnames(ortho_genes_dd) <- strainCol_c2
@@ -27,16 +26,45 @@ for (i in 1:length(strainCol_c2_u)) {
   
   ortho_count <- ortho_count %>%
     dplyr::mutate(!!sym(temp_colname) := stringr::str_count(!!sym(strainCol_c2_u[i]),", ") + 1)
-}
 
-all_relations <- ortho_count %>%
+}
+all_relations_pre <- ortho_count %>%
   dplyr::select(HOG, dplyr::contains("_count"))
 
+private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/private_OG_genes_gene_assignments.tsv") %>%
+  tidyr::pivot_wider(id_cols = Orthogroup, names_from = Source, values_from = Gene)
 
-#### Plotting ####
+cols_yuh <- colnames(private_OGs)
+cols_yuh1 <- gsub(".braker.longest.protein","", cols_yuh)
+cols_yuh2 <- gsub(".longest.protein","", cols_yuh1)
+colnames(private_OGs) <- cols_yuh2
+
+private_cols <- cols_yuh2[!cols_yuh2 %in% c("Orthogroup")]
+
+private_ortho_count <- private_OGs
+for (i in 1:length(private_cols)) {
+  print(paste0(i, " out of ", length(private_cols)))
+  temp_colname <- paste0(private_cols[i], "_count")
+  
+  private_ortho_count <- private_ortho_count %>%
+    dplyr::mutate(!!sym(temp_colname) := ifelse(is.na(!!sym(private_cols[i])), NA, 1))
+}
+
+all_relations_private <- private_ortho_count %>%
+  dplyr::select(Orthogroup, dplyr::contains("_count")) %>%
+  dplyr::rename(HOG = Orthogroup)
+
+all_relations <- all_relations_pre %>%
+  dplyr::bind_rows(all_relations_private)
+
+all_ortho_genes_dd <- ortho_genes_dd %>%
+  dplyr::select(-OG, -'Gene Tree Parent Clade') %>%
+  dplyr::bind_rows((private_OGs %>% dplyr::rename(HOG = Orthogroup)))
+
+# Extracting HOG/OG identifiers for private OGs
 private_freq = (1/(length(strainCol_c2_u)))
 
-classification <- all_relations %>%
+private_rowids <- all_relations %>%
   dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
   dplyr::mutate(sum = rowSums(across(-1, ~ ., .names = NULL), na.rm = TRUE)) %>%
   dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
@@ -48,39 +76,8 @@ classification <- all_relations %>%
       TRUE ~ "undefined"
     )
   ) %>%
-  dplyr::count(freq, class) %>%
-  dplyr::mutate(percent = (n / sum(n)) * 100) 
-
-
-gs_allOrtho <- ggplot(data = classification, aes(x = freq * 100, y = percent, fill = class)) + 
-  geom_bar(stat = "identity", color = "black", alpha = 0.5) + 
-  scale_fill_manual(values = c(
-    "core" = "green4",
-    "accessory" = "#DB6333",
-    "private" = "magenta3"
-  ), 
-  limits = c("core", "accessory", "private"),  # Manually ordering legend items
-  guide = guide_legend(title = NULL) 
-  ) +
-  ylab("HOGs") + # longest isoform
-  xlab("Frequency") +
-  scale_y_continuous(labels = scales::percent_format(scale = 1)) + 
-  scale_x_continuous(labels = scales::percent_format(scale = 1)) +
-  theme_classic() +
-  theme(
-    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
-    legend.position = c(0.85, 0.8),
-    plot.title = element_text(size=18, face = 'bold', hjust=0.5),
-    legend.text = element_text(size=16, color = 'black'),
-    axis.text = element_text(size=14, color = 'black')
-  )
-gs_allOrtho
-
-# HOG_class_count <- classification %>%
-#   dplyr::group_by(class) %>%
-#   dplyr::summarise(n_HOG = sum(n)) %>%
-#   dplyr::ungroup()
-
+  dplyr::filter(class == "private") %>%
+  dplyr::pull(HOG)
 
 
 # ======================================================================================================================================================================================== #
@@ -99,18 +96,20 @@ nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annota
   dplyr::select(-IDY,-LENR)
 
 all_relations_rowid <- all_relations %>% dplyr::rename(rowid = HOG)
-ortho_genes_dd_rowid <- ortho_genes_dd %>% dplyr::rename(rowid = HOG)
+ortho_genes_dd_rowid <- all_ortho_genes_dd %>% dplyr::rename(rowid = HOG)
 
 # Extract rowids for simple and complex HOGs
-simple_rowids <- all_relations_rowid %>% 
-  dplyr::filter(if_all(2:ncol(.), ~ is.na(.) | . <= 1)) %>% 
-  dplyr::pull(rowid)
+# simple_rowids <- all_relations_rowid %>% 
+#   dplyr::filter(if_all(2:ncol(.), ~ is.na(.) | . <= 1)) %>% 
+#   dplyr::pull(rowid)
 
-complex_rowids <- all_relations_rowid %>% 
+complex_all_rowids <- all_relations_rowid %>% 
   dplyr::filter(if_any(2:ncol(.), ~ . > 1)) %>% 
-  dplyr::pull(rowid)
+  dplyr::pull(rowid) 
 
-simple_HOGS <- ortho_genes_dd_rowid %>% dplyr::filter(rowid %in% simple_rowids)
+complex_rowids <- setdiff(complex_all_rowids, private_rowids) #remove complex HOGs that are PRIVATE!
+
+# simple_HOGS <- ortho_genes_dd_rowid %>% dplyr::filter(rowid %in% simple_rowids)
 complex_HOGS <- ortho_genes_dd_rowid %>% dplyr::filter(rowid %in% complex_rowids) ### further decompress into only complex orthogroups that have ONE N2 gene
 
 # noN2_complex_HOG <- complex_HOGS %>% dplyr::filter(is.na(N2))
@@ -135,9 +134,12 @@ n2_goi <- complex_HOGS%>%
   tidyr::separate_rows(N2, sep = ",\\s*") %>%
   dplyr::filter(!is.na(N2)) 
 
-n2_genes <- all_genes_strain %>% dplyr::filter(strain == "N2") %>% dplyr::rename(chrom = contig) %>%
-  dplyr::filter(reduce(n2_goi$N2, ~ .x | str_detect(attributes, fixed(.y)), .init = FALSE)) %>%
-  data.table::as.data.table() # 10,370
+n2_genes <- all_genes_strain %>% 
+  dplyr::filter(strain == "N2") %>% 
+  dplyr::rename(chrom = contig) %>%
+  dplyr::filter(str_detect(attributes, str_c(n2_goi$N2, collapse = "|"))) %>%
+  # dplyr::filter(reduce(n2_goi$N2, ~ .x | str_detect(attributes, fixed(.y)), .init = FALSE)) %>%
+  data.table::as.data.table() # 10,333
 
 # ======================================================================================================================================================================================== #
 # Extracting the longest WS contig alignment for every N2 gene coordinate #
@@ -156,8 +158,7 @@ n2_genes_align <- data.table::foverlaps(
   type = "any" # if the start/end of any alignment is within an N2 gene
 ) %>%
   dplyr::rename(N2 = i.strain, n2_gene = attributes, start_aln = start, end_aln = end, start_gene = i.start, end_gene = i.end) %>%
-  dplyr::select(-type, -strand)
-# 10,370 N2 genes 
+  dplyr::select(-type, -strand) # 10,333 genes!
 
 
 # Join where an N2 gene is fully contained within an alignment
@@ -187,6 +188,8 @@ nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlott
   dplyr::filter(LENQ == max(LENQ)) %>% # to filter out alignments that are the same size, but from different contigs
   dplyr::ungroup()
 
+
+
 # manyAln <- ggplot(nucmer_longest %>% dplyr::filter(n2_gene == "WBGene00008623")) + 
 #   facet_wrap(~strain, scales = 'free', strip.position = "right") +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.05) +
@@ -203,31 +206,29 @@ nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlott
 #   ggtitle("WBGene00008623 : IV")
 # manyAln
 
-
-
 # #### Testing how selection of "best" contig works with dot plots ####
-all_ctg_align <- n2_genes_align %>%
-  dplyr::group_by(strain, n2_gene) %>%
-  dplyr::mutate(nalign = n()) %>%
-  dplyr::ungroup() %>%
-  dplyr::group_by(n2_gene,contig, strain) %>%
-  dplyr::mutate(ntig= n()) %>%
-  dplyr::mutate(tigsize=sum(L2)) %>%
-  dplyr::ungroup()
-
-all_test <- ggplot(nucmer_longest %>% dplyr::filter(strain == "ECA36" & n2_gene == "WBGene00010415")) +
-  geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.05) +
-  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = longest_contig), linewidth = 1) +
-  theme(
-    legend.position = 'none',
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    panel.border = element_rect(fill = NA),
-    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
-    axis.text = element_text(size = 14, color = 'black'),
-    plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
-  labs(y = "STRAIN genome position (Mb)", x = "N2 genome position (Mb)", title = "GENE : CHOROM")
-all_test
+# all_ctg_align <- n2_genes_align %>%
+#   dplyr::group_by(strain, n2_gene) %>%
+#   dplyr::mutate(nalign = n()) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::group_by(n2_gene,contig, strain) %>%
+#   dplyr::mutate(ntig= n()) %>%
+#   dplyr::mutate(tigsize=sum(L2)) %>%
+#   dplyr::ungroup()
+# 
+# all_test <- ggplot(nucmer_longest %>% dplyr::filter(strain == "ECA36" & n2_gene == "WBGene00010415")) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.05) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = longest_contig), linewidth = 1) +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+#     axis.text = element_text(size = 14, color = 'black'),
+#     plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
+#   labs(y = "ECA36 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00010415 : CHOROM")
+# all_test
                      
 
 # all_ctg_gene <- ggplot(all_ctg_align %>% dplyr::filter(n2_gene == "WBGene00013172" & strain == "ECA923")) +
@@ -519,6 +520,10 @@ nucmer_longest_jumpRemoved <- nucmer_longest_jump %>%
   dplyr::select(-gsize) %>%
   dplyr::ungroup()
 
+#### Testing how my two-variable heuristics look when I do not remove the initial jump filter
+nucmer_longest_jumpRemoved <- nucmer_longest_jump
+#####
+
 # check1 <- ggplot(nucmer_longest_jumpRemoved %>% dplyr::filter(n2_gene == "WBGene00013300" & strain == "ECA369")) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = min(WSS) / 1e6, ymax = max(WSE) / 1e6), fill = "darkolivegreen4", alpha = 0.3) +
 #   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
@@ -687,6 +692,7 @@ diff_dist_plot
 diff_dist_plotjumps <- ggplot(data = diff) +
   geom_histogram(aes(x = jumptwo / 1e6), bins = 200, fill = 'black') +
   geom_vline(xintercept = max(diff$jumptwo, na.rm = TRUE) / 1e6, color = 'red', size = 2) +
+  geom_vline(xintercept = 4.5, color = 'blue', size = 2) +
   # geom_vline(xintercept = 0.5, color = 'blue', size = 2) +
   scale_y_log10(
     breaks = scales::trans_breaks("log10", function(x) 10^x),
@@ -785,105 +791,96 @@ diff_info <- diff %>%
   dplyr::mutate(WS_n2_middleGene = ((slope * n2_gene_middle) + intercept)) %>%
   dplyr::arrange(St2) %>%
   dplyr::group_by(n2_gene, strain) %>% 
-  
-  # dplyr::mutate(local_dup = ifelse((min(Et2) < max(St2)) & (max(St2) > min(Et2)) & (min(L1) > (end_gene - start_gene + 11000)), TRUE, FALSE)) %>% #only calculate the difference in WS coordinates at N2 gene locus if the two alingments don't overlap in WS coordinate space
-  # dplyr::mutate(local_dup = ifelse((min(Et2) < max(St2)) & (max(St2) > min(Et2)) & (St2 < (start_gene - 6000)) & (Et2 > (end_gene + 6000)), TRUE, FALSE)) %>% #only calculate the difference in WS coordinates at N2 gene locus if the two alingments don't overlap in WS coordinate space
-  dplyr::mutate(local_dup = ifelse((min(Et2) < max(St2)) & (max(St2) > min(Et2)) & ( (L1 == min(L1) & start_aln < (start_gene - 6000) & end_aln > (end_gene + 6000)) ), TRUE, FALSE)) %>%
-  # dplyr::mutate(local_dup = {
-  #   minL1_idx <- which.min(L1)
-  #   flag <- start_aln[minL1_idx] > min(start_aln) &
-  #     end_aln[minL1_idx] < max(start_aln) &
-  #     start_aln[minL1_idx] < (start_gene[minL1_idx] - 6000) &
-  #     end_aln[minL1_idx] > (end_gene[minL1_idx] + 6000)
-  #   rep(flag, n()) }) %>%
-  # dplyr::mutate(WS_n2_middleGene_diff = ifelse((min(WS_n2_middleGene) < max(St2)) & (max(WS_n2_middleGene) > min(Et2)), (max(WS_n2_middleGene) - min(WS_n2_middleGene)), NA)) %>% #only calculate the difference in WS coordinates at N2 gene locus if the two alingments don't overlap in WS coordinate space
+  dplyr::mutate(local_dup = ifelse((min(Et2) < max(St2)) & (max(St2) > min(Et2)) & ( (L1 == min(L1) & start_aln < (start_gene - 0) & end_aln > (end_gene + 0)) ), TRUE, FALSE)) %>% 
   dplyr::mutate(WS_n2_middleGene_diff = max(WS_n2_middleGene) - min(WS_n2_middleGene)) %>% # want to include this data, because we probably don't want to keep massive jumps in duplication coordinates
   dplyr::ungroup() 
 
 
-# dist <- ggplot(diff_info) +
-#   scale_y_continuous(expand = c(0.005, 0)) +
-#   scale_x_continuous(expand = c(0.005,0)) +
-#   geom_point(data = diff_info %>% dplyr::filter(local_dup == FALSE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
-#   geom_point(data = diff_info %>% dplyr::filter(local_dup == TRUE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
-#   geom_vline(xintercept = 100, color = "gray30", size = 2, linetype="dashed") +
-#   geom_rect(xmin = -Inf, xmax = 100, ymin = -Inf, ymax = Inf, fill = 'gray', alpha = 0.008) +
-#   geom_hline(yintercept = 0.05, color = "gray30", size = 2, linetype="dashed") +
-#   geom_rect(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0.05, fill = 'gray', alpha = 0.008) +
-#   scale_color_manual(values = c("TRUE" = "red", "FALSE" = "blue")) +
-#   theme(
-#     legend.position = 'none',
-#     panel.background = element_blank(),
-#     panel.grid = element_blank(),
-#     # axis.title = element_blank(),
-#     axis.text = element_text(size = 14, color = 'black'),
-#     axis.title = element_text(size = 14, color = 'black', face = 'bold'),
-#     panel.border = element_rect(fill = NA)) +
-#   labs(x = "WS alignment coordinate difference at N2 gene locus (kb)", y = "Proportional difference in size of WS alignments (1 - (min(L2) / max(L2)))")
-# dist
+dist <- ggplot(diff_info) +
+  scale_y_continuous(expand = c(0.005, 0)) +
+  scale_x_continuous(expand = c(0.005,0)) +
+  geom_point(data = diff_info %>% dplyr::filter(local_dup == FALSE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
+  geom_point(data = diff_info %>% dplyr::filter(local_dup == TRUE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
+  geom_vline(xintercept = 100, color = "gray30", size = 2, linetype="dashed") +
+  geom_rect(xmin = -Inf, xmax = 100, ymin = -Inf, ymax = Inf, fill = 'gray', alpha = 0.008) +
+  geom_hline(yintercept = 0.05, color = "gray30", size = 2, linetype="dashed") +
+  geom_rect(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0.05, fill = 'gray', alpha = 0.008) +
+  scale_color_manual(values = c("TRUE" = "red", "FALSE" = "blue")) +
+  theme(
+    legend.position = 'none',
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    # axis.title = element_blank(),
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.title = element_text(size = 14, color = 'black', face = 'bold'),
+    panel.border = element_rect(fill = NA)) +
+  labs(x = "WS alignment coordinate difference at N2 gene locus (kb)", y = "Proportional difference in size of WS alignments (1 - (min(L2) / max(L2)))")
+dist
 
 # How many are local (contained in longer WS contig alignment) duplications?
-# local_dup_counts <- diff_info %>%
-#   dplyr::count(local_dup) # 175 are local, or should be kept due to syntenic context, and 232,000 do not meet the criteria
-# 
-# gene_jump_dist <- ggplot(data = diff_info) +
-#   geom_histogram(aes(x = WS_n2_middleGene_diff / 1e3), bins = 200, fill = 'gray30') +
-#   scale_y_continuous(expand = c(0.001, 0), labels = scales::label_number(scale = 1e-3)) +
-#   scale_x_continuous(expand = c(0.001,0)) +
-#   theme(
-#     legend.position = 'none',
-#     panel.background = element_blank(),
-#     panel.grid = element_blank(),
-#     axis.ticks.x = element_blank(),
-#     axis.text.y = element_text(size = 14, color = 'black'),
-#     axis.text.x = element_blank(),
-#     axis.title.x = element_blank(),
-#     axis.title.y = element_text(size = 16, color ='black'),
-#     # plot.margin = margin(r = 10, t = 10, l = 10),
-#     axis.line = element_line(color = "black"),
-#     axis.line.y.right = element_blank(),
-#     axis.line.x.top = element_blank()) +
-#   ylab("Count (thousands)")
-# gene_jump_dist
-# 
-# L2_diff_dist <- ggplot(data = diff_info) +
-#   geom_histogram(aes( y= diff_fraction), bins = 200, fill = 'gray30') +
-#   scale_y_continuous(expand = c(0.001, 0), position = "right") +
-#   scale_x_continuous(labels = scales::label_number(scale = 1e-3)) +
-#   theme(
-#     legend.position = 'none',
-#     panel.background = element_blank(),
-#     axis.ticks.y = element_blank(),
-#     axis.text.x = element_text(size = 14, color = 'black'),
-#     panel.grid = element_blank(),
-#     axis.text.y = element_blank(),
-#     axis.title.y = element_blank(),
-#     axis.title.x = element_text(size = 16, color = 'black'),
-#     # plot.margin = margin(l = 20, t = 10, r = 10, b = 23),
-#     axis.line = element_line(color = "black"),
-#     axis.line.y.right = element_blank(),
-#     axis.line.x.bottom = element_blank()) +
-#   xlab("Count (thousands)")
-# L2_diff_dist
-# 
-# 
-# gene_jump_dist_clean <- gene_jump_dist + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
-# 
-# L2_diff_dist_clean <- L2_diff_dist + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
-# 
-# top_row <- plot_grid(gene_jump_dist_clean, NULL, ncol = 2, rel_widths = c(0.8, 0.20))
-# middle_row <- plot_grid(dist, L2_diff_dist_clean, ncol = 2, rel_widths = c(0.8, 0.20)) #+ theme(plot.margin = margin(t = 20))
-# 
-# final_plot <- plot_grid(top_row, middle_row, nrow = 2, rel_heights = c(0.2, 0.8))
-# 
-# final_plot
+local_dup_counts <- diff_info %>%
+  dplyr::count(local_dup) 
+# 175 are local, or should be kept due to syntenic context with the threshold of having to span the N2 gene plus 6kb upstream and downstream
+# 10,449 are local, or should be kept due to syntenic context when I lower the threshold of synteny to only having to span the N2 gene, and not 6kb up- and downstream
+
+gene_jump_dist <- ggplot(data = diff_info) +
+  geom_histogram(aes(x = WS_n2_middleGene_diff / 1e3), bins = 200, fill = 'gray30') +
+  scale_y_continuous(expand = c(0.001, 0), labels = scales::label_number(scale = 1e-3)) +
+  scale_x_continuous(expand = c(0.001,0)) +
+  theme(
+    legend.position = 'none',
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.text.y = element_text(size = 14, color = 'black'),
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 16, color ='black'),
+    # plot.margin = margin(r = 10, t = 10, l = 10),
+    axis.line = element_line(color = "black"),
+    axis.line.y.right = element_blank(),
+    axis.line.x.top = element_blank()) +
+  ylab("Count (thousands)")
+gene_jump_dist
+
+L2_diff_dist <- ggplot(data = diff_info) +
+  geom_histogram(aes( y= diff_fraction), bins = 200, fill = 'gray30') +
+  scale_y_continuous(expand = c(0.001, 0), position = "right") +
+  scale_x_continuous(labels = scales::label_number(scale = 1e-3)) +
+  theme(
+    legend.position = 'none',
+    panel.background = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_text(size = 14, color = 'black'),
+    panel.grid = element_blank(),
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.title.x = element_text(size = 16, color = 'black'),
+    # plot.margin = margin(l = 20, t = 10, r = 10, b = 23),
+    axis.line = element_line(color = "black"),
+    axis.line.y.right = element_blank(),
+    axis.line.x.bottom = element_blank()) +
+  xlab("Count (thousands)")
+L2_diff_dist
 
 
-# # example of local duplication that is not a point on the plot
-asdf <- diff_info %>% dplyr::filter(WS_n2_middleGene_diff > 400000 & diff_fraction > 0.75 & local_dup == T)
-boo <- ggplot(diff_info %>% dplyr::filter(n2_gene == "WBGene00012012" & strain == "ECA1887")) +
-  geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
-  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
+gene_jump_dist_clean <- gene_jump_dist + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+L2_diff_dist_clean <- L2_diff_dist + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+top_row <- plot_grid(gene_jump_dist_clean, NULL, ncol = 2, rel_widths = c(0.8, 0.20))
+middle_row <- plot_grid(dist, L2_diff_dist_clean, ncol = 2, rel_widths = c(0.8, 0.20)) #+ theme(plot.margin = margin(t = 20))
+
+final_plot <- plot_grid(top_row, middle_row, nrow = 2, rel_heights = c(0.2, 0.8))
+
+final_plot
+
+
+# CRAZY EXAMPLE of gene duplication over 10Mb away on the same contig
+lkj <- diff_info %>% dplyr::filter(WS_n2_middleGene_diff > 10100000 & diff_fraction > 0.75 & local_dup == T & n2_gene == "WBGene00013102")
+lkjplt <- ggplot(diff_info %>% dplyr::filter(n2_gene == "WBGene00013102" & strain == "ECA2187")) +
+  geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.5) +
+  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6), color = 'blue', linewidth = 1) +
   theme(
     legend.position = 'none',
     panel.background = element_blank(),
@@ -892,31 +889,48 @@ boo <- ggplot(diff_info %>% dplyr::filter(n2_gene == "WBGene00012012" & strain =
     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
     axis.text = element_text(size = 14, color = 'black'),
     plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
-  labs(y = "ECA1887 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00012012 : IV")
+  labs(y = "ECA2187 contig position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00013102 : IV")
 # coord_cartesian(xlim = c(7.4,7.408), ylim = c(3,3.05))
-boo
+lkjplt
 
 
-
-pltExL2 <- diff_info %>% dplyr::filter(n2_gene == "WBGene00000638") %>% dplyr::filter(strain == "ECA2607")
-dfFilt_gene <- ggplot(pltExL2) +
-  geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
-  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
-  theme(
-    legend.position = 'none',
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    panel.border = element_rect(fill = NA),
-    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
-    axis.text = element_text(size = 14, color = 'black'),
-    plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
-  labs(y = "ECA2607 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00000638 : I")
-  # coord_cartesian(xlim = c(7.4,7.408), ylim = c(3,3.05))
-dfFilt_gene
-
-
-
+# asdf <- diff_info %>% dplyr::filter(WS_n2_middleGene_diff > 400000 & diff_fraction > 0.75 & local_dup == T)
+# boo <- ggplot(diff_info %>% dplyr::filter(n2_gene == "WBGene00012012" & strain == "ECA1887")) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+#     axis.text = element_text(size = 14, color = 'black'),
+#     plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
+#   labs(y = "ECA1887 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00012012 : IV")
+# # coord_cartesian(xlim = c(7.4,7.408), ylim = c(3,3.05))
+# boo
 # 
+# 
+# 
+# pltExL2 <- diff_info %>% dplyr::filter(n2_gene == "WBGene00000638") %>% dplyr::filter(strain == "ECA2607")
+# dfFilt_gene <- ggplot(pltExL2) +
+#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
+#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = St2 / 1e6, yend = Et2 / 1e6, color = longest_contig), linewidth = 1) +
+#   theme(
+#     legend.position = 'none',
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+#     axis.text = element_text(size = 14, color = 'black'),
+#     plot.title = element_text(size = 18, hjust = 0.5, color = 'black', face = 'bold')) +
+#   labs(y = "ECA2607 genome position (Mb)", x = "N2 genome position (Mb)", title = "WBGene00000638 : I")
+#   # coord_cartesian(xlim = c(7.4,7.408), ylim = c(3,3.05))
+# dfFilt_gene
+
+
+
+ 
 # Example of two alignments of the same length from the same contig that are very far apart
 # pltExL3 <- diff_info %>% dplyr::filter(n2_gene == "WBGene00012066") %>% dplyr::filter(strain == "CB4856")
 # dfFilt_gene2 <- ggplot(pltExL3) +
