@@ -22,7 +22,7 @@ interproscan.sh \
 	--input /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/prep/QX1410.update.April2025.noWBGeneID.csq.ONLYPC.longest.protein.fa \
 	--goterms \
 	--cpu 48 \
-	--applications Pfam,SMART,TIGRFAM,SUPERFAMILY,CDD,Gene3D \
+	--applications Pfam,SMART,TIGRFAM,SUPERFAMILY,CDD,Gene3D,FunFam,PANTHER,PIRSF,PIRSR,ProSiteProfiles,ProSitePatterns,SFLD,Hamap,Coils,AntiFam \
 	--iprlookup \
 	--disable-precalc \
 	--output-file-base $output/QX1410_InterProScan \
