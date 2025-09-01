@@ -9,22 +9,20 @@
 #SBATCH --output=/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/InterProScan/slurm.oe
 #SBATCH --error=/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/InterProScan/slurm.rr
 
-
-source activate interpro
-
 output="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/InterProScan/output"
 mkdir -p $output
 TMP=${SLURM_TMPDIR:-/scratch4/eande106/Lance/ipr.$SLURM_JOB_ID}
 mkdir -p $TMP
 
-interproscan.sh \
+#         --applications Pfam,SMART,TIGRFAM,SUPERFAMILY,CDD,Gene3D,FunFam,PANTHER,PIRSF,PIRSR,ProSiteProfiles,ProSitePatterns,SFLD,Hamap,Coils,AntiFam \
+
+/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/InterProScan/database/interproscan-5.75-106.0/interproscan.sh \
 	--formats TSV \
 	--input /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/prep/QX1410.update.April2025.noWBGeneID.csq.ONLYPC.longest.protein.fa \
 	--goterms \
 	--cpu 48 \
-	--applications Pfam,SMART,TIGRFAM,SUPERFAMILY,CDD,Gene3D,FunFam,PANTHER,PIRSF,PIRSR,ProSiteProfiles,ProSitePatterns,SFLD,Hamap,Coils,AntiFam \
 	--iprlookup \
 	--disable-precalc \
-	--output-file-base $output/QX1410_InterProScan \
+	--output-file-base $output/QX_IPR_allApps \
 	--tempdir $TMP
 
