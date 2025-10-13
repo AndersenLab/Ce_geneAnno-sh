@@ -1,2 +1,3 @@
-# Ce_geneAnno-sh
-This repository contains the scripts used for pangneome gene set analysis and visualization, syntelog matrix creation, synteny visualization, SV calling, and other misc analyses using PacBio HiFi assemblies created using assembly-nf
+# Misc. scripts...
+This directory was created for the initial analyses of creating a gene-based pangenome. It has quickly turned into a repository for storing all scripts related to genome assembly, gene annotation, SV calling, GFF/FA file manipulation, functional enrichment analysis, gene set visualization, and syntelog decompression.
+
