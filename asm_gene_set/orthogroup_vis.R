@@ -255,20 +255,22 @@ nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annota
 
 # Converting transcripts to genes and removing all duplicate genes (not needed anymore, using longest isoform) in a dataframe cell:
 # see script - /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/scripts/Ce_geneAnno-sh/asm_gene_set/tran_gene.sh 
-ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N0_0504_genes.tsv")
+# ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N0_0504_genes.tsv")
+ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups.tsv")
 
 
-whatever <- ortho_genes_dd %>%
-  dplyr::select(JU1581.braker.longest.protein, N2.longest.protein)
+# whatever <- ortho_genes_dd %>%
+  # dplyr::select(JU1581.braker.longest.protein, N2.longest.protein)
 
 strainCol <- colnames(ortho_genes_dd)
-strainCol_c1 <- gsub(".braker.longest.protein","",strainCol)
-strainCol_c2 <- gsub(".longest.protein","",strainCol_c1)
+ugh <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
+ugh2 <- gsub("..20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","",ugh)
+strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", ugh2)
 colnames(ortho_genes_dd) <- strainCol_c2
 
 ortho_count <- ortho_genes_dd
 
-strainCol_c2_u <- strainCol_c2[!strainCol_c2 %in% c("OG", "HOG", "Gene Tree Parent Clade")]
+strainCol_c2_u <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
 
 for (i in 1:length(strainCol_c2_u)) {
   print(paste0(i,"out of", length(strainCol_c2_u)))
@@ -279,18 +281,14 @@ for (i in 1:length(strainCol_c2_u)) {
 }
 
 all_relations_pre <- ortho_count %>%
-  dplyr::select(HOG, dplyr::contains("_count"))
+  dplyr::select(Orthogroup, dplyr::contains("_count"))
 
 
-private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/private_OG_genes_gene_assignments.tsv") %>%
-  tidyr::pivot_wider(id_cols = Orthogroup, names_from = Source, values_from = Gene)
+private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups_UnassignedGenes.tsv") 
 
-cols_yuh <- colnames(private_OGs)
-cols_yuh1 <- gsub(".braker.longest.protein","", cols_yuh)
-cols_yuh2 <- gsub(".longest.protein","", cols_yuh1)
-colnames(private_OGs) <- cols_yuh2
+colnames(private_OGs) <- strainCol_c2
 
-private_cols <- cols_yuh2[!cols_yuh2 %in% c("Orthogroup")]
+private_cols <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
 
 private_ortho_count <- private_OGs
 for (i in 1:length(private_cols)) {
@@ -302,8 +300,7 @@ for (i in 1:length(private_cols)) {
 }
   
 all_relations_private <- private_ortho_count %>%
-  dplyr::select(Orthogroup, dplyr::contains("_count")) %>%
-  dplyr::rename(HOG = Orthogroup)
+  dplyr::select(Orthogroup, dplyr::contains("_count"))
 
 
 all_relations <- all_relations_pre %>%
@@ -341,23 +338,24 @@ gs_allOrtho <- ggplot(data = classification, aes(x = sum, y = n, fill = class)) 
   guide = guide_legend(title = NULL) 
   ) +
   ylab("Orthogroups") + # longest isoform
-  xlab("Strains") +
+  xlab("Genomes") +
   # scale_y_continuous(labels = scales::percent_format(scale = 1)) + 
   # scale_x_continuous(labels = scales::percent_format(scale = 1)) +
   theme_classic() +
+  scale_x_continuous(breaks = seq(0, max(classification$sum), by = 25)) +
   theme(
-    axis.title = element_text(size = 20, color = 'black', face = 'bold'),
+    axis.title = element_text(size = 24, color = 'black', face = 'bold'),
     legend.position = c(0.85, 0.8),
     plot.margin = margin(l = 20, r = 20, t = 20),
-    plot.title = element_text(size=18, face = 'bold', hjust=0.5),
-    legend.text = element_text(size=19, color = 'black'),
-    axis.text = element_text(size=16, color = 'black')
+    # plot.title = element_text(size=26, face = 'bold', hjust=0.5),
+    legend.text = element_text(size=22, color = 'black'),
+    axis.text = element_text(size=18, color = 'black')
   )
 gs_allOrtho
 
-HOG_class_count <- classification %>%
+OG_class_count <- classification %>%
   dplyr::group_by(class) %>%
-  dplyr::summarise(n_HOG = sum(n)) %>%
+  dplyr::summarise(n_OG = sum(n)) %>%
   dplyr::ungroup()
 
 
@@ -425,8 +423,8 @@ all_genes_class_count <- sum_genes %>%
 
 ### PLOTTING BAR PLOTS FOR THE PROPORTION OF GENES THAT ARE CLASSIFIED AS EACH GENE SET IN STRAIN
 table <- all_relations %>%
-  dplyr::left_join(classification_genes %>% dplyr::select(HOG, class), by = "HOG") %>%
-  dplyr::select(-HOG)
+  dplyr::left_join(classification_genes %>% dplyr::select(Orthogroup, class), by = "Orthogroup") %>%
+  dplyr::select(-Orthogroup)
 
 colnames(table) <- gsub("_count", "", colnames(table))
 
@@ -452,13 +450,13 @@ for (col_name in count_cols) {
 
 final_df <- bind_rows(results_list)
 
-# df_long <- final_df %>%
-#   tidyr::pivot_longer(cols = c(core, accessory, private), names_to = "class", values_to = "n_genes") %>%
-#   dplyr::mutate(class = factor(class, levels = c("private", "accessory", "core")), strain = factor(strain, levels = rev(unique(strain))))
-# 
-# ugh <- df_long %>%
-#   dplyr::group_by(class) %>%
-#   dplyr::summarise(meann = mean(n_genes))
+df_long <- final_df %>%
+  tidyr::pivot_longer(cols = c(core, accessory, private), names_to = "class", values_to = "n_genes") %>%
+  dplyr::mutate(class = factor(class, levels = c("private", "accessory", "core")), strain = factor(strain, levels = rev(unique(strain))))
+
+ugh <- df_long %>%
+  dplyr::group_by(class) %>%
+  dplyr::summarise(meann = mean(n_genes))
 # 
 # core <- ugh %>%dplyr::filter(class == "core")
 # acc <- ugh %>% dplyr::filter(class == "accessory") %>% dplyr::mutate(meann = meann + core$meann)
@@ -491,6 +489,7 @@ df_percent <- final_df %>%
   dplyr::select(-total) %>%
   tidyr::pivot_longer(cols = c(core, accessory, private), names_to = "class", values_to = "percent")
 
+
 strain_order <- df_percent %>%
   dplyr::filter(class == "core") %>%
   dplyr::arrange(percent) %>%
@@ -511,7 +510,7 @@ contrib <- ggplot(df_percent, aes(x = percent, y = strain, fill = class)) +
     private = "magenta3"
   )) +
   geom_bar(stat = "identity") +
-  geom_vline(xintercept = core$meann, linetype = "dashed", color = 'gray22', linewidth = 1.5) +
+  # geom_vline(xintercept = core$meann, linetype = "dashed", color = 'gray22', linewidth = 1.5) +
   # geom_vline(xintercept = acc$meann, linetype = "dashed", color = 'gray22', linewidth = 1.5) +
   # geom_vline(xintercept = priv$meann, linetype = "dashed", color = 'gray22', linewidth = 1.5) +
   labs(x = "Percent of genes", fill = "Gene set") +
@@ -528,7 +527,7 @@ contrib <- ggplot(df_percent, aes(x = percent, y = strain, fill = class)) +
   )
 contrib
 
-ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/bar.png", contrib, height = 13, width = 12, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/bar.png", contrib, height = 13, width = 12, dpi = 600)
 
 
 
@@ -552,11 +551,14 @@ count <- all_relations %>%
     )
   ) 
 
+
 n2_gene <- all_genes_strain %>%
   dplyr::filter(strain == "N2") %>%
   dplyr::rename(ID = attributes)
 
 n2_table <- ortho_genes_dd %>% 
+  dplyr::select(-OG,-'Gene Tree Parent Clade') %>%
+  dplyr::bind_rows((private_OGs %>% dplyr::rename(HOG = Orthogroup))) %>%
   dplyr::select(HOG,N2) 
 
 ortho_count_wCoord <- count %>%
@@ -650,7 +652,7 @@ stats <- ortho_count_wCoord_HDR %>%
 ortho_count_wCoord_HDR_final <- ortho_count_wCoord_HDR %>%
   dplyr::left_join(stats, by = 'class') %>%
   dplyr::filter(contig != "MtDNA") %>%
-  dplyr::mutate(class = dplyr::recode(class, "core" = "core (14,799)", "accessory" = "accessory (4,660)", "private" = "private (37)")) %>%
+  dplyr::mutate(class = dplyr::recode(class, "core" = "core (14,799)", "accessory" = "accessory (4,660)", "private" = "private (462)")) %>%
   dplyr::rename(Class = class, HDR = in_HDR)
 
 
@@ -658,8 +660,8 @@ N2_genes_plot <- ggplot(ortho_count_wCoord_HDR_final) +
   geom_point(aes(x = start / 1e6, y = freq * 100, color = Class, shape = HDR), size = 2) +
   scale_color_manual(
     name = "Gene set",
-    values = c("core (14,799)" = "green4", "accessory (4,660)" = "#DB6333", "private (37)" = "magenta3"),
-    limits = c("core (14,799)", "accessory (4,660)", "private (37)")) +
+    values = c("core (14,799)" = "green4", "accessory (4,660)" = "#DB6333", "private (462)" = "magenta3"),
+    limits = c("core (14,799)", "accessory (4,660)", "private (462)")) +
   scale_shape_manual(
     name = "In a HDR?",
     values = c("TRUE" = 4, "FALSE" = 1)) +
@@ -688,8 +690,8 @@ acc_hdr <- ortho_count_wCoord_HDR_final %>%
   dplyr::count(HDR) # 2273/2380:InHDRs/notInHDRs - 49%
 
 priv_hdr <- ortho_count_wCoord_HDR_final %>%
-  dplyr::filter(Class == "private (37)") %>%
-  dplyr::count(HDR) # 10/27:InHDRs/notInHDRs - 27%
+  dplyr::filter(Class == "private (462)") %>%
+  dplyr::count(HDR) # 105/357:InHDRs/notInHDRs - 23%
 
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/N2_geneFreq.png", N2_genes_plot, height = 10, width = 15, dpi = 600)
 
@@ -730,65 +732,65 @@ ggplot(ortho_count_wCoord_HDR_final) +
 # ======================================================================================================================================================================================== #
 # Plotting rarefaction #
 # ======================================================================================================================================================================================== #
-private <- all_relations %>%
-  dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
-  dplyr::mutate(sum = rowSums(across(-1, ~ ., .names = NULL), na.rm = TRUE)) %>%
-  dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
-  dplyr::mutate(
-    class = case_when(
-      freq == 1 ~ "core",
-      freq >= 0.95 & freq < 1 ~ "soft-core",
-      freq > private_freq & freq < 0.95 ~ "accessory",
-      freq == private_freq ~ "private",
-      TRUE ~ "undefined"
-    )
-  ) %>%
-  dplyr::filter(class == "private")
-
-strains <- private %>%
-  dplyr::select(-HOG,-sum,-freq,-class) %>%
-  colnames()
-
-private_ordered <- private %>%
-  dplyr::select(all_of(strains)) %>%  # Keep only strain columns
-  dplyr::summarise(across(everything(), sum, na.rm = TRUE)) %>%
-  pivot_longer(cols = everything(), names_to = "strain", values_to = "count") %>%  # Use a string for `names_to`
-  dplyr::arrange(desc(count)) %>%
-  dplyr::pull(strain)
-
-private_final <- private %>%
-  dplyr::select(HOG, all_of(private_ordered), sum, freq, class)
-
-rarefaction <- data.frame(
-  num_strains = integer(),
-  num_private_orthogroups = integer()
-)
-
-for (i in 2:length(strainCol_c2_u)) {
-   temp <- private_final %>% dplyr::select(2:i)
-   # print(temp)
-
-   private_count <- sum(apply(temp, 1, function(row) sum(!is.na(row)) == 1))
-   rarefaction <- rbind(rarefaction, data.frame(num_strains = i-1, num_private_orthogroups = private_count))
-}
-
-rfc <- ggplot(data = rarefaction) +
-  geom_point(aes(x=num_strains, y = num_private_orthogroups), size=2.5, color = 'magenta3', alpha=0.8) +
-  xlab("Genomes") +
-  ylab("Private HOGs") +
-  # coord_cartesian(ylim = c(200,1500)) +
-  theme(
-    panel.background = element_blank(),
-    axis.title = element_text(size=16, color = 'black', face = 'bold'),
-    axis.text = element_text(size=14, color = 'black'),
-    panel.border = element_rect(fill = NA),
-    plot.margin = margin(t = 20, r = 20, b = 20, l = 20, unit = "pt")  # 20pt on all sides
-  )
-
-rfc
-
-
-# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/rarefaction_115_labelled.png", height = 5, width = 9, rfc_labeled, dpi = 600)
+# private <- all_relations %>%
+#   dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
+#   dplyr::mutate(sum = rowSums(across(-1, ~ ., .names = NULL), na.rm = TRUE)) %>%
+#   dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
+#   dplyr::mutate(
+#     class = case_when(
+#       freq == 1 ~ "core",
+#       freq >= 0.95 & freq < 1 ~ "soft-core",
+#       freq > private_freq & freq < 0.95 ~ "accessory",
+#       freq == private_freq ~ "private",
+#       TRUE ~ "undefined"
+#     )
+#   ) %>%
+#   dplyr::filter(class == "private")
+# 
+# strains <- private %>%
+#   dplyr::select(-HOG,-sum,-freq,-class) %>%
+#   colnames()
+# 
+# private_ordered <- private %>%
+#   dplyr::select(all_of(strains)) %>%  # Keep only strain columns
+#   dplyr::summarise(across(everything(), sum, na.rm = TRUE)) %>%
+#   pivot_longer(cols = everything(), names_to = "strain", values_to = "count") %>%  # Use a string for `names_to`
+#   dplyr::arrange(desc(count)) %>%
+#   dplyr::pull(strain)
+# 
+# private_final <- private %>%
+#   dplyr::select(HOG, all_of(private_ordered), sum, freq, class)
+# 
+# rarefaction <- data.frame(
+#   num_strains = integer(),
+#   num_private_orthogroups = integer()
+# )
+# 
+# for (i in 2:length(strainCol_c2_u)) {
+#    temp <- private_final %>% dplyr::select(2:i)
+#    # print(temp)
+# 
+#    private_count <- sum(apply(temp, 1, function(row) sum(!is.na(row)) == 1))
+#    rarefaction <- rbind(rarefaction, data.frame(num_strains = i-1, num_private_orthogroups = private_count))
+# }
+# 
+# rfc <- ggplot(data = rarefaction) +
+#   geom_point(aes(x=num_strains, y = num_private_orthogroups), size=2.5, color = 'magenta3', alpha=0.8) +
+#   xlab("Genomes") +
+#   ylab("Private HOGs") +
+#   # coord_cartesian(ylim = c(200,1500)) +
+#   theme(
+#     panel.background = element_blank(),
+#     axis.title = element_text(size=16, color = 'black', face = 'bold'),
+#     axis.text = element_text(size=14, color = 'black'),
+#     panel.border = element_rect(fill = NA),
+#     plot.margin = margin(t = 20, r = 20, b = 20, l = 20, unit = "pt")  # 20pt on all sides
+#   )
+# 
+# rfc
+# 
+# 
+# # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/rarefaction_115_labelled.png", height = 5, width = 9, rfc_labeled, dpi = 600)
 
 
 ### PLOTTING RAREFRACTION BASED ON PRIVATE GENE NUMBERS NOT PRIVATE HOGs ###
@@ -807,25 +809,25 @@ private <- all_relations %>%
   ) %>%
   dplyr::filter(class == "private")
 
-priv_HOGs <- private %>%
-  dplyr::pull(HOG)
+priv_OGs <- private %>%
+  dplyr::pull(Orthogroup)
 
 strains <- private %>%
-  dplyr::select(-HOG,-sum,-freq,-class) %>%
+  dplyr::select(-Orthogroup,-sum,-freq,-class) %>%
   colnames()
 
 priv_genes <- all_relations %>%
-  dplyr::filter(HOG %in% priv_HOGs) 
+  dplyr::filter(Orthogroup %in% priv_OGs) 
 
 private_ordered_genes <- priv_genes %>%
   dplyr::select(all_of(strains)) %>%  # Keep only strain columns
   dplyr::summarise(across(everything(), sum, na.rm = TRUE)) %>%
   pivot_longer(cols = everything(), names_to = "strain", values_to = "count") %>% 
-  dplyr::arrange(desc(count)) %>%
+  dplyr::arrange(desc(count)) #%>%
   dplyr::pull(strain)
 
 private_final <- priv_genes %>%
-  dplyr::select(HOG, all_of(private_ordered_genes))
+  dplyr::select(Orthogroup, all_of(private_ordered_genes))
 
 rarefaction <- data.frame(
   num_strains = integer(),
@@ -914,6 +916,17 @@ rfc_genes_fit
 
 
 
+# ======================================================================================================================================================================================== #
+# Plotting distribution of strains and count of private genes #
+# ======================================================================================================================================================================================== #
+
+
+
+
+
+
+
+
 
 
 
@@ -924,7 +937,7 @@ rfc_genes_fit
 # Plotting distribution of strains and count of private genes #
 # ======================================================================================================================================================================================== #
 trp <- private_final %>%
-  dplyr::select(-HOG) %>%
+  dplyr::select(-Orthogroup) %>%
   t() %>%
   as.data.frame() %>%
   tibble::rownames_to_column("strain") %>%
@@ -1007,11 +1020,130 @@ blah
 
 
 
+# ======================================================================================================================================================================================== #
+# Looking at relationship between number of private genes and number of single-exon genes #
+# ======================================================================================================================================================================================== #
+
+allGffs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/ALL_GFFs_longestIso_exons_fixed.tsv", col_names = c("exonID"))
+
+singleEx <- allGffs %>%
+  tidyr::separate(exonID, into = c("exonID","strain"), sep = " ") %>%
+  dplyr::filter(strain != "c_elegans'") %>%
+  dplyr::group_by(exonID, strain) %>%
+  dplyr::mutate(num_exons = n()) %>%
+  dplyr::filter(num_exons == 1) %>%
+  dplyr::ungroup()
+
+N2_exons <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/N2_longestIso_exons_fixed.tsv", col_names = c("exonID", "strain")) %>%
+  dplyr::group_by(exonID,strain) %>%
+  dplyr::mutate(num_exons = n()) %>%
+  dplyr::filter(num_exons == 1) %>%
+  dplyr::ungroup()
+
+single_exonGenes <- singleEx %>%
+  dplyr::bind_rows(N2_exons) %>%
+  dplyr::count(strain, name = "num_SE_genes") %>%
+  dplyr::filter(strain != "c_elegans")
+  
+priv_genes <- geneCount_HOGs %>%
+  dplyr::select(strain,count, n_genes) %>%
+  dplyr::rename(privates = count, PC_genes = n_genes) %>%
+  dplyr::left_join(single_exonGenes, by = "strain") %>%
+  dplyr::arrange(privates)
 
 
+model <- lm(privates ~ num_SE_genes, data = priv_genes)
+r_sq <- summary(model)$r.squared
+segenes <- ggplot(priv_genes) + 
+  geom_line(aes(x = privates, y = PC_genes/10), color = 'magenta') +
+  geom_line(aes(x = privates, y = num_SE_genes), color = 'red') + 
+  geom_point(aes(x = privates, y = num_SE_genes), color = 'firebrick') +
+  geom_smooth(data = priv_genes, aes(x = privates, y = num_SE_genes),method = "lm", se = FALSE, color = "black") + 
+  geom_text(data = subset(priv_genes, num_SE_genes > 3600 | num_SE_genes < 800), aes(x = privates, y = num_SE_genes, label = strain), hjust = 1.1, vjust = -0.5, size = 5, color = "firebrick") +
+  annotate("text", x = 1000, y = 1500, label = "PC genes", hjust = -1.5, vjust = -5, size = 5, color = "magenta") +
+  annotate("text", x = 1200, y = 4200, label = paste0("R² = ", round(r_sq, 3)), size = 5, color = "black") +
+  xlab("Number of private genes") +
+  ylab("Single exon genes") +
+  theme(
+    panel.background = element_blank(),
+    axis.title = element_text(size=13, color = 'black', face = 'bold'),
+    axis.text = element_text(size=11, color = 'black'),
+    panel.border = element_rect(fill = NA),
+    plot.margin = margin(t = 20, r = 20, b = 20, l = 20, unit = "pt")  
+  )
+segenes
 
 
+# Of the private genes, are all of them single exon genes??? 
+private_ogs <- private %>%
+  dplyr::select(HOG) %>%
+  dplyr::pull()
 
+
+N2 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N2_tran_gene.tsv", col_names = c('tran','gene'))
+
+strain_SE <- singleEx %>%
+  dplyr::bind_rows(N2_exons) %>%
+  dplyr::select(-num_exons) %>%
+  dplyr::filter(strain != "c_elegans") %>%
+  dplyr::mutate(exonID = gsub("\\.t[0-9]+", "", exonID)) %>%
+  dplyr::mutate(exonID = gsub("transcript:", "", exonID)) %>%
+  dplyr::mutate(exonID = ifelse(exonID %in% N2$tran, N2$gene, exonID)) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(num_single_exon = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::select(strain, exonID, num_single_exon)
+  
+privs <- ortho_genes_dd %>% 
+  dplyr::select(-OG,-'Gene Tree Parent Clade') %>%
+  dplyr::bind_rows((private_OGs %>% dplyr::rename(HOG = Orthogroup))) %>%
+  dplyr::filter(HOG %in% private_ogs) %>%
+  pivot_longer(
+    cols = -HOG,
+    names_to = "strain",
+    values_to = "genes"
+  ) %>%
+  dplyr::filter(!is.na(genes)) %>%                     
+  dplyr::mutate(genes = str_split(genes, ",")) %>%     
+  unnest(genes) %>%                             
+  dplyr::arrange(strain) %>%
+  dplyr::select(-HOG) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(num_privs = n()) %>%
+  dplyr::ungroup() 
+
+prop_SE_priv <- privs %>%
+  inner_join(strain_SE, by = c("strain" = "strain", "genes" = "exonID")) %>%  
+  group_by(strain) %>%
+  summarise(
+    num_priv_single_exon = n(),                        
+    num_privs = first(num_privs),                      
+    proportion = num_priv_single_exon / num_privs      
+  )
+
+plot_data <- prop_SE_priv %>%
+  dplyr::mutate(non_single_exon = 1 - proportion) %>%
+  dplyr::arrange(proportion) %>% 
+  dplyr::mutate(strain = factor(strain, levels = strain)) %>%
+  dplyr::select(strain, single_exon = proportion, non_single_exon) %>%
+  pivot_longer(cols = c(single_exon, non_single_exon), 
+               names_to = "gene_type", values_to = "prop") 
+
+SE_plot <- ggplot(plot_data, aes(x = prop, y = reorder(strain, prop), fill = gene_type)) +
+  geom_bar(stat = "identity", position = "stack") +
+  scale_fill_manual(values = c("single_exon" = "firebrick", "non_single_exon" = "gray70"),
+                    labels = c("multi-exon", "single-exon")) +
+  labs(x = "Proportion of private genes", y = "Strain") +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 9, color = 'black'),
+    axis.title.y = element_blank(),
+    legend.title = element_blank(),
+    axis.title = element_text(size = 12, face = "bold"),
+    legend.position = "right",
+    panel.border = element_rect(fill = NA)) +
+  scale_x_continuous(expand = c(0,0))
+SE_plot
 
 
 

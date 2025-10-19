@@ -10,45 +10,47 @@ library(stringr)
 
 
 # want <- c("N2","JU346","ECA2581","ECA36","ECA1825","ECA1409","ECA1761","ECA1769")
+# want <- c("N2","JU346","ECA36","ECA1825","ECA1409","ECA1761")
 # want <- c("N2", "ECA1769", "ECA36")
 # want <- c("N2","ECA1409")
 # want <- c("N2", "NIC195")
+# want <- c("N2","ECA1187","ECA1195","ECA703")
 
 #read all pairwise genome coordinate comparisons
-transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/nucmer_runs/115_WI_transformed_coords_FIXED.tsv",col_names = F) 
+# transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/nucmer_runs/115_WI_transformed_coords_FIXED.tsv",col_names = F) # REPLACE
+transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/nucmer_aln_WSs/all_140_nucmer.tsv",col_names = F) 
 colnames(transformed_coords) <- c("S1","E1","S2","E2","L1","L2","IDY","LENR","LENQ","REF","HIFI","STRAIN") 
 transformed_coords <- transformed_coords #%>%
-  # dplyr::filter(grepl("ECA", STRAIN))
-  # dplyr::filter(STRAIN %in% want)
+ # dplyr::filter(STRAIN %in% want)
 
 #read concatentated gene models of every genome
-# gffCat1 <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/braker_runs/merged_gff/all_WI_braker.clean.gff", col_names = F)
-gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/ALL_GFFs_longestIso.tsv", col_names = F)
+# gffCat1 <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/braker_runs/merged_gff/all_WI_braker.clean.gff", col_names = F) 
+# gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/ALL_GFFs_longestIso.tsv", col_names = F) # need to replace iwth Updated Octover results
+gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/140strain_genemRNAfeatures.tsv", col_names = F)
 colnames(gffCat1) <- c("seqid","source","type","start","end","score","strand","phase","attributes","STRAIN")
 gffCat2 <- ape::read.gff("/vast/eande106/projects/Nicolas/c.elegans/N2/wormbase/WS283/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
 gffCat <- rbind(gffCat1,gffCat2) #%>% 
-  # dplyr::filter(grepl("ECA", STRAIN))
   # dplyr::filter(STRAIN %in% want)
 
 #read ortholog relationships among gene models
 # orthos <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_78/OrthoFinder/Results_Mar20/Orthogroups/Orthogroups.tsv")
-orthos <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_115_longIso/OrthoFinder/Results_May02/Orthogroups/Orthogroups.tsv")
+orthos <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups.tsv")
 strainCol <- colnames(orthos)
 # strainCol_c1 <- gsub(".braker.protein","", strainCol)
 # strainCol_c2 <- gsub("_WS283.protein","", strainCol_c1)
-strainCol_c1 <- gsub(".braker.longest.protein","", strainCol)
-strainCol_c2 <- gsub(".longest.protein","", strainCol_c1)
+strainCol_c1 <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
+strainCol_c1.1 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol_c1)
+strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", strainCol_c1.1)
 colnames(orthos) <- strainCol_c2
-
 
 # hdr_chrom = "V"
 # hdr_start_pos = 16067500
 # hdr_end_pos = 16153000
 
 # smaller right arm of V for BWC
-# hdr_chrom = "V"
-# hdr_start_pos = 16067500
-# hdr_end_pos = 16092500
+hdr_chrom = "V"
+hdr_start_pos = 16060000
+hdr_end_pos = 16070000
 
 # Looking at kola genes
 # K06A9.1
@@ -66,7 +68,6 @@ colnames(orthos) <- strainCol_c2
 # hdr_start_pos = 6628000 
 # hdr_end_pos = 6660000
 
-
 # C49C3.4
 # hdr_chrom = "IV"
 # hdr_start_pos = 17300000 
@@ -82,10 +83,11 @@ colnames(orthos) <- strainCol_c2
 # hdr_start_pos = 10888000
 # hdr_end_pos = 10918000
 
-# Stefan ROI
-hdr_chrom = "V"
-hdr_start_pos = 19200000
-hdr_end_pos =  19300000
+# # Stefan ROI
+# hdr_chrom = "V"
+# hdr_start_pos = 19200000
+# hdr_end_pos =  19300000
+
 
 
 #offset lets you explore adjacent regions
@@ -506,9 +508,11 @@ N2_ad_corr <- N2_ad %>%
 g_count <- length(unique(N2_ad_corr$Parent))
 
 # desired_order <- c("N2","ECA1409","ECA1761","JU346","ECA1769","ECA36","ECA1825","ECA2581")
+# desired_order <- c("N2","JU346","ECA36","ECA1825","ECA1409","ECA1761")
 # desired_order <- c("N2","ECA1769","ECA36")
 # desired_order <- c("N2","ECA1409")
 # desired_order <- c("N2", "NIC195")
+# desired_order <- c("N2","ECA1187","ECA1195","ECA703")
 
 WI_ad <- boundGenes %>% 
   dplyr::filter(!STRAIN=="N2") %>%
@@ -534,7 +538,7 @@ WI_ad <- boundGenes %>%
   dplyr::arrange(start_sort, .by_group = TRUE) %>%
   dplyr::mutate(first_gene=dplyr::first(alias)) %>%
   dplyr::ungroup() %>%
-  # dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
+  dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
   dplyr::group_by(STRAIN) %>%
   dplyr::arrange(first_gene, n_gene, .by_group = TRUE) %>% 
   dplyr::mutate(order_gene = dplyr::first(first_gene), order_num = dplyr::first(n_gene)) %>% 
@@ -618,6 +622,20 @@ all_hap <- ggplot() +
 all_hap
 
 
+
+
+
+
+
+# ======================================================================================================================= #
+plot_ad <- all_ad %>%
+  dplyr::group_by(STRAIN,Parent) %>%
+  dplyr::filter(col==max(col)) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(STRAIN,Parent,.keep_all = T) %>%
+  dplyr::mutate(class=ifelse(col==0,"no_known_ortho",ifelse(col==1,"has_distal_ortho","has_local_ortho"))) 
+
+
 # Exclude "non-ortho" from the trapezium joining
 plot_ad_filtered <- plot_ad %>% 
   dplyr::mutate(alias=ifelse(is.na(alias),"non-ortho",alias)) %>%
@@ -664,7 +682,7 @@ ordered_aliases <- plot_ad %>%
   unique()
 
 # Reorder the factor levels so that the legend follows the ordered aliases
-plot_ad2 <- plot_ad %>%
+plot_ad <- plot_ad %>%
   mutate(alias = factor(alias, levels = ordered_aliases))
 
 # Also update any other data frames with alias info, e.g. trapezium_polys:
@@ -682,7 +700,7 @@ default_colors <- setNames(hcl.colors(length(shuffled_aliases), "Dark 3"), shuff
 final_colors <- default_colors[ordered_aliases]
 
 # Optionally, if you have the "non-ortho" alias (or any other), add it explicitly:
-final_colors <- c(final_colors, "New gene" = "darkgrey")
+final_colors <- c(final_colors, "Unknown gene" = "darkgrey")
 
 
 plot_ad_segments <- plot_ad %>%
@@ -700,43 +718,219 @@ plot_ad_segments <- plot_ad %>%
     x_end   = end,
     y_seg   = y_pos - 0.25  # just under the geom_rect (geom_rect is y_pos ± 0.2)
   )
-
-
+#apply final_colors in your ggplot scale:
 all_hap_bg <- ggplot() +
-  geom_segment(data = hlines, aes(x = boundStart - shift, xend = boundEnd - shift, y = y_pos, yend = y_pos)) +
-  geom_polygon(data = trapezium_polys,  aes(x = x, y = y, group = group, fill = alias)) +
-  geom_rect(data = plot_ad %>% dplyr::mutate(alias=ifelse(is.na(alias),"New gene", as.character(alias))), aes(xmin = start, xmax = end, ymin = y_pos + 0.2, ymax = y_pos - 0.2, fill = alias),color = "black") +
-  # geom_segment(
-  #   data = plot_ad_segments,
-  #   aes(x = x_start, xend = x_end, y = y_seg, yend = y_seg, color = seg_color),
-  #   linewidth = 0.5,
-  #   inherit.aes = FALSE
-  # ) +
+  geom_segment(data = hlines, 
+               aes(x = boundStart - shift, xend = boundEnd - shift, y = y_pos, yend = y_pos)) +
+  geom_polygon(data = trapezium_polys, 
+               aes(x = x, y = y, group = group, fill = alias)) +
+  geom_rect(data = plot_ad %>% dplyr::mutate(alias=ifelse(is.na(alias),"Unknown gene",as.character(alias))),
+            aes(xmin = start, xmax = end, ymin = y_pos + 0.2, ymax = y_pos - 0.2, fill = alias),color = "black") +
+  geom_segment(
+    data = plot_ad_segments,
+    aes(x = x_start, xend = x_end, y = y_seg, yend = y_seg, color = seg_color),
+    linewidth = 0.5,
+    inherit.aes = FALSE
+  ) +
   scale_y_continuous(
     expand = c(0.01, 0),
     breaks = hlines$y_pos,
     labels = hlines$STRAIN
   ) +
   scale_x_continuous(expand = c(0.01, 0),labels = function(x) x / 1000) +
-  scale_fill_manual(values = final_colors) +
+  scale_fill_manual(values = final_colors,
+                    breaks = names(final_colors)) +
   scale_color_identity()  +
   #scale_color_manual(values = c("+"="black","-"="red")) +
-  labs(fill="Reference gene")+ # "Reference\ngene"
+  labs(fill="Reference\ngene")+
   xlab("Physical distance (kb)") +
   theme(
     panel.background = element_blank(),
     axis.title = element_blank(),
-    axis.text.y = element_text(size = 8, color = 'black', face = 'bold'),  # adjust size as needed
+    axis.text.y = element_text(size = 8),  # adjust size as needed
     axis.ticks.y = element_blank(),
     axis.line.x = element_line(),
-    axis.title.x = element_text())
+    axis.title.x = element_text(),
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    legend.key.size = unit(0.4, "lines"),
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = 7)
+  ) +
+  guides(fill = guide_legend(nrow = 6, byrow = TRUE))
+
 all_hap_bg
+# ======================================================================================================================= #
+
+
+
+######## OLD haplotype plotter code - does not connect orthogroups that are not present in N2 but in wild strains
+# # Exclude "non-ortho" from the trapezium joining
+# plot_ad_filtered <- plot_ad %>% 
+#   dplyr::mutate(alias=ifelse(is.na(alias),"non-ortho",alias)) %>%
+#   filter(alias != "non-ortho")
+# 
+# # Join filtered data frames for many-to-many connections
+# trapeziums <- inner_join(
+#   plot_ad_filtered, plot_ad_filtered,
+#   by = "alias",
+#   suffix = c("_upper", "_lower"),
+#   relationship = "many-to-many"
+# ) %>% 
+#   filter(y_pos_upper - y_pos_lower == 1)
+# 
+# # Create trapezium polygons using min/max for x-coordinates so that start/end orientation is corrected.
+# trapezium_polys <- trapeziums %>% 
+#   rowwise() %>%
+#   do({
+#     # Calculate corrected x coordinates for the upper rectangle
+#     x_left_upper <- min(.$start_upper, .$end_upper)
+#     x_right_upper <- max(.$start_upper, .$end_upper)
+#     
+#     # Calculate corrected x coordinates for the lower rectangle
+#     x_left_lower <- min(.$start_lower, .$end_lower)
+#     x_right_lower <- max(.$start_lower, .$end_lower)
+#     
+#     data.frame(
+#       alias = .$alias,
+#       group = paste(.$alias, .$y_pos_upper, sep = "_"),
+#       x = c(x_left_upper, x_right_upper, x_right_lower, x_left_lower),
+#       y = c(.$y_pos_upper - 0.2,  # bottom edge of the upper rectangle
+#             .$y_pos_upper - 0.2,
+#             .$y_pos_lower + 0.2,  # top edge of the lower rectangle
+#             .$y_pos_lower + 0.2)
+#     )
+#   }) %>%
+#   ungroup()
+# 
+# # Extract unique aliases at y_pos 77 in order of increasing start position
+# ordered_aliases <- plot_ad %>%
+#   filter(y_pos == max(plot_ad$y_pos)) %>%
+#   arrange(start) %>%
+#   pull(alias) %>%
+#   unique()
+# 
+# # Reorder the factor levels so that the legend follows the ordered aliases
+# plot_ad2 <- plot_ad %>%
+#   mutate(alias = factor(alias, levels = ordered_aliases))
+# 
+# # Also update any other data frames with alias info, e.g. trapezium_polys:
+# trapezium_polys <- trapezium_polys %>%
+#   mutate(alias = factor(alias, levels = ordered_aliases))
+# 
+# # Shuffle the assignment of colors to the ordered aliases
+# set.seed(123)  # for reproducibility
+# shuffled_aliases <- sample(ordered_aliases)
+# 
+# # Generate colors using hcl.colors() for the shuffled aliases
+# default_colors <- setNames(hcl.colors(length(shuffled_aliases), "Dark 3"), shuffled_aliases)
+# 
+# # But to keep the legend order as ordered_aliases, we re-map these colors back:
+# final_colors <- default_colors[ordered_aliases]
+# 
+# # Optionally, if you have the "non-ortho" alias (or any other), add it explicitly:
+# final_colors <- c(final_colors, "New gene" = "darkgrey")
+# 
+# 
+# plot_ad_segments <- plot_ad %>%
+#   mutate(
+#     # Adjust strand logic if inverted
+#     strand_logic = case_when(
+#       strand == "+" & !inv ~ "+",
+#       strand == "-" & !inv ~ "-",
+#       strand == "+" & inv  ~ "-",
+#       strand == "-" & inv  ~ "+"
+#     ),
+#     seg_color = ifelse(strand_logic == "+", "black", "red"),
+#     
+#     x_start = start,
+#     x_end   = end,
+#     y_seg   = y_pos - 0.25  # just under the geom_rect (geom_rect is y_pos ± 0.2)
+#   )
+# 
+# 
+# all_hap_bg <- ggplot() +
+#   geom_segment(data = hlines, aes(x = boundStart - shift, xend = boundEnd - shift, y = y_pos, yend = y_pos)) +
+#   geom_polygon(data = trapezium_polys,  aes(x = x, y = y, group = group, fill = alias)) +
+#   geom_rect(data = plot_ad %>% dplyr::mutate(alias=ifelse(is.na(alias),"New gene", as.character(alias))), aes(xmin = start, xmax = end, ymin = y_pos + 0.2, ymax = y_pos - 0.2, fill = alias),color = "black") +
+#   # geom_segment(
+#   #   data = plot_ad_segments,
+#   #   aes(x = x_start, xend = x_end, y = y_seg, yend = y_seg, color = seg_color),
+#   #   linewidth = 0.5,
+#   #   inherit.aes = FALSE
+#   # ) +
+#   scale_y_continuous(
+#     expand = c(0.01, 0),
+#     breaks = hlines$y_pos,
+#     labels = hlines$STRAIN
+#   ) +
+#   scale_x_continuous(expand = c(0.01, 0),labels = function(x) x / 1000) +
+#   scale_fill_manual(values = final_colors) +
+#   scale_color_identity()  +
+#   #scale_color_manual(values = c("+"="black","-"="red")) +
+#   labs(fill="Reference gene")+ # "Reference\ngene"
+#   xlab("Physical distance (kb)") +
+#   theme(
+#     panel.background = element_blank(),
+#     axis.title = element_blank(),
+#     axis.text.y = element_text(size = 8, color = 'black', face = 'bold'),  # adjust size as needed
+#     axis.ticks.y = element_blank(),
+#     axis.line.x = element_line(),
+#     axis.title.x = element_text())
+# all_hap_bg
 
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/ugh.png", dpi = 900, all_hap_bg, width = 15, height = 8)
 
 
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/haplotype_plotter.png", dpi = 600, all_hap_bg, width = 15, height = 8)
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/haplotype_plotter_threeGenes.png", dpi = 600, all_hap_bg, width = 15, height = 8)
+
+
+# all <- plot_ad %>% dplyr::select(tranname, STRAIN) %>% dplyr::filter(STRAIN == 'N2') %>% dplyr::pull(tranname)
+# 
+# ugh <- plot_ad %>% dplyr::select(tranname, STRAIN, alias) %>% dplyr::filter(STRAIN == "N2") %>% dplyr::select(tranname,alias) %>% dplyr::rename(N2 = tranname)
+# 
+# ohyeah <- orthos %>%
+#   tidyr::separate_rows(N2, sep = ", ") %>%
+#   dplyr::filter(N2 %in% all) %>% 
+#   dplyr::left_join(ugh, by = "N2") %>%
+#   dplyr::select(-N2) %>%
+#   dplyr::rename(N2 = alias)
+# 
+# check <- plot_ad %>% dplyr::filter(STRAIN == "N2") %>% dplyr::select(alias) 
+# 
+# filta <- ohyeah %>%
+#   dplyr::select(N2) %>% dplyr::pull()
+# 
+# okay <- check %>%
+#   dplyr::mutate(correct = ifelse(alias %in% filta, "correct","WHAT"))
+
+# write.table(ohyeah, "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/misc/all_ROI_stefan.tsv", col.names = T, row.names = F, quote = F, sep = "\t")
+
+
+
+# orthogroups_long <- orthos %>%
+#   pivot_longer(
+#     cols = -Orthogroup,
+#     names_to = "STRAIN",
+#     values_to = "genes"
+#   )
+# 
+# # Step 2: Separate comma-separated gene names into individual rows
+# orthogroups_expanded <- orthogroups_long %>%
+#   tidyr::separate_rows(genes, sep = ",") %>%
+#   dplyr::rename(tranname = genes)
+# 
+# # Step 3: Filter only matching strain + gene (tranname) combos
+# filtered_expanded <- orthogroups_expanded %>%
+#   semi_join(all, by = c("STRAIN", "tranname"))
+# 
+# 
+# filtered_wide <- filtered_expanded %>%
+#   dplyr::group_by(Orthogroup, STRAIN) %>%
+#   dplyr::summarise(tranname = paste(tranname, collapse = ","), .groups = "drop") %>%
+#   pivot_wider(names_from = STRAIN, values_from = tranname)
+
 
 
 
@@ -887,21 +1081,17 @@ alias_strain_counts <- alias_strain_counts %>%
 
 plot_ad <- plot_ad %>%
   dplyr::left_join(alias_strain_counts, by = "alias") %>%
-  dplyr::mutate(
-    gene_category = ifelse(is.na(gene_category), "private", gene_category)
-  )
+  dplyr::mutate(gene_category = ifelse(is.na(gene_category), "private", gene_category))
 
 trapezium_polys <- trapezium_polys %>%
   dplyr::left_join(alias_strain_counts %>% dplyr::select(alias, gene_category), by = "alias") %>%
-  dplyr::mutate(
-    gene_category = ifelse(is.na(gene_category), "private", gene_category)
-  )
+  dplyr::mutate(gene_category = ifelse(is.na(gene_category), "private", gene_category))
 
 synteny_colors <- c(
   "core" = "#BDB2E1",      # pastel red
   "accessory" = "#92C5DE", # pastel blue
   "private" = "#E78AC3"    # pastel purple
-)
+  )
 
 all_hap_bg <- ggplot() +
   geom_segment(data = hlines,
@@ -915,14 +1105,12 @@ all_hap_bg <- ggplot() +
     legend.position = 'none',
     axis.title = element_blank(),
     axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
+    # axis.text.y = element_blank(),
     axis.ticks = element_blank()
   ) +
   scale_fill_manual(values = synteny_colors) +
   scale_x_continuous(expand = c(0.01, 0)) +
   scale_y_continuous(breaks = hlines$y_pos, labels = hlines$STRAIN, expand = c(0, 0))
-
-# Show it!
 all_hap_bg
 
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/synteny_geneSet.png", all_hap_bg, width = 11, height = 8, dpi = 600)
