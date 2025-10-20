@@ -64,6 +64,15 @@ all_genes_strain <- genes_strain %>%
   dplyr::mutate(attributes = sub(";.*", "", attributes)) %>%
   dplyr::filter(type == "gene")
 
+N2_tranGene <- N2_gff %>%
+  dplyr::filter(type == "mRNA") %>%
+  dplyr::mutate(attributes = gsub("ID=transcript:","",attributes), attributes = gsub("Parent=gene:","",attributes)) %>%
+  tidyr::separate_wider_delim(attributes, delim = ";",names = c("tran", "gene", "rest"), too_many = "merge") %>%
+  dplyr::select(tran,gene, -rest)
+
+  # dplyr::mutate(gene = str_extract(attributes,"(?<=\\bID=gene:)WBGene\\d+|^WBGene\\d+|(?<=\\bName=)WBGene\\d+"),tran = str_extract(attributes, "(?<=\\bsequence_name=)[^;]+")) %>%
+  # dplyr::select(tran,gene)
+
 # test1 <- all_genes_strain %>%
 #   dplyr::filter(strain == "N2") # ~19,000
 
@@ -261,7 +270,6 @@ nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/
 # ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N0_0504_genes.tsv")
 ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups.tsv")
 
-
 # whatever <- ortho_genes_dd %>%
   # dplyr::select(JU1581.braker.longest.protein, N2.longest.protein)
 
@@ -304,7 +312,6 @@ for (i in 1:length(private_cols)) {
   
 all_relations_private <- private_ortho_count %>%
   dplyr::select(Orthogroup, dplyr::contains("_count"))
-
 
 all_relations <- all_relations_pre %>%
   dplyr::bind_rows(all_relations_private)
@@ -533,10 +540,84 @@ contrib
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/bar.png", contrib, height = 13, width = 12, dpi = 600)
 
 
+
+
+
+
+
 # ======================================================================================================================================================================================== #
 # Pangenome gene set classification of N2 genes enriched in particular N2 genomic loci??
 # ======================================================================================================================================================================================== #
+count <- all_relations %>%
+  dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
+  dplyr::mutate(sum = rowSums(across(-1, ~ ., .names = NULL), na.rm = TRUE)) %>%
+  dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
+  dplyr::mutate(
+    class = case_when(
+      freq == 1 ~ "core",
+      freq > private_freq & freq < 1 ~ "accessory",
+      freq == private_freq ~ "private",
+      TRUE ~ "undefined"
+    )
+  )
 
+N2_coords <- N2_gff %>%
+  dplyr::filter(type == "mRNA") %>%
+  dplyr::mutate(attributes = gsub("ID=transcript:","",attributes), attributes = gsub("Parent=gene:","",attributes)) %>%
+  tidyr::separate_wider_delim(attributes, delim = ";",names = c("tran", "gene", "rest"), too_many = "merge") %>%
+  dplyr::select(seqid, start, end, tran, gene, -rest)
+
+n2_gene <- N2_coords %>%
+  dplyr::mutate(tran = paste0("transcript_",tran))
+
+n2_table <- ortho_genes_dd %>%
+  dplyr::bind_rows(private_OGs) %>% 
+  dplyr::select(Orthogroup,N2)
+
+ortho_count_wCoord <- count %>%
+  dplyr::left_join(n2_table, by = "Orthogroup") %>%
+  dplyr::select(freq, class, N2) %>%
+  dplyr::filter(!is.na(N2)) %>%
+  tidyr::separate_rows(N2, sep = ",\\s*") %>% # splitting rows so each gene is on a row and it retains is gene set classification
+  dplyr::left_join(n2_gene, by = c("N2" = "tran")) %>%
+  dplyr::select(freq,class,N2,gene,seqid,start,end)
+  
+
+plt_data <- ortho_count_wCoord %>%
+  dplyr::filter(seqid != "MtDNA") %>%
+  dplyr::mutate(mid_mb = (start + end) / 2 / 1e6)
+  
+ggplot(data = plt_data) +
+  geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6, fill = class), ymin = -Inf, ymax = Inf, alpha = 0.5) +
+  geom_density(aes(x = mid_mb, y = after_stat(scaled), color = class), adjust = 0.5, linewidth = 0.9, position = "identity") +
+  scale_color_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
+  scale_fill_manual(values = c("accessory" = "#DB6333", "private" = "magenta3", "core" = "green4")) +
+  facet_wrap(~seqid, scales = "free") +
+  theme(axis.title.x = element_text(size = 16, color = 'black', face = 'bold'),
+        axis.text.x = element_text(size = 13, color = 'black'),
+        panel.background = element_blank(),
+        panel.border = element_rect(fill = NA, color = 'black')) +
+  scale_x_continuous(expand = c(0,0)) +
+  xlab("N2 genome position (Mb)") +
+  scale_y_continuous(NULL, breaks = NULL) 
+
+ortho_private_coords <- ortho_count_wCoord %>% dplyr::filter(class == "private")
+
+summ <- ortho_private_coords %>%
+  dplyr::group_by(seqid) %>%
+  dplyr::summarise(n_perChrom = n())
+
+ggplot(data = ortho_private_coords) +
+  geom_rect(data = N2_coords, aes(xmin = start / 1e6, xmax = end / 1e6), ymin = -Inf, ymax = Inf, fill = 'gray30', alpha = 0.5) + 
+  geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6), ymin = -Inf, ymax = Inf, fill = 'magenta3', alpha = 0.5) + 
+  # scale_fill_manual(values = c("accessory" = "#DB6333", "private" = "magenta3", "core" = "green4")) +
+  facet_wrap(~seqid, scales = "free") +
+  theme(axis.title.x = element_text(size = 16, color = 'black', face = 'bold'),
+        axis.text.x = element_text(size = 13, color = 'black'),
+        panel.background = element_blank(),
+        panel.border = element_rect(fill = NA, color = 'black')) +
+  scale_x_continuous(expand = c(0,0)) +
+  xlab("N2 genome position (Mb)")
 
 
 
@@ -726,12 +807,6 @@ contrib
 #         panel.border = element_rect(fill = NA))
 #         # legend.key.height = unit(0.3, "cm"),  
 #         # legend.key.width = unit(0.3, "cm"))
-
-
- # SOME TYPE OF VISUALIZATION OF GENES FOUND IN N2 VERSUS NOT IN N2??
-
-
-
 
 
 
@@ -939,7 +1014,6 @@ trp <- private_final %>%
   as.data.frame() %>%
   tibble::rownames_to_column("strain") %>%
   dplyr::mutate(strain = gsub("_count","", strain)) %>%
-  dplyr::mutate(strain = gsub(".longest.protein_count","", strain)) %>%
   dplyr::mutate(count = rowSums(across(where(is.numeric)), na.rm = TRUE)) %>%
   dplyr::select(strain, count)
 
@@ -1041,7 +1115,7 @@ single_exonGenes <- singleEx %>%
   dplyr::filter(strain != "c_elegans")
   
 priv_genes <- geneCount_OGs %>%
-  dplyr::select(strain,count, n_genes) %>%
+  dplyr::select(strain, count, n_genes) %>%
   dplyr::rename(privates = count, PC_genes = n_genes) %>%
   dplyr::left_join(single_exonGenes, by = "strain") %>%
   dplyr::arrange(privates)
@@ -1075,14 +1149,14 @@ private_ogs <- private %>%
   dplyr::pull()
 
 
-N2 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N2_tran_gene.tsv", col_names = c('tran','gene'))
+# N2 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N2_tran_gene.tsv", col_names = c('tran','gene'))
 
 strain_SE <- singleEx %>%
   dplyr::bind_rows(N2_exons) %>%
   dplyr::select(-num_exons) %>%
   dplyr::mutate(exonID = gsub("\\.t[0-9]+", "", exonID)) %>%
   dplyr::mutate(exonID = gsub("transcript:", "", exonID)) %>%
-  dplyr::mutate(exonID = ifelse(exonID %in% N2$tran, N2$gene, exonID)) %>%
+  dplyr::mutate(exonID = ifelse(exonID %in% N2_tranGene$tran, N2_tranGene$gene, exonID)) %>%
   dplyr::group_by(strain) %>%
   dplyr::mutate(num_single_exon = n()) %>%
   dplyr::ungroup() %>%
@@ -1107,7 +1181,7 @@ privs <- ortho_genes_dd %>%
   dplyr::ungroup() %>%
   dplyr::mutate(genes = gsub("transcript_", "", genes)) %>% 
   dplyr::mutate(genes = stringr::str_trim(genes)) %>%
-  dplyr::mutate(genes = ifelse(genes %in% N2$tran, N2$gene, genes)) %>%
+  dplyr::mutate(genes = ifelse(genes %in% N2_tranGene$tran, N2_tranGene$gene, genes)) %>%
   dplyr::mutate(genes = ifelse(strain != "N2", sub("\\..*","",genes), genes))
   
 N2_privates <- privs %>% dplyr::filter(strain == "N2") %>% dplyr::select(genes)
@@ -1122,7 +1196,7 @@ prop_SE_priv <- privs %>%
     proportion = num_priv_single_exon / num_privs      
   )
 
-okay2 <- prop_SE_priv %>% dplyr::filter(strain == "N2")
+okay2 <- prop_SE_priv %>% dplyr::filter(strain == "N2") # no private N2 genes are sinlge-exon genes
 
 plot_data <- prop_SE_priv %>%
   dplyr::mutate(non_single_exon = 1 - proportion) %>%
@@ -1165,13 +1239,16 @@ SE_plot
 # IPR analysis on genes that are private to N2 #
 # ======================================================================================================================================================================================== #
 
-N2_tranGene <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N2_tran_gene.tsv", col_names = c('tran','gene')) %>%
+# N2_tranGene <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N2_tran_gene.tsv", col_names = c('tran','gene')) %>%
+  # dplyr::mutate(tran = paste0("transcript:", tran))
+
+N2_tran_gene <- N2_tranGene %>%
   dplyr::mutate(tran = paste0("transcript:", tran))
 
 N2_privates <- privs %>% dplyr::filter(strain == "N2") %>% dplyr::select(genes) %>% dplyr::pull()
 
 ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/elegans/ipr/output/N2_IPR_allApps_20251019.tsv",  col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
-  dplyr::left_join(N2_tranGene, by = 'tran') %>%
+  dplyr::left_join(N2_tran_gene, by = 'tran') %>%
   dplyr::select(-tran) %>%
   dplyr::select(gene,signature_accession,signature_description,IPR_accession,IPR_description,GO) %>%
   dplyr::rename(N2 = gene)
@@ -1180,7 +1257,6 @@ ipr_gene <- ipr %>%
   dplyr::filter(!is.na(IPR_description) & IPR_description != "-") %>%
   dplyr::select(N2, IPR_accession, IPR_description) %>%
   dplyr::distinct(N2, IPR_accession, IPR_description) # 14,996
-
 
 
 
