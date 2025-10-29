@@ -268,8 +268,8 @@ nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/
 # Converting transcripts to genes and removing all duplicate genes (not needed anymore, using longest isoform) in a dataframe cell:
 # see script - /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/scripts/Ce_geneAnno-sh/asm_gene_set/tran_gene.sh 
 # ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N0_0504_genes.tsv")
-ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups.tsv")
-
+ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups.tsv") %>%
+  dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
 # whatever <- ortho_genes_dd %>%
   # dplyr::select(JU1581.braker.longest.protein, N2.longest.protein)
 
@@ -295,7 +295,8 @@ all_relations_pre <- ortho_count %>%
   dplyr::select(Orthogroup, dplyr::contains("_count"))
 
 
-private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups_UnassignedGenes.tsv") 
+private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups_UnassignedGenes.tsv") %>%
+  dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
 
 colnames(private_OGs) <- strainCol_c2
 
@@ -526,7 +527,7 @@ contrib <- ggplot(df_percent, aes(x = percent, y = strain, fill = class)) +
   labs(x = "Percent of genes", fill = "Gene set") +
   scale_x_continuous(expand = c(0, 0)) +
   theme(
-    axis.text.y = element_text(size = 8.5, color = 'black'),
+    axis.text.y = element_text(size = 7.5, color = 'black'),
     axis.title.y = element_blank(),
     axis.text.x = element_text(size = 19, color = 'black'),
     axis.title.x = element_text(size = 22, color = 'black', face = 'bold'),
@@ -601,6 +602,122 @@ ggplot(data = plt_data) +
   xlab("N2 genome position (Mb)") +
   scale_y_continuous(NULL, breaks = NULL) 
 
+
+plt_data <- plt_data %>%
+  mutate(seqid = factor(seqid, levels = c("I","II","III","IV","V","X"))) %>%
+  dplyr::rename(Class = class)
+ncol_facets <- 3
+lev <- levels(plt_data$seqid)
+left_facets <- lev[seq(1, length(lev), by = ncol_facets)] 
+
+class_labels <- plt_data %>% dplyr::distinct(class) %>% dplyr::mutate(y = ifelse(class == "core", 1.75,
+                                                                                 ifelse(class == "accessory", 1, 0.25)), x = -Inf)
+class_labels <- tidyr::crossing(class_labels, seqid = left_facets)
+
+ggplot() + 
+  geom_rect(data = plt_data %>% dplyr::filter(class == "core"), aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 1.5, ymax = 2), fill = "green4", alpha = 0.5) +
+  geom_rect(data = plt_data %>% dplyr::filter(class == "accessory"), aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 0.75, ymax = 1.25), fill = "#DB6333", alpha = 0.5) +
+  geom_rect(data = plt_data %>% dplyr::filter(class == "private"), aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 0, ymax = 0.5), fill = "magenta3", alpha = 0.5) +
+  geom_text(data = class_labels,aes(x = x, y = y, label = class), hjust = 1.1, fontface = "bold", size = 4, inherit.aes = FALSE) +
+  facet_wrap(~seqid, scales = "free") +
+  coord_cartesian(clip = "off") +
+  theme(axis.title.x = element_text(size = 16, color = 'black', face = 'bold'),
+        axis.text.x = element_text(size = 13, color = 'black'),
+        panel.background = element_blank(),
+        panel.border = element_rect(fill = "NA", color = 'black'),
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        plot.margin = margin(l = 70)) +
+  scale_x_continuous(expand = c(0,0)) +
+  xlab("N2 genome position (Mb)") +
+  scale_y_continuous(NULL, breaks = NULL)
+
+
+ggplot(data = plt_data) +
+  geom_density(aes(x = mid_mb, y = after_stat(count), color = class), adjust = 1, linewidth = 0.9, position = "identity") + 
+  scale_color_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
+  facet_wrap(~seqid, scales = 'free_x') +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        panel.background = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.position = 'none',
+        panel.border = element_rect(fill = "NA", color = 'black'),
+        # strip.background = element_blank(),
+        axis.text.y = element_text(size = 12, color = 'black'),
+        axis.title.y = element_text(size =14, color = 'black', face = 'bold'),
+        # strip.text.x = element_blank(),
+        plot.margin = margin(l = 70)) +
+  ylab("Kernel Density * Count")
+
+
+# Final plot
+lane_h   <- 14        # lane height (y units)
+gap_h    <- 6         # gap between lanes
+y_core   <- -lane_h                      # [-12, 0)
+y_acc    <- -(2*lane_h + gap_h)          # [-30, -18)
+y_priv   <- -(3*lane_h + 2*gap_h)        # [-48, -36)
+
+rects <- plt_data %>%
+  dplyr::mutate(xmin = start/1e6, xmax = end/1e6, ymin = dplyr::case_when(
+    Class == "core" ~ y_core - lane_h, 
+    Class == "accessory" ~ y_acc - lane_h, 
+    Class == "private" ~ y_priv - lane_h), 
+    ymax = dplyr::case_when(
+      Class == "core" ~ y_core, 
+      Class == "accessory" ~ y_acc, 
+      Class == "private" ~ y_priv)) %>% 
+  dplyr::rename(`Gene set` = Class)
+
+class_labels_final <- plt_data %>% dplyr::distinct(Class) %>% dplyr::mutate(y = ifelse(Class == "core", -21,
+                                                                                       ifelse(Class == "accessory", -41, -61)), x = -Inf)
+class_labels_final <- tidyr::crossing(class_labels_final, seqid = left_facets)
+
+density_label <- plt_data %>% dplyr::mutate(label = "Gene count per bandwidth window") %>% dplyr::mutate(x = -Inf, y = 100) %>% dplyr::select(label,x,y)
+density_label_final <- tidyr::crossing(density_label, seqid = left_facets)
+
+finalfinal <- ggplot() +
+  # draw rect "tracks" first so they sit under the density
+  geom_rect(data = rects, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = `Gene set`), color = NA) +
+  scale_fill_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
+  # density scaled by counts (absolute abundance)
+  geom_density(data = plt_data, aes(x = mid_mb, y = after_stat(count), color = Class), adjust = 1, linewidth = 0.9, position = "identity", show.legend = FALSE) +
+  geom_text(data = class_labels_final, aes(x = x, y = y, label = Class), hjust = 1.1, fontface = "bold", size = 4, inherit.aes = FALSE) +
+  geom_text(data = density_label_final, aes(x = x, y = y, label = label), vjust = -3, fontface = "bold", size = 5, inherit.aes = FALSE, angle = 90) +
+  scale_color_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
+  facet_wrap(~ seqid, scales = "free_x", ncol = 3) +
+  # reserve room below zero for the lanes
+  coord_cartesian(ylim = c(y_priv - 5, NA), clip = "off") +
+  scale_x_continuous(expand = c(0.01,0)) +
+  # hide negative tick labels; show only non-negative y ticks
+  scale_y_continuous(name = "Kernel Density × Count", labels = function(b) ifelse(b < 0, "", b)) + # normalized kernel density * count
+  labs(x = "N2 genome position (Mb)") +
+  theme(
+    panel.background = element_blank(),
+    panel.border = element_rect(fill = NA, color = "black"),
+    # strip.background = element_blank(),
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size =10, color = 'black'),
+    axis.text.x  = element_text(size = 12),
+    panel.spacing=unit(2, "lines"),
+    # axis.title.y = element_text(size = 14, face = "bold"),
+    axis.title.y = element_blank(),
+    legend.position = 'none',
+    axis.text.y  = element_text(size = 12),
+    plot.margin  = margin(l = 70, r = 5, t = 5, b = 5))
+finalfinal
+
+bw_by_class <- plt_data %>%
+  dplyr::group_by(Class) %>%
+  dplyr::summarise(bw = density(mid_mb)$bw)
+bw_by_class
+
+
+ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/N2_geneSetLoci.png",finalfinal, height = 12, width = 14, dpi = 500)
+
+
+
+  
 ortho_private_coords <- ortho_count_wCoord %>% dplyr::filter(class == "private")
 
 summ <- ortho_private_coords %>%
@@ -1103,11 +1220,12 @@ singleEx <- allGffs %>%
   dplyr::filter(num_exons == 1) %>%
   dplyr::ungroup()
 
+# awk '$3 == "exon" {print $NF}' c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.gff3 | awk -F';' '{print $NF}' | sed 's|Parent=||'
 N2_exons <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/N2_longestIso_exons_fixed.tsv", col_names = c("exonID", "strain")) %>%
   dplyr::group_by(exonID,strain) %>%
   dplyr::mutate(num_exons = n()) %>%
   dplyr::filter(num_exons == 1) %>%
-  dplyr::ungroup()
+  dplyr::ungroup() # 703 single-exon genes in N2
 
 single_exonGenes <- singleEx %>%
   dplyr::bind_rows(N2_exons) %>%
