@@ -430,9 +430,9 @@ all_genes_class_count <- sum_genes %>%
 
 
 
-
-
-### PLOTTING BAR PLOTS FOR THE PROPORTION OF GENES THAT ARE CLASSIFIED AS EACH GENE SET IN STRAIN
+# ======================================================================================================================================================================================== #
+# PLOTTING HORIZONTAL BAR PLOTS FOR THE PROPORTION OF GENES THAT ARE CLASSIFIED AS EACH GENE SET IN STRAIN
+# ======================================================================================================================================================================================== #
 table <- all_relations %>%
   dplyr::left_join(classification_genes %>% dplyr::select(Orthogroup, class), by = "Orthogroup") %>%
   dplyr::select(-Orthogroup)
@@ -713,28 +713,74 @@ bw_by_class <- plt_data %>%
 bw_by_class
 
 
-ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/N2_geneSetLoci.png",finalfinal, height = 12, width = 14, dpi = 500)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/N2_geneSetLoci.png",finalfinal, height = 12, width = 14, dpi = 500)
+
+# 
+# 
+#   
+# ortho_private_coords <- ortho_count_wCoord %>% dplyr::filter(class == "private")
+# 
+# summ <- ortho_private_coords %>%
+#   dplyr::group_by(seqid) %>%
+#   dplyr::summarise(n_perChrom = n())
+# 
+# ggplot(data = ortho_private_coords) +
+#   geom_rect(data = N2_coords, aes(xmin = start / 1e6, xmax = end / 1e6), ymin = -Inf, ymax = Inf, fill = 'gray30', alpha = 0.5) + 
+#   geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6), ymin = -Inf, ymax = Inf, fill = 'magenta3', alpha = 0.5) + 
+#   # scale_fill_manual(values = c("accessory" = "#DB6333", "private" = "magenta3", "core" = "green4")) +
+#   facet_wrap(~seqid, scales = "free") +
+#   theme(axis.title.x = element_text(size = 16, color = 'black', face = 'bold'),
+#         axis.text.x = element_text(size = 13, color = 'black'),
+#         panel.background = element_blank(),
+#         panel.border = element_rect(fill = NA, color = 'black')) +
+#   scale_x_continuous(expand = c(0,0)) +
+#   xlab("N2 genome position (Mb)")
+# 
 
 
 
+# ======================================================================================================================================================================================== #
+# PLOTTING PANGENOME AND CORE PANGENOME RAREFACTION CURVES # 
+# ======================================================================================================================================================================================== #
+# Randomly sample 1-141 strains and calculate the number of total orthogroups, and the number of core orthogroups
+all <- all_relations %>% dplyr::select(-Orthogroup)
+
+iterations <- c()
+for (i in 1:(ncol(all))) {
+  print(i)
   
-ortho_private_coords <- ortho_count_wCoord %>% dplyr::filter(class == "private")
+  subset <- all %>% dplyr::select(1:i) %>% dplyr::filter(!if_all(everything(), is.na)) 
+  all_OGs <- nrow(subset)
+  
+  core_count <- subset %>%
+    dplyr::mutate(across(1:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
+    dplyr::mutate(sum = rowSums(across(), na.rm = TRUE)) %>%
+    dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
+    dplyr::mutate(class = case_when(freq == 1 ~ "core")) %>%
+    dplyr::filter(class == "core") 
+  
+  core <- nrow(core_count)
+  
+  # Append the list "i,#pan,#core" 
+  # Or iteratively bind_rows??
+  
+  
+}
 
-summ <- ortho_private_coords %>%
-  dplyr::group_by(seqid) %>%
-  dplyr::summarise(n_perChrom = n())
+  count <- all %>%
+    dplyr::mutate(across(1:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
+      dplyr::mutate(sum = rowSums(across(), na.rm = TRUE)) %>%
+      dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
+      dplyr::mutate(class = case_when(freq == 1 ~ "core")) %>%
+      dplyr::filter(class == "core") 
 
-ggplot(data = ortho_private_coords) +
-  geom_rect(data = N2_coords, aes(xmin = start / 1e6, xmax = end / 1e6), ymin = -Inf, ymax = Inf, fill = 'gray30', alpha = 0.5) + 
-  geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6), ymin = -Inf, ymax = Inf, fill = 'magenta3', alpha = 0.5) + 
-  # scale_fill_manual(values = c("accessory" = "#DB6333", "private" = "magenta3", "core" = "green4")) +
-  facet_wrap(~seqid, scales = "free") +
-  theme(axis.title.x = element_text(size = 16, color = 'black', face = 'bold'),
-        axis.text.x = element_text(size = 13, color = 'black'),
-        panel.background = element_blank(),
-        panel.border = element_rect(fill = NA, color = 'black')) +
-  scale_x_continuous(expand = c(0,0)) +
-  xlab("N2 genome position (Mb)")
+      core <- nrow(count)
+  
+
+test <- all %>% dplyr::select(AB1_count,NIC2_count,XZ1516_count) %>%
+    dplyr::filter(!if_all(everything(), is.na))
+
+
 
 
 
