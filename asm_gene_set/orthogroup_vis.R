@@ -610,15 +610,15 @@ ncol_facets <- 3
 lev <- levels(plt_data$seqid)
 left_facets <- lev[seq(1, length(lev), by = ncol_facets)] 
 
-class_labels <- plt_data %>% dplyr::distinct(class) %>% dplyr::mutate(y = ifelse(class == "core", 1.75,
-                                                                                 ifelse(class == "accessory", 1, 0.25)), x = -Inf)
+class_labels <- plt_data %>% dplyr::distinct(Class) %>% dplyr::mutate(y = ifelse(Class == "core", 1.75,
+                                                                                 ifelse(Class == "accessory", 1, 0.25)), x = -Inf)
 class_labels <- tidyr::crossing(class_labels, seqid = left_facets)
 
 ggplot() + 
-  geom_rect(data = plt_data %>% dplyr::filter(class == "core"), aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 1.5, ymax = 2), fill = "green4", alpha = 0.5) +
-  geom_rect(data = plt_data %>% dplyr::filter(class == "accessory"), aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 0.75, ymax = 1.25), fill = "#DB6333", alpha = 0.5) +
-  geom_rect(data = plt_data %>% dplyr::filter(class == "private"), aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 0, ymax = 0.5), fill = "magenta3", alpha = 0.5) +
-  geom_text(data = class_labels,aes(x = x, y = y, label = class), hjust = 1.1, fontface = "bold", size = 4, inherit.aes = FALSE) +
+  geom_rect(data = plt_data %>% dplyr::filter(Class == "core"), aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 1.5, ymax = 2), fill = "green4", alpha = 0.5) +
+  geom_rect(data = plt_data %>% dplyr::filter(Class == "accessory"), aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 0.75, ymax = 1.25), fill = "#DB6333", alpha = 0.5) +
+  geom_rect(data = plt_data %>% dplyr::filter(Class == "private"), aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 0, ymax = 0.5), fill = "magenta3", alpha = 0.5) +
+  geom_text(data = class_labels,aes(x = x, y = y, label = Class), hjust = 1.1, fontface = "bold", size = 4, inherit.aes = FALSE) +
   facet_wrap(~seqid, scales = "free") +
   coord_cartesian(clip = "off") +
   theme(axis.title.x = element_text(size = 16, color = 'black', face = 'bold'),
@@ -634,7 +634,7 @@ ggplot() +
 
 
 ggplot(data = plt_data) +
-  geom_density(aes(x = mid_mb, y = after_stat(count), color = class), adjust = 1, linewidth = 0.9, position = "identity") + 
+  geom_density(aes(x = mid_mb, y = after_stat(count), color = Class), adjust = 1, linewidth = 0.9, position = "identity") + 
   scale_color_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
   facet_wrap(~seqid, scales = 'free_x') +
   theme(axis.title.x = element_blank(),
@@ -745,42 +745,112 @@ bw_by_class
 # Randomly sample 1-141 strains and calculate the number of total orthogroups, and the number of core orthogroups
 all <- all_relations %>% dplyr::select(-Orthogroup)
 
-iterations <- c()
-for (i in 1:(ncol(all))) {
-  print(i)
-  
-  subset <- all %>% dplyr::select(1:i) %>% dplyr::filter(!if_all(everything(), is.na)) 
-  all_OGs <- nrow(subset)
-  
-  core_count <- subset %>%
-    dplyr::mutate(across(1:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
-    dplyr::mutate(sum = rowSums(across(), na.rm = TRUE)) %>%
-    dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
-    dplyr::mutate(class = case_when(freq == 1 ~ "core")) %>%
-    dplyr::filter(class == "core") 
-  
-  core <- nrow(core_count)
-  
-  # Append the list "i,#pan,#core" 
-  # Or iteratively bind_rows??
-  
-  
+pan_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
+core_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
+
+set.seed(42)
+
+n_strains_total <- ncol(all)
+n_perms <- 100
+
+
+# For the pangenome
+pan_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141 
+iteration_pan <- 1
+
+for (i in 2:n_strains_total) {
+  for (it_i in 1:n_perms) {
+    # pick k random strains
+    cols <- sample(colnames(all), size = i, replace = FALSE)
+    subset <- all[, cols, drop = FALSE] # subset all df to k strains
+    
+    subset <- subset %>% dplyr::filter(!if_all(everything(), is.na)) 
+    all_OGs <- nrow(subset)
+    # print(all_OGs)
+    print(paste0("On strain subset: ",i,", and iteration: ", it_i))
+    
+    pan_list[[iteration_pan]] <- data.frame(
+      n_strains = i,
+      replicate = it_i,
+      n_core_ogs = all_OGs)
+    iteration_pan <- iteration_pan + 1
+  }
 }
 
-  count <- all %>%
-    dplyr::mutate(across(1:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
-      dplyr::mutate(sum = rowSums(across(), na.rm = TRUE)) %>%
-      dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
+pan_final <- dplyr::bind_rows(pan_list)
+
+pan_summary <- pan_final %>%
+  dplyr::group_by(n_strains) %>%
+  dplyr::summarise(
+    median_core = median(n_core_ogs),
+    mean_core   = mean(n_core_ogs),
+    sd_core     = sd(n_core_ogs),
+    q05         = quantile(n_core_ogs, 0.05),
+    q95         = quantile(n_core_ogs, 0.95)) %>%
+  dplyr::ungroup()
+
+# For the core pangenome
+res_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141 
+iteration <- 1
+
+for (i in 2:n_strains_total) {
+  for (it_i in 1:n_perms) {
+    # pick k random strains
+    cols <- sample(colnames(all), size = i, replace = FALSE)
+    subset <- all[, cols, drop = FALSE] # subset all df to k strains
+    
+    # binarize and count core
+    core_calc <- subset %>%
+      dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
+      dplyr::mutate(sum = rowSums(across(everything()))) %>%
+      dplyr::mutate(freq = (sum / i)) %>%
       dplyr::mutate(class = case_when(freq == 1 ~ "core")) %>%
-      dplyr::filter(class == "core") 
-
-      core <- nrow(count)
+      dplyr::filter(class == "core")
+    
+    # print(head(core_calc))
+    print(paste0("On strain subset: ", i,", and iteration: ", it_i))
+    
+    core_count <- nrow(core_calc)
+    # print(core_count)
   
+    res_list[[iteration]] <- data.frame(
+      n_strains = i,
+      replicate = it_i,
+      n_core_ogs = core_count)
+    iteration <- iteration + 1
+  }
+}
 
-test <- all %>% dplyr::select(AB1_count,NIC2_count,XZ1516_count) %>%
-    dplyr::filter(!if_all(everything(), is.na))
+core_final <- dplyr::bind_rows(res_list)
+
+core_summary <- core_final %>%
+  dplyr::group_by(n_strains) %>%
+  dplyr::summarise(
+    median_core = median(n_core_ogs),
+    mean_core   = mean(n_core_ogs),
+    sd_core     = sd(n_core_ogs),
+    q05         = quantile(n_core_ogs, 0.05),
+    q95         = quantile(n_core_ogs, 0.95)) %>%
+  dplyr::ungroup()
+
+core_rarefaction <- ggplot() +
+  geom_errorbar(data = pan_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
+  geom_point(data = pan_summary, aes(x = n_strains, y = mean_core), color = 'blue', size = 3) +
+  geom_errorbar(data = core_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
+  geom_point(data = core_summary, aes(x = n_strains, y = mean_core), color = 'green4', size = 3) +
+  # geom_ribbon(aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), alpha = 0.2) +
+  labs(x = "Genomes", y = "Core orthogroups") +
+  theme(
+    panel.background = element_blank(),
+    panel.border = element_rect(fill = NA, color = "black"),
+    axis.title = element_text(size = 18, face = "bold"),
+    axis.text = element_text(size =14, color = 'black'))
+    # legend.position = 'none')
+core_rarefaction
 
 
+saveRDS(pan_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
+saveRDS(core_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
 
 
 
