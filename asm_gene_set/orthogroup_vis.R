@@ -748,36 +748,36 @@ all <- all_relations %>% dplyr::select(-Orthogroup)
 pan_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
 core_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
 
-set.seed(42)
-
-n_strains_total <- ncol(all)
-n_perms <- 100
-
-
-# For the pangenome
-pan_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141 
-iteration_pan <- 1
-
-for (i in 2:n_strains_total) {
-  for (it_i in 1:n_perms) {
-    # pick k random strains
-    cols <- sample(colnames(all), size = i, replace = FALSE)
-    subset <- all[, cols, drop = FALSE] # subset all df to k strains
-    
-    subset <- subset %>% dplyr::filter(!if_all(everything(), is.na)) 
-    all_OGs <- nrow(subset)
-    # print(all_OGs)
-    print(paste0("On strain subset: ",i,", and iteration: ", it_i))
-    
-    pan_list[[iteration_pan]] <- data.frame(
-      n_strains = i,
-      replicate = it_i,
-      n_core_ogs = all_OGs)
-    iteration_pan <- iteration_pan + 1
-  }
-}
-
-pan_final <- dplyr::bind_rows(pan_list)
+# set.seed(42)
+# 
+# n_strains_total <- ncol(all)
+# n_perms <- 100
+# 
+# 
+# # For the pangenome
+# pan_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141 
+# iteration_pan <- 1
+# 
+# for (i in 2:n_strains_total) {
+#   for (it_i in 1:n_perms) {
+#     # pick k random strains
+#     cols <- sample(colnames(all), size = i, replace = FALSE)
+#     subset <- all[, cols, drop = FALSE] # subset all df to k strains
+#     
+#     subset <- subset %>% dplyr::filter(!if_all(everything(), is.na)) 
+#     all_OGs <- nrow(subset)
+#     # print(all_OGs)
+#     print(paste0("On strain subset: ",i,", and iteration: ", it_i))
+#     
+#     pan_list[[iteration_pan]] <- data.frame(
+#       n_strains = i,
+#       replicate = it_i,
+#       n_core_ogs = all_OGs)
+#     iteration_pan <- iteration_pan + 1
+#   }
+# }
+# 
+# pan_final <- dplyr::bind_rows(pan_list)
 
 pan_summary <- pan_final %>%
   dplyr::group_by(n_strains) %>%
@@ -789,39 +789,39 @@ pan_summary <- pan_final %>%
     q95         = quantile(n_core_ogs, 0.95)) %>%
   dplyr::ungroup()
 
-# For the core pangenome
-res_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141 
-iteration <- 1
-
-for (i in 2:n_strains_total) {
-  for (it_i in 1:n_perms) {
-    # pick k random strains
-    cols <- sample(colnames(all), size = i, replace = FALSE)
-    subset <- all[, cols, drop = FALSE] # subset all df to k strains
-    
-    # binarize and count core
-    core_calc <- subset %>%
-      dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
-      dplyr::mutate(sum = rowSums(across(everything()))) %>%
-      dplyr::mutate(freq = (sum / i)) %>%
-      dplyr::mutate(class = case_when(freq == 1 ~ "core")) %>%
-      dplyr::filter(class == "core")
-    
-    # print(head(core_calc))
-    print(paste0("On strain subset: ", i,", and iteration: ", it_i))
-    
-    core_count <- nrow(core_calc)
-    # print(core_count)
-  
-    res_list[[iteration]] <- data.frame(
-      n_strains = i,
-      replicate = it_i,
-      n_core_ogs = core_count)
-    iteration <- iteration + 1
-  }
-}
-
-core_final <- dplyr::bind_rows(res_list)
+# # For the core pangenome
+# res_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141 
+# iteration <- 1
+# 
+# for (i in 2:n_strains_total) {
+#   for (it_i in 1:n_perms) {
+#     # pick k random strains
+#     cols <- sample(colnames(all), size = i, replace = FALSE)
+#     subset <- all[, cols, drop = FALSE] # subset all df to k strains
+#     
+#     # binarize and count core
+#     core_calc <- subset %>%
+#       dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
+#       dplyr::mutate(sum = rowSums(across(everything()))) %>%
+#       dplyr::mutate(freq = (sum / i)) %>%
+#       dplyr::mutate(class = case_when(freq == 1 ~ "core")) %>%
+#       dplyr::filter(class == "core")
+#     
+#     # print(head(core_calc))
+#     print(paste0("On strain subset: ", i,", and iteration: ", it_i))
+#     
+#     core_count <- nrow(core_calc)
+#     # print(core_count)
+#   
+#     res_list[[iteration]] <- data.frame(
+#       n_strains = i,
+#       replicate = it_i,
+#       n_core_ogs = core_count)
+#     iteration <- iteration + 1
+#   }
+# }
+# 
+# core_final <- dplyr::bind_rows(res_list)
 
 core_summary <- core_final %>%
   dplyr::group_by(n_strains) %>%
@@ -833,24 +833,27 @@ core_summary <- core_final %>%
     q95         = quantile(n_core_ogs, 0.95)) %>%
   dplyr::ungroup()
 
-core_rarefaction <- ggplot() +
+pan_core_rarefact <- ggplot() +
   geom_errorbar(data = pan_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
   geom_point(data = pan_summary, aes(x = n_strains, y = mean_core), color = 'blue', size = 3) +
   geom_errorbar(data = core_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
   geom_point(data = core_summary, aes(x = n_strains, y = mean_core), color = 'green4', size = 3) +
   # geom_ribbon(aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), alpha = 0.2) +
-  labs(x = "Genomes", y = "Core orthogroups") +
+  labs(x = "Genomes", y = "Orthogroups") +
   theme(
     panel.background = element_blank(),
     panel.border = element_rect(fill = NA, color = "black"),
     axis.title = element_text(size = 18, face = "bold"),
     axis.text = element_text(size =14, color = 'black'))
     # legend.position = 'none')
-core_rarefaction
+pan_core_rarefact
+
+ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_core_rarefaction.png", pan_core_rarefact, width = 14, height = 12, dpi = 600)
 
 
-saveRDS(pan_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
-saveRDS(core_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
+
+# saveRDS(pan_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
+# saveRDS(core_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
 
 
 
