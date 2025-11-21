@@ -673,7 +673,7 @@ class_labels_final <- plt_data %>% dplyr::distinct(Class) %>% dplyr::mutate(y = 
                                                                                        ifelse(Class == "accessory", -41, -61)), x = -Inf)
 class_labels_final <- tidyr::crossing(class_labels_final, seqid = left_facets)
 
-density_label <- plt_data %>% dplyr::mutate(label = "Gene count per bandwidth window") %>% dplyr::mutate(x = -Inf, y = 100) %>% dplyr::select(label,x,y)
+density_label <- plt_data %>% dplyr::mutate(label = "Gene count density") %>% dplyr::mutate(x = -Inf, y = 100) %>% dplyr::select(label,x,y)
 density_label_final <- tidyr::crossing(density_label, seqid = left_facets)
 
 finalfinal <- ggplot() +
@@ -681,7 +681,7 @@ finalfinal <- ggplot() +
   geom_rect(data = rects, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = `Gene set`), color = NA) +
   scale_fill_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
   # density scaled by counts (absolute abundance)
-  geom_density(data = plt_data, aes(x = mid_mb, y = after_stat(count), color = Class), adjust = 1, linewidth = 0.9, position = "identity", show.legend = FALSE) +
+  geom_density(data = plt_data, aes(x = mid_mb, y = after_stat(count), color = Class), adjust = 0.5, linewidth = 0.9, position = "identity", show.legend = FALSE) +
   geom_text(data = class_labels_final, aes(x = x, y = y, label = Class), hjust = 1.1, fontface = "bold", size = 4, inherit.aes = FALSE) +
   geom_text(data = density_label_final, aes(x = x, y = y, label = label), vjust = -3, fontface = "bold", size = 5, inherit.aes = FALSE, angle = 90) +
   scale_color_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
@@ -747,11 +747,13 @@ all <- all_relations %>% dplyr::select(-Orthogroup)
 
 pan_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
 core_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
+accessory_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/acc_iterativeOGcount.rds")
+priv_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/priv_iterativeOGcount.rds")
 
-# set.seed(42)
-# 
-# n_strains_total <- ncol(all)
-# n_perms <- 100
+set.seed(42)
+
+n_strains_total <- ncol(all)
+n_perms <- 100
 # 
 # 
 # # For the pangenome
@@ -833,11 +835,114 @@ core_summary <- core_final %>%
     q95         = quantile(n_core_ogs, 0.95)) %>%
   dplyr::ungroup()
 
-pan_core_rarefact <- ggplot() +
+
+
+# For the accessory pangenome
+private_freq = (1/(length(n_strains_total)))
+
+res_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141
+iteration <- 1
+
+for (i in 2:n_strains_total) {
+  for (it_i in 1:n_perms) {
+    # pick k random strains
+    cols <- sample(colnames(all), size = i, replace = FALSE)
+    subset <- all[, cols, drop = FALSE] # subset all df to k strains
+
+    # binarize and count accessory
+    accessory_calc <- subset %>%
+      dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
+      dplyr::mutate(sum = rowSums(across(everything()))) %>%
+      dplyr::mutate(freq = (sum / i)) %>%
+      dplyr::mutate(class = case_when(freq > private_freq & freq < 1 ~ "accessory")) %>%
+      dplyr::filter(class == "accessory")
+
+    # print(head(accessory_calc))
+    print(paste0("On strain subset: ", i,", and iteration: ", it_i))
+
+    accessory_count <- nrow(accessory_calc)
+    print(accessory_count)
+
+    res_list[[iteration]] <- data.frame(
+      n_strains = i,
+      replicate = it_i,
+      n_accessory_ogs = accessory_count)
+    iteration <- iteration + 1
+  }
+}
+
+accessory_final <- dplyr::bind_rows(res_list)
+
+accessory_summary <- accessory_final %>%
+  dplyr::group_by(n_strains) %>%
+  dplyr::summarise(
+    median_accessory = median(n_accessory_ogs),
+    mean_accessory   = mean(n_accessory_ogs),
+    sd_accessory     = sd(n_accessory_ogs),
+    q05         = quantile(n_accessory_ogs, 0.05),
+    q95         = quantile(n_accessory_ogs, 0.95)) %>%
+  dplyr::ungroup()
+
+# For the private pangenome
+res_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141
+iteration <- 1
+
+for (i in 2:n_strains_total) {
+  for (it_i in 1:n_perms) {
+    # pick k random strains
+    cols <- sample(colnames(all), size = i, replace = FALSE)
+    subset <- all[, cols, drop = FALSE] # subset all df to k strains
+    
+    # binarize and count accessory
+    priv_calc <- subset %>%
+      dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
+      dplyr::mutate(sum = rowSums(across(everything()))) %>%
+      dplyr::mutate(freq = (sum / i)) %>%
+      dplyr::mutate(class = case_when(freq == private_freq ~ "priv")) %>%
+      dplyr::filter(class == "priv")
+    
+    # print(head(priv_calc))
+    print(paste0("On strain subset: ", i,", and iteration: ", it_i))
+    
+    priv_count <- nrow(priv_calc)
+    # print(priv_count)
+    
+    res_list[[iteration]] <- data.frame(
+      n_strains = i,
+      replicate = it_i,
+      n_priv_ogs = priv_count)
+    iteration <- iteration + 1
+  }
+}
+
+priv_final <- dplyr::bind_rows(res_list)
+
+priv_summary <- priv_final %>%
+  dplyr::group_by(n_strains) %>%
+  dplyr::summarise(
+    median_priv = median(n_priv_ogs),
+    mean_priv   = mean(n_priv_ogs),
+    sd_priv     = sd(n_priv_ogs),
+    q05         = quantile(n_priv_ogs, 0.05),
+    q95         = quantile(n_priv_ogs, 0.95)) %>%
+  dplyr::ungroup()
+
+
+
+# Plotting
+pan_rarfact <- ggplot() +
+  # Pangenome
   geom_errorbar(data = pan_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
   geom_point(data = pan_summary, aes(x = n_strains, y = mean_core), color = 'blue', size = 3) +
+  # Core
   geom_errorbar(data = core_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
   geom_point(data = core_summary, aes(x = n_strains, y = mean_core), color = 'green4', size = 3) +
+  # Accessory
+  geom_errorbar(data = accessory_summary, aes(x = n_strains, ymin = mean_accessory - sd_accessory, ymax = mean_accesosry + sd_accessory), width = 0.5) +
+  geom_point(data = accessory_summary, aes(x = n_strains, y = mean_accessory), color = '#DB6333', size = 3) +
+  # Private
+  # geom_errorbar(data = priv_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
+  # geom_point(data = priv_summary, aes(x = n_strains, y = mean_core), color = 'magenta3', size = 3) +
   # geom_ribbon(aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), alpha = 0.2) +
   labs(x = "Genomes", y = "Orthogroups") +
   theme(
@@ -846,15 +951,16 @@ pan_core_rarefact <- ggplot() +
     axis.title = element_text(size = 18, face = "bold"),
     axis.text = element_text(size =14, color = 'black'))
     # legend.position = 'none')
-pan_core_rarefact
+pan_rarfact
 
-ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_core_rarefaction.png", pan_core_rarefact, width = 14, height = 12, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_core_rarefaction.png", pan_rarfact, width = 14, height = 12, dpi = 600)
 
 
 
 # saveRDS(pan_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
 # saveRDS(core_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
-
+saveRDS(accessory_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/acc_iterativeOGcount.rds")
+saveRDS(priv_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/priv_iterativeOGcount.rds")
 
 
 
@@ -1281,10 +1387,16 @@ geneCount_OGs$strain <- factor(geneCount_OGs$strain, levels = geneCount_OGs$stra
 geneCount_OGs <- geneCount_OGs %>%
   dplyr::mutate(n_genes_scaled = n_genes / 100)
 
+mt_contigs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/nucmer_aln_WSs/numberOfContigsAln_MtDNA.tsv", col_names = F) %>%
+  tidyr::separate(X1, into = c("number","strain"), sep = ' ')
+
+geneCount_OGs <- geneCount_OGs %>% dplyr::left_join(mt_contigs, by = 'strain') %>% dplyr::mutate(number = ifelse(is.na(number),0,number)) %>% dplyr::rename(mt_contigs = number) %>% 
+  dplyr::mutate(mt_contigs = ifelse(strain == "N2", 1, mt_contigs))
+
 geneCount_OGs$strain <- factor(geneCount_OGs$strain, levels = geneCount_OGs$strain)
 
 OGs_PCgenes <- ggplot(geneCount_OGs, aes(x = strain)) +
-  geom_col(aes(y = count), fill = "magenta3", width = 0.6, alpha = 0.5, color = "black", linewidth = 0.3) +
+  geom_col(aes(y = count, fill = mt_contigs), width = 0.6, alpha = 0.5, color = "black", linewidth = 0.3) +
   geom_line(aes(y = n_genes_scaled, group = 1), color = "blue", size = 1.2) +
   geom_point(aes(y = n_genes_scaled), color = "blue", size = 2) +
   scale_y_continuous(
@@ -1298,7 +1410,8 @@ OGs_PCgenes <- ggplot(geneCount_OGs, aes(x = strain)) +
     axis.title = element_text(size = 22, color = 'black', face = 'bold'),
     axis.text.y = element_text(size = 18, color = 'black'),
     panel.border = element_rect(fill = NA),
-    legend.position = "none",
+    legend.position = "inside",
+    legend.position.inside = c(0.9,0.8)
     # plot.margin = margin(t = 20, r = 20, b = 20, l = 20, unit = "pt")  # 20pt on all sides
   ) +
   labs(x = "Strains")
@@ -1306,6 +1419,23 @@ OGs_PCgenes
 
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/HOGs_PCgenes.png", HOGs_PCgenes, height = 6, width = 10, dpi = 600)
 
+
+
+corr <- geneCount_OGs %>% dplyr::select(strain, count) %>% dplyr::left_join(mt_contigs, by = 'strain') %>% dplyr::mutate(number = ifelse(is.na(number),0,number)) %>% dplyr::rename(mt_contigs = number, number_private = count) %>% dplyr::filter(strain != "N2") %>%
+  dplyr::group_by(mt_contigs) %>%
+  dplyr::mutate(mean_private = mean(number_private)) %>%
+  dplyr::ungroup()
+
+ggplot(corr) + 
+  geom_point(aes(x = mt_contigs, y = number_private, color = strain), size = 2.5) + 
+  geom_point(aes(x = mt_contigs, y = mean_private), color = 'black', size = 5) +
+  geom_line(aes(x = mt_contigs, y = mean_private, group = 1), color = 'black') +
+  theme_bw() +
+  theme(legend.position = 'none',
+        axis.text = element_text(size = 12, color = 'black'),
+        axis.title = element_text(size = 14, color = 'black', face = 'bold')) +
+  xlab("# of WS contigs that align to N2 MtDNA") +
+  ylab("# of private genes")
 
 # lm_model <- lm(count ~ n_genes_scaled, data = geneCount_HOGs)
 # r2 <- summary(lm_model)$r.squared
