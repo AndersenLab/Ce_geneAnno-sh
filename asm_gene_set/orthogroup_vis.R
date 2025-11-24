@@ -748,14 +748,14 @@ all <- all_relations %>% dplyr::select(-Orthogroup)
 pan_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
 core_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
 accessory_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/acc_iterativeOGcount.rds")
-priv_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/priv_iterativeOGcount.rds")
+# priv_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/priv_iterativeOGcount.rds")
 
 set.seed(42)
 
 n_strains_total <- ncol(all)
 n_perms <- 100
-# 
-# 
+ 
+ 
 # # For the pangenome
 # pan_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141 
 # iteration_pan <- 1
@@ -836,7 +836,6 @@ core_summary <- core_final %>%
   dplyr::ungroup()
 
 
-
 # For the accessory pangenome
 # res_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141
 # iteration <- 1
@@ -874,7 +873,7 @@ core_summary <- core_final %>%
 #   }
 # }
 
-accessory_final <- dplyr::bind_rows(res_list)
+# accessory_final <- dplyr::bind_rows(res_list)
 
 accessory_summary <- accessory_final %>%
   dplyr::group_by(n_strains) %>%
@@ -887,10 +886,10 @@ accessory_summary <- accessory_final %>%
   dplyr::ungroup()
 
 # For the private pangenome
-res_list <- vector("list", length = n_strains_total)
+res_list <- vector("list", length = n_strains_total -1)
 iteration <- 1
 
-for (i in 1:n_strains_total) {              # NEED TO BEGIN ITERATION ON A SINLE STRAIN WHEN CALCULATING PRIVATE
+for (i in 2:n_strains_total) {              # NEED TO BEGIN ITERATION ON A SINLE STRAIN WHEN CALCULATING PRIVATE
   for (it_i in 1:n_perms) {
     # pick k random strains
     cols <- sample(colnames(all), size = i, replace = FALSE)
@@ -967,7 +966,7 @@ pan_rarfact
 
 # saveRDS(pan_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
 # saveRDS(core_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
-saveRDS(accessory_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/acc_iterativeOGcount.rds")
+# saveRDS(accessory_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/acc_iterativeOGcount.rds")
 saveRDS(priv_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/priv_iterativeOGcount.rds")
 
 
