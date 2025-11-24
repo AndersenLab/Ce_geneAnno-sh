@@ -78,7 +78,7 @@ N2_tranGene <- N2_gff %>%
 
 # write.table(all_genes_strain,"/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/116strain_genes.tsv", quote = F, row.names = F, col.names = T, sep = '\t')
 
-nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/nucmer_aln_WSs/all_140_nucmer.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
+nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/all_140_nucmer.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
   dplyr::select(-L1,-L2,-IDY,-LENR,-LENQ)
 # write.table(nucmer,"/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/115WS_nucmer_clean.tsv", quote = F, row.names = F, col.names = T, sep = '\t')
 
@@ -838,38 +838,41 @@ core_summary <- core_final %>%
 
 
 # For the accessory pangenome
-private_freq = (1/(length(n_strains_total)))
-
-res_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141
-iteration <- 1
-
-for (i in 2:n_strains_total) {
-  for (it_i in 1:n_perms) {
-    # pick k random strains
-    cols <- sample(colnames(all), size = i, replace = FALSE)
-    subset <- all[, cols, drop = FALSE] # subset all df to k strains
-
-    # binarize and count accessory
-    accessory_calc <- subset %>%
-      dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
-      dplyr::mutate(sum = rowSums(across(everything()))) %>%
-      dplyr::mutate(freq = (sum / i)) %>%
-      dplyr::mutate(class = case_when(freq > private_freq & freq < 1 ~ "accessory")) %>%
-      dplyr::filter(class == "accessory")
-
-    # print(head(accessory_calc))
-    print(paste0("On strain subset: ", i,", and iteration: ", it_i))
-
-    accessory_count <- nrow(accessory_calc)
-    print(accessory_count)
-
-    res_list[[iteration]] <- data.frame(
-      n_strains = i,
-      replicate = it_i,
-      n_accessory_ogs = accessory_count)
-    iteration <- iteration + 1
-  }
-}
+# res_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141
+# iteration <- 1
+# 
+# for (i in 2:n_strains_total) {
+#   for (it_i in 1:n_perms) {
+#     # pick k random strains
+#     cols <- sample(colnames(all), size = i, replace = FALSE)
+#     subset <- all[, cols, drop = FALSE] # subset all df to k strains
+# 
+#     # binarize and count accessory
+#     accessory_calc <- subset %>%
+#       dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
+#       dplyr::mutate(sum = rowSums(across(everything()))) %>%
+#       dplyr::mutate(freq = (sum / i)) %>%
+#       dplyr::mutate(
+#         class = case_when(
+#           freq == 1 ~ "core",
+#           freq > 1/i & freq < 1 ~ "accessory",
+#           freq == 1/i ~ "private",
+#           TRUE ~ "undefined")) %>%
+#       dplyr::filter(class == "accessory")
+# 
+#     # print(head(accessory_calc))
+#     print(paste0("On strain subset: ", i,", and iteration: ", it_i))
+# 
+#     accessory_count <- nrow(accessory_calc)
+#     # print(accessory_count)
+# 
+#     res_list[[iteration]] <- data.frame(
+#       n_strains = i,
+#       replicate = it_i,
+#       n_accessory_ogs = accessory_count)
+#     iteration <- iteration + 1
+#   }
+# }
 
 accessory_final <- dplyr::bind_rows(res_list)
 
@@ -884,10 +887,10 @@ accessory_summary <- accessory_final %>%
   dplyr::ungroup()
 
 # For the private pangenome
-res_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141
+res_list <- vector("list", length = n_strains_total)
 iteration <- 1
 
-for (i in 2:n_strains_total) {
+for (i in 1:n_strains_total) {              # NEED TO BEGIN ITERATION ON A SINLE STRAIN WHEN CALCULATING PRIVATE
   for (it_i in 1:n_perms) {
     # pick k random strains
     cols <- sample(colnames(all), size = i, replace = FALSE)
@@ -898,14 +901,19 @@ for (i in 2:n_strains_total) {
       dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
       dplyr::mutate(sum = rowSums(across(everything()))) %>%
       dplyr::mutate(freq = (sum / i)) %>%
-      dplyr::mutate(class = case_when(freq == private_freq ~ "priv")) %>%
-      dplyr::filter(class == "priv")
+      dplyr::mutate(
+        class = case_when(
+          freq == 1 ~ "core",
+          freq > 1/i & freq < 1 ~ "accessory",
+          freq == 1/i ~ "private",
+          TRUE ~ "undefined")) %>%
+      dplyr::filter(class == "private")
     
-    # print(head(priv_calc))
+    print(head(priv_calc))
     print(paste0("On strain subset: ", i,", and iteration: ", it_i))
     
     priv_count <- nrow(priv_calc)
-    # print(priv_count)
+    print(priv_count)
     
     res_list[[iteration]] <- data.frame(
       n_strains = i,
@@ -938,7 +946,7 @@ pan_rarfact <- ggplot() +
   geom_errorbar(data = core_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
   geom_point(data = core_summary, aes(x = n_strains, y = mean_core), color = 'green4', size = 3) +
   # Accessory
-  geom_errorbar(data = accessory_summary, aes(x = n_strains, ymin = mean_accessory - sd_accessory, ymax = mean_accesosry + sd_accessory), width = 0.5) +
+  geom_errorbar(data = accessory_summary, aes(x = n_strains, ymin = mean_accessory - sd_accessory, ymax = mean_accessory + sd_accessory), width = 0.5) +
   geom_point(data = accessory_summary, aes(x = n_strains, y = mean_accessory), color = '#DB6333', size = 3) +
   # Private
   # geom_errorbar(data = priv_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
