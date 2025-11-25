@@ -275,7 +275,7 @@ ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/ass
 
 strainCol <- colnames(ortho_genes_dd)
 ugh <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
-ugh2 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","",ugh)
+ugh2 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh)
 strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", ugh2)
 colnames(ortho_genes_dd) <- strainCol_c2
 
@@ -968,6 +968,85 @@ pan_rarefact
 # saveRDS(core_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
 # saveRDS(accessory_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/acc_iterativeOGcount.rds")
 # saveRDS(priv_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/priv_iterativeOGcount.rds")
+
+
+
+
+
+
+
+
+
+# ======================================================================================================================================================================================== #
+# Plotting orthogroup/gene family presence/absence heatmap, clustered by strain relatedness
+# ======================================================================================================================================================================================== #
+colnames(all_relations) <- strainCol_c2
+pav_mat <- all_relations %>% dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>% 
+  dplyr::mutate(across(2:ncol(.), ~ifelse(is.na(.), 0, .))) %>%
+  dplyr::mutate(sum = rowSums(across(-1, ~ ., .names = NULL), na.rm = TRUE)) %>%
+  dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
+  dplyr::mutate(
+    class = case_when(
+      freq == 1 ~ "core",
+      freq > private_freq & freq < 1 ~ "accessory",
+      freq == private_freq ~ "private",
+      TRUE ~ "undefined")) %>%
+  dplyr::select(-freq) %>%
+  dplyr::mutate(class = factor(class, levels = c("core", "accessory", "private"))) %>%
+  dplyr::arrange(class, Orthogroup, desc(sum)) %>%
+  dplyr::select(-sum) %>%
+  dplyr::mutate(Orthogroup = factor(Orthogroup, levels = unique(Orthogroup)))
+
+pav_long <- pav_mat %>%
+  tidyr::pivot_longer(
+    cols = all_of(strainCol_c2_u),
+    names_to = "strain",
+    values_to = "presence") %>%
+  dplyr::mutate(
+    class_presence = case_when(
+      presence == 1 ~ paste0(class, "_present"),
+      presence == 0 ~ paste0(class, "_absent")))
+
+ggplot(pav_long, aes(x = Orthogroup, y = strain, fill = class_presence)) +
+  geom_tile() +
+  scale_fill_manual(
+    values = c(
+      core_present       = "green4",
+      core_absent        = "grey90",
+      accessory_present  = "#DB6333",
+      accessory_absent   = "grey90",
+      private_present    = "magenta3",
+      private_absent     = "grey90")) +
+  labs(x = "Orthogroups", y = "Strain", fill = "Class × presence") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),      
+    axis.ticks.x = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = 'none',
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.text.y = element_text(size = 6, color = 'black'),
+    axis.title.x = element_text(color = 'black', size = 12, face = 'bold'),
+    axis.title.y = element_blank())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
