@@ -748,7 +748,7 @@ all <- all_relations %>% dplyr::select(-Orthogroup)
 pan_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
 core_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
 accessory_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/acc_iterativeOGcount.rds")
-# priv_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/priv_iterativeOGcount.rds")
+priv_final <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/priv_iterativeOGcount.rds")
 
 set.seed(42)
 
@@ -886,43 +886,43 @@ accessory_summary <- accessory_final %>%
   dplyr::ungroup()
 
 # For the private pangenome
-res_list <- vector("list", length = n_strains_total -1)
-iteration <- 1
-
-for (i in 2:n_strains_total) {              # NEED TO BEGIN ITERATION ON A SINLE STRAIN WHEN CALCULATING PRIVATE
-  for (it_i in 1:n_perms) {
-    # pick k random strains
-    cols <- sample(colnames(all), size = i, replace = FALSE)
-    subset <- all[, cols, drop = FALSE] # subset all df to k strains
-    
-    # binarize and count accessory
-    priv_calc <- subset %>%
-      dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
-      dplyr::mutate(sum = rowSums(across(everything()))) %>%
-      dplyr::mutate(freq = (sum / i)) %>%
-      dplyr::mutate(
-        class = case_when(
-          freq == 1 ~ "core",
-          freq > 1/i & freq < 1 ~ "accessory",
-          freq == 1/i ~ "private",
-          TRUE ~ "undefined")) %>%
-      dplyr::filter(class == "private")
-    
-    print(head(priv_calc))
-    print(paste0("On strain subset: ", i,", and iteration: ", it_i))
-    
-    priv_count <- nrow(priv_calc)
-    print(priv_count)
-    
-    res_list[[iteration]] <- data.frame(
-      n_strains = i,
-      replicate = it_i,
-      n_priv_ogs = priv_count)
-    iteration <- iteration + 1
-  }
-}
-
-priv_final <- dplyr::bind_rows(res_list)
+# res_list <- vector("list", length = n_strains_total -1)
+# iteration <- 1
+# 
+# for (i in 2:n_strains_total) {              # NEED TO BEGIN ITERATION ON A SINLE STRAIN WHEN CALCULATING PRIVATE
+#   for (it_i in 1:n_perms) {
+#     # pick k random strains
+#     cols <- sample(colnames(all), size = i, replace = FALSE)
+#     subset <- all[, cols, drop = FALSE] # subset all df to k strains
+#     
+#     # binarize and count accessory
+#     priv_calc <- subset %>%
+#       dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
+#       dplyr::mutate(sum = rowSums(across(everything()))) %>%
+#       dplyr::mutate(freq = (sum / i)) %>%
+#       dplyr::mutate(
+#         class = case_when(
+#           freq == 1 ~ "core",
+#           freq > 1/i & freq < 1 ~ "accessory",
+#           freq == 1/i ~ "private",
+#           TRUE ~ "undefined")) %>%
+#       dplyr::filter(class == "private")
+#     
+#     # print(head(priv_calc))
+#     print(paste0("On strain subset: ", i,", and iteration: ", it_i))
+#     
+#     priv_count <- nrow(priv_calc)
+#     # print(priv_count)
+#     
+#     res_list[[iteration]] <- data.frame(
+#       n_strains = i,
+#       replicate = it_i,
+#       n_priv_ogs = priv_count)
+#     iteration <- iteration + 1
+#   }
+# }
+#
+# priv_final <- dplyr::bind_rows(res_list)
 
 priv_summary <- priv_final %>%
   dplyr::group_by(n_strains) %>%
@@ -937,7 +937,7 @@ priv_summary <- priv_final %>%
 
 
 # Plotting
-pan_rarfact <- ggplot() +
+pan_rarefact <- ggplot() +
   # Pangenome
   geom_errorbar(data = pan_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
   geom_point(data = pan_summary, aes(x = n_strains, y = mean_core), color = 'blue', size = 3) +
@@ -948,8 +948,8 @@ pan_rarfact <- ggplot() +
   geom_errorbar(data = accessory_summary, aes(x = n_strains, ymin = mean_accessory - sd_accessory, ymax = mean_accessory + sd_accessory), width = 0.5) +
   geom_point(data = accessory_summary, aes(x = n_strains, y = mean_accessory), color = '#DB6333', size = 3) +
   # Private
-  # geom_errorbar(data = priv_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
-  # geom_point(data = priv_summary, aes(x = n_strains, y = mean_core), color = 'magenta3', size = 3) +
+  geom_errorbar(data = priv_summary, aes(x = n_strains, ymin = mean_priv - sd_priv, ymax = mean_priv + sd_priv), width = 0.5) +
+  geom_point(data = priv_summary, aes(x = n_strains, y = mean_priv), color = 'magenta3', size = 3) +
   # geom_ribbon(aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), alpha = 0.2) +
   labs(x = "Genomes", y = "Orthogroups") +
   theme(
@@ -958,17 +958,16 @@ pan_rarfact <- ggplot() +
     axis.title = element_text(size = 18, face = "bold"),
     axis.text = element_text(size =14, color = 'black'))
     # legend.position = 'none')
-pan_rarfact
+pan_rarefact
 
-# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_core_rarefaction.png", pan_rarfact, width = 14, height = 12, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_core_acc_priv_rarefaction.png", pan_rarefact, width = 14, height = 12, dpi = 600)
 
 
 
 # saveRDS(pan_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
 # saveRDS(core_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
 # saveRDS(accessory_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/acc_iterativeOGcount.rds")
-saveRDS(priv_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/priv_iterativeOGcount.rds")
-
+# saveRDS(priv_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/priv_iterativeOGcount.rds")
 
 
 
