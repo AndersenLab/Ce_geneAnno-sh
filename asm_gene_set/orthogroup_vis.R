@@ -993,7 +993,7 @@ pav_mat <- all_relations %>% dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 
       TRUE ~ "undefined")) %>%
   dplyr::select(-freq) %>%
   dplyr::mutate(class = factor(class, levels = c("core", "accessory", "private"))) %>%
-  dplyr::arrange(class, Orthogroup, desc(sum)) %>%
+  dplyr::arrange(desc(sum)) %>%
   dplyr::select(-sum) %>%
   dplyr::mutate(Orthogroup = factor(Orthogroup, levels = unique(Orthogroup)))
 
@@ -1005,18 +1005,29 @@ pav_long <- pav_mat %>%
   dplyr::mutate(
     class_presence = case_when(
       presence == 1 ~ paste0(class, "_present"),
-      presence == 0 ~ paste0(class, "_absent")))
+      presence == 0 ~ paste0(class, "_absent"))) %>%
+  dplyr::group_by(strain,class) %>%
+  dplyr::mutate(class_count=sum(presence)) %>%
+  dplyr::ungroup() 
 
-ggplot(pav_long, aes(x = Orthogroup, y = strain, fill = class_presence)) +
+strain_order_acc <- pav_long %>%
+  dplyr::filter(class=="accessory") %>%
+  dplyr::arrange(class_count) %>%
+  dplyr::distinct(strain,.keep_all = T) %>%
+  dplyr::pull(strain) 
+
+ggplot(pav_long %>%
+         dplyr::mutate(strain=factor(strain,levels=strain_order_acc)),
+       aes(x = Orthogroup, y = strain, fill = class_presence)) +
   geom_tile() +
   scale_fill_manual(
     values = c(
       core_present       = "green4",
-      core_absent        = "grey90",
+      core_absent        = "white",
       accessory_present  = "#DB6333",
-      accessory_absent   = "grey90",
+      accessory_absent   = "white",
       private_present    = "magenta3",
-      private_absent     = "grey90")) +
+      private_absent     = "white")) +
   labs(x = "Orthogroups", y = "Strain", fill = "Class × presence") +
   theme_minimal() +
   theme(
@@ -1028,14 +1039,6 @@ ggplot(pav_long, aes(x = Orthogroup, y = strain, fill = class_presence)) +
     axis.text.y = element_text(size = 6, color = 'black'),
     axis.title.x = element_text(color = 'black', size = 12, face = 'bold'),
     axis.title.y = element_blank())
-
-
-
-
-
-
-
-
 
 
 
@@ -2045,19 +2048,4 @@ plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
   guides(
     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-  labs(title = "Enriched GO:MF terms for genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
-plot_GO_MF
-
-
-final_plot <- cowplot::plot_grid(
-  plot_ipr, plot_GO_BP,
-  rel_heights = c(1,0.5),
-  ncol = 1,
-  align = "v",
-  axis = "lr",
-  labels = c("a","b"),
-  label_size = 14,
-  label_fontface = "bold")
-final_plot
-
-
+  labs(titl
