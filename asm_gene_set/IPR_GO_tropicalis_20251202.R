@@ -11,18 +11,18 @@ library(clusterProfiler) ## BiocManager::install("clusterProfiler") # need this 
 library(enrichplot)
 library(data.table)
 library(cowplot)
-#library(broom) # added by Nic
 
-
-ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/processed_data/Orthogroups_N0_genes.tsv") %>%
-  dplyr::rename(QX1410 = QX1410.longest.prot, AF16 = c_briggsae.PRJNA10731.WS276.csq.ONLYPC.longest.protein, N2 = c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein)
+ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/tropicalis/orthofinder/29_prot/OrthoFinder/Results_Nov26/Orthogroups/Orthogroups.tsv")
 
 strainCol <- colnames(ortho_genes_dd)
-colnames(ortho_genes_dd) <- strainCol
+ugh <- gsub(".20251125.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
+ugh2 <- gsub("c_tropicalis.NIC58_20251002.csq.longest.protein","NIC58", ugh)
+strainCol_c2 <- gsub(".inbred.hifi.longestIso.protein","CGC3", ugh2)
+colnames(ortho_genes_dd) <- strainCol_c2
 
 ortho_count <- ortho_genes_dd
 
-strainCol_c2_u <- strainCol[!strainCol %in% c("Orthogroup")]
+strainCol_c2_u <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
 
 for (i in 1:length(strainCol_c2_u)) {
   print(paste0(i,"out of", length(strainCol_c2_u)))
@@ -32,8 +32,32 @@ for (i in 1:length(strainCol_c2_u)) {
     dplyr::mutate(!!sym(temp_colname) := stringr::str_count(!!sym(strainCol_c2_u[i]),", ") + 1)
 }
 
-all_relations <- ortho_count %>%
+all_relations_pre <- ortho_count %>%
   dplyr::select(Orthogroup, dplyr::contains("_count"))
+
+
+private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/tropicalis/orthofinder/29_prot/OrthoFinder/Results_Nov26/Orthogroups/Orthogroups_UnassignedGenes.tsv") 
+mtgenes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/tropicalis/orthofinder/29_prot/OrthoFinder/Results_Nov26/Orthogroups/tropicalis_mtDNA_genes.tsv", col_names = "gene") %>% dplyr::pull()
+private_OGs <- private_OGs %>% dplyr::filter(!c_tropicalis.NIC58_20251002.csq.longest.protein %in% mtgenes)
+
+colnames(private_OGs) <- strainCol_c2
+
+private_cols <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
+
+private_ortho_count <- private_OGs
+for (i in 1:length(private_cols)) {
+  print(paste0(i, " out of ", length(private_cols)))
+  temp_colname <- paste0(private_cols[i], "_count")
+  
+  private_ortho_count <- private_ortho_count %>%
+    dplyr::mutate(!!sym(temp_colname) := ifelse(is.na(!!sym(private_cols[i])), NA, 1))
+}
+
+all_relations_private <- private_ortho_count %>%
+  dplyr::select(Orthogroup, dplyr::contains("_count"))
+
+all_relations <- all_relations_pre %>%
+  dplyr::bind_rows(all_relations_private)
 
 
 #### Plotting ####
@@ -51,11 +75,12 @@ classification <- all_relations %>%
       TRUE ~ "undefined"
     )
   ) %>%
-  dplyr::count(freq, class) %>%
+  dplyr::count(freq, sum, class) %>%
   dplyr::mutate(percent = (n / sum(n)) * 100) 
 
 
-gs_allOrtho <- ggplot(data = classification, aes(x = freq * 100, y = percent, fill = class)) + 
+
+gs_allOrtho <- ggplot(data = classification, aes(x = sum, y = n, fill = class)) + 
   geom_bar(stat = "identity", color = "black", alpha = 0.5) + 
   scale_fill_manual(values = c(
     "core" = "green4",
@@ -65,25 +90,82 @@ gs_allOrtho <- ggplot(data = classification, aes(x = freq * 100, y = percent, fi
   limits = c("core", "accessory", "private"),  # Manually ordering legend items
   guide = guide_legend(title = NULL) 
   ) +
-  ylab("OGs") + # longest isoform
-  xlab("Frequency") +
-  scale_y_continuous(labels = scales::percent_format(scale = 1)) + 
-  scale_x_continuous(labels = scales::percent_format(scale = 1)) +
+  ylab("Orthogroups") + # longest isoform
+  xlab("Genomes") +
+  # scale_y_continuous(labels = scales::percent_format(scale = 1)) + 
+  # scale_x_continuous(labels = scales::percent_format(scale = 1)) +
+  theme_classic() +
+  scale_x_continuous(breaks = seq(0, max(classification$sum), by = 25)) +
+  theme(
+    axis.title = element_text(size = 24, color = 'black', face = 'bold'),
+    legend.position = c(0.8, 0.8),
+    plot.margin = margin(l = 20, r = 20, t = 20),
+    # plot.title = element_text(size=26, face = 'bold', hjust=0.5),
+    legend.text = element_text(size=22, color = 'black'),
+    axis.text = element_text(size=18, color = 'black')
+  )
+gs_allOrtho
+
+OG_class_count <- classification %>%
+  dplyr::group_by(class) %>%
+  dplyr::summarise(n_OG = sum(n)) %>%
+  dplyr::ungroup()
+
+
+##### BASED ON GENES #####
+classification_genes <- all_relations %>%
+  dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
+  dplyr::mutate(sum = rowSums(across(-1, ~ ., .names = NULL), na.rm = TRUE)) %>%
+  dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
+  dplyr::mutate(
+    class = case_when(
+      freq == 1 ~ "core",
+      freq > private_freq & freq < 1 ~ "accessory",
+      freq == private_freq ~ "private",
+      TRUE ~ "undefined"
+    )
+  ) 
+
+sum_genes <- all_relations %>%
+  dplyr::mutate(all_genes = rowSums(dplyr::across(2:ncol(.)), na.rm = TRUE)) %>%
+  dplyr::select(all_genes) %>%
+  dplyr::bind_cols(classification_genes) %>%
+  dplyr::group_by(freq, sum, class) %>%
+  dplyr::summarise(total_genes = sum(all_genes, na.rm = TRUE)) %>%
+  dplyr::ungroup()
+
+
+genes_allHOGs <- ggplot(data = sum_genes, aes(x = sum, y = total_genes / 1000, fill = class)) + 
+  geom_bar(stat = "identity", color = "black", alpha = 0.5) + 
+  scale_fill_manual(values = c(
+    "core" = "green4",
+    "accessory" = "#DB6333",
+    "private" = "magenta3"
+  ), 
+  limits = c("core", "accessory", "private"),  # Manually ordering legend items
+  guide = guide_legend(title = NULL) 
+  ) +
+  ylab("Genes (1e3)") + # longest isoform
+  xlab("Strains") +
+  # scale_y_continuous(labels = scales::percent_format(scale = 1)) + 
+  # scale_x_continuous(labels = scales::percent_format(scale = 1)) +
   theme_classic() +
   theme(
     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
     legend.position = c(0.85, 0.8),
-    plot.margin = margin(l = 20),
+    # plot.margin = margin(l = 20),
     plot.title = element_text(size=18, face = 'bold', hjust=0.5),
     legend.text = element_text(size=16, color = 'black'),
     axis.text = element_text(size=14, color = 'black')
   )
-gs_allOrtho
+genes_allHOGs
 
-HOG_class_count <- classification %>%
+all_genes_class_count <- sum_genes %>%
   dplyr::group_by(class) %>%
-  dplyr::summarise(n_HOG = sum(n)) %>%
+  dplyr::summarise(n_genes = sum(total_genes)) %>%
   dplyr::ungroup()
+
+
 
 # ======================================================================================================================================================================================== #
 
@@ -285,7 +367,7 @@ gffFinal <- gffCB %>%
   # dplyr::left_join(final_GO, by = "QX1410")
   dplyr::distinct(QX1410, .keep_all = T)
 
-gffCt <- ape::read.gff("")
+gffCt <- ape::read.gff("/vast/eande106/data/c_tropicalis/genomes/NIC58_nanopore/June2021/gff/c_tropicalis.NIC58_20251002.csq.longest.gff3")
 
 gffFinal <- gffCt %>%
   dplyr::filter(type=="gene") %>%
@@ -402,10 +484,10 @@ ggplot(data = nHDR_armDomain) +
 # INTERPROSCAN - all genes as background and ALL HDR genes are enrichment set
 
 #==============================================================================================================================================================================================================================#
-allQX <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/processed_data/QX1410_tran_gene_updatedGFF_20251007.tsv", col_names = c("tran","QX1410")) %>%
+allQX <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/ipr/NIC58_tran_gene.tsv", col_names = c("tran","NIC58")) %>%
   dplyr::mutate(tran = paste0("transcript:",tran))
 
-ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/InterProScan/output/QX_IPR_allApps_20251006.tsv", col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
+ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/ipr/output/", col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
   dplyr::left_join(allQX, by = 'tran') %>%
   dplyr::select(-tran) %>%
   dplyr::select(QX1410,signature_accession,signature_description,IPR_accession,IPR_description,GO) 
