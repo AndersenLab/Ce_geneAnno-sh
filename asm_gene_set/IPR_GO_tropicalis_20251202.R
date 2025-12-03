@@ -315,11 +315,10 @@ getGenesFromBed <- function(gff,regions) {
   return(regGenes)
 }
 
+nHDR_armDomain <- readr::read_tsv("/vast/eande106/projects/Nicolas/hyperdivergent_regions/tropicalis_legacy/arm_domain_ranges.tsv") %>%
+  dplyr::rename(left=domStart,right=domEnd) %>%
+  dplyr::select(Chromosome,left,right)
 
-nHDR_armDomain <- readr::read_csv("/vast/eande106/projects/Nicolas/hyperdivergent_regions/briggsae/multi_reference/2024_release/QX1410/chromosome_domain_Cbriggsae.csv") %>%
-  dplyr::rename(Chromosome=chrom) %>%
-  dplyr::select(Chromosome,left,right) %>%
-  dplyr::mutate(left=left*1e3,right=right*1e3)
 
 ggplot(data = nHDR_armDomain) + 
   geom_rect(aes(xmin = left / 1e6, xmax = right / 1e6, ymin = 0.5, ymax = 1.5, fill = 'red')) +
@@ -354,19 +353,7 @@ for (i in 1:nrow(centers)) {
   reglist_center[[i]] <- temp2
 }
 
-# Read in GFF for extracting QX1410 genes in nHDRs and HDRs
-gffCB <-  ape::read.gff("/vast/eande106/projects/Nicolas/CBCN_comp/tree/gene_level_20251006/updated_QX/c_briggsae.QX1410_20250929.csq.longest.gff")
-
-gffFinal <- gffCB %>%
-  dplyr::filter(type=="gene") %>%
-  dplyr::filter(grepl("biotype=protein_coding", attributes)) %>%
-  tidyr::separate(attributes, into=c("ID","rest"), sep = "ID=gene:") %>%
-  tidyr::separate(rest, into=c("keep","nope"), sep = ";biotype=") %>%
-  dplyr::select(-ID,-source,-type,-score,-strand,-phase,-nope) %>%
-  dplyr::rename(CHROM = seqid, QX1410 = keep) %>%
-  # dplyr::left_join(final_GO, by = "QX1410")
-  dplyr::distinct(QX1410, .keep_all = T)
-
+# Read in GFF for extracting NIC58 genes in nHDRs and HDRs
 gffCt <- ape::read.gff("/vast/eande106/data/c_tropicalis/genomes/NIC58_nanopore/June2021/gff/c_tropicalis.NIC58_20251002.csq.longest.gff3")
 
 gffFinal <- gffCt %>%
@@ -375,9 +362,8 @@ gffFinal <- gffCt %>%
   tidyr::separate(attributes, into=c("ID","rest"), sep = "ID=gene:") %>%
   tidyr::separate(rest, into=c("keep","nope"), sep = ";biotype=") %>%
   dplyr::select(-ID,-source,-type,-score,-strand,-phase,-nope) %>%
-  dplyr::rename(CHROM = seqid, QX1410 = keep) %>%
-  # dplyr::left_join(final_GO, by = "QX1410")
-  dplyr::distinct(QX1410, .keep_all = T)
+  dplyr::rename(CHROM = seqid, NIC58 = keep) %>%
+  dplyr::distinct(NIC58, .keep_all = T)
 
 
 HDreg_arm <- ldply(reglist,data.frame)
@@ -385,7 +371,7 @@ HDreg_center <- ldply(reglist_center,data.frame)
 HDgene <- getGenesFromBed(gffFinal,HDreg_arm)
 HD_gene_vector <- HDgene[[]]
 HD_QX_genes <- (do.call(rbind, HDgene))
-HD_gene_vector <- unique(HD_QX_genes$QX1410) 
+HD_gene_vector <- unique(HD_QX_genes$NIC58) 
 
 
 ## Extracting ALL HDR genes ##
@@ -398,7 +384,7 @@ HD_gene_vector <- unique(HD_QX_genes$QX1410)
 nHDreg <- classifyingArms(HDreg_arm %>% dplyr::rename(minStart=start,maxEnd=end), nHDR_armDomain) %>% dplyr::select(-domain)
 nHDgene <- getGenesFromBed(gffFinal,nHDreg)
 nHD_QX_genes <- do.call(rbind, nHDgene)
-nHD_gene_vector <- unique(nHD_QX_genes$QX1410) 
+nHD_gene_vector <- unique(nHD_QX_genes$NIC58) 
 
 
 
@@ -458,7 +444,7 @@ posplot2
 arms <- nHDR_armDomain %>% dplyr::rename(CHROM=Chromosome,start=left,end=right)
 all_arm_genes <- getGenesFromBed(gffFinal,arms)
 all_arm_genes_df <- as.data.frame((do.call(rbind, all_arm_genes)))
-arm_genes <- all_arm_genes_df$QX1410
+arm_genes <- all_arm_genes_df$NIC58
 
 ggplot(data = nHDR_armDomain) + 
   geom_rect(aes(xmin = left / 1e6, xmax = right / 1e6, ymin = 0.5, ymax = 1.5), fill = 'black') +
@@ -487,10 +473,10 @@ ggplot(data = nHDR_armDomain) +
 allQX <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/ipr/NIC58_tran_gene.tsv", col_names = c("tran","NIC58")) %>%
   dplyr::mutate(tran = paste0("transcript:",tran))
 
-ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/ipr/output/", col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
+ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/ipr/output/NIC58_IPR_allApps_20251202.tsv", col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
   dplyr::left_join(allQX, by = 'tran') %>%
   dplyr::select(-tran) %>%
-  dplyr::select(QX1410,signature_accession,signature_description,IPR_accession,IPR_description,GO) 
+  dplyr::select(NIC58,signature_accession,signature_description,IPR_accession,IPR_description,GO) 
 
 #==============================================================================================================================================================================================================================#
 
@@ -499,12 +485,12 @@ ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotatio
 #==============================================================================================================================================================================================================================#
 ipr_gene <- ipr %>%
   dplyr::filter(!is.na(IPR_description) & IPR_description != "-") %>%
-  dplyr::select(QX1410, IPR_accession, IPR_description) %>%
-  dplyr::distinct(QX1410,IPR_accession, IPR_description) %>% # 15,289
-  dplyr::filter(QX1410 %in% arm_genes) # 5,301 genes!
+  dplyr::select(NIC58, IPR_accession, IPR_description) %>%
+  dplyr::distinct(NIC58,IPR_accession, IPR_description) %>% # 15,289
+  dplyr::filter(NIC58 %in% arm_genes) # 5,301 genes!
 
 # Define universe & HDR membership (annotated-only universe) 
-univ_genes <- unique(ipr_gene$QX1410)
+univ_genes <- unique(ipr_gene$NIC58)
 hdr_genes  <- intersect(HD_gene_vector, univ_genes) # 3,087 genes 
 
 N <- length(univ_genes)
@@ -515,7 +501,7 @@ k_tbl <- ipr_gene %>%
   dplyr::count(IPR_accession, name = "k")
 
 x_tbl <- ipr_gene %>%
-  dplyr::filter(QX1410 %in% hdr_genes) %>%
+  dplyr::filter(NIC58 %in% hdr_genes) %>%
   dplyr::count(IPR_accession, name = "x")
 
 desc_tbl <- ipr_gene %>%
@@ -554,17 +540,17 @@ ipr_sig_gene_collapsed <- ipr_gene %>%
   dplyr::group_by(IPR_accession) %>%
   dplyr::summarise(
     IPR_description = dplyr::first(stats::na.omit(IPR_description)),
-    n_genes_HDR = dplyr::n_distinct(QX1410[QX1410 %in% hdr_genes]),
-    genes_HDR   = paste(sort(unique(QX1410[QX1410 %in% hdr_genes])), collapse = ", "),
-    n_genes_all = dplyr::n_distinct(QX1410),
-    genes_all   = paste(sort(unique(QX1410)), collapse = ", "),
+    n_genes_HDR = dplyr::n_distinct(NIC58[NIC58 %in% hdr_genes]),
+    genes_HDR   = paste(sort(unique(NIC58[NIC58 %in% hdr_genes])), collapse = ", "),
+    n_genes_all = dplyr::n_distinct(NIC58),
+    genes_all   = paste(sort(unique(NIC58)), collapse = ", "),
     .groups = "drop") %>%
   dplyr::left_join(ipr_sig %>% dplyr::select(IPR_accession, x, k, n, N, expected, enrich_ratio, OR, pval, FDR_p.adjust), by = "IPR_accession") %>%
   dplyr::mutate(Region = "hyper-divergent regions")
 
 
 # Now for non-HDR arm genes
-univ_genes2 <- unique(ipr_gene$QX1410)
+univ_genes2 <- unique(ipr_gene$NIC58)
 nhdr_genes  <- intersect(nHD_gene_vector, univ_genes2) # 3,427 genes 
 
 N <- length(univ_genes2)
@@ -575,7 +561,7 @@ k_tbl2 <- ipr_gene %>%
   dplyr::count(IPR_accession, name = "k")
 
 x_tbl2 <- ipr_gene %>%
-  dplyr::filter(QX1410 %in% nhdr_genes) %>%
+  dplyr::filter(NIC58 %in% nhdr_genes) %>%
   dplyr::count(IPR_accession, name = "x")
 
 desc_tbl2 <- ipr_gene %>%
@@ -614,10 +600,10 @@ ipr_sig_gene_collapsed2 <- ipr_gene %>%
   dplyr::group_by(IPR_accession) %>%
   dplyr::summarise(
     IPR_description = dplyr::first(stats::na.omit(IPR_description)),
-    n_genes_HDR = dplyr::n_distinct(QX1410[QX1410 %in% hdr_genes]),
-    genes_HDR   = paste(sort(unique(QX1410[QX1410 %in% hdr_genes])), collapse = ", "),
-    n_genes_all = dplyr::n_distinct(QX1410),
-    genes_all   = paste(sort(unique(QX1410)), collapse = ", "),
+    n_genes_HDR = dplyr::n_distinct(NIC58[NIC58 %in% hdr_genes]),
+    genes_HDR   = paste(sort(unique(NIC58[NIC58 %in% hdr_genes])), collapse = ", "),
+    n_genes_all = dplyr::n_distinct(NIC58),
+    genes_all   = paste(sort(unique(NIC58)), collapse = ", "),
     .groups = "drop") %>%
   dplyr::left_join(ipr_sig2 %>% dplyr::select(IPR_accession, x, k, n, N, expected, enrich_ratio, OR, pval, FDR_p.adjust), by = "IPR_accession") %>%
   dplyr::mutate(Region = "non HDRs")
@@ -676,16 +662,16 @@ go_ipr <- ipr %>%
   dplyr::filter(!is.na(GO) & GO != "-") %>%
   tidyr::separate_rows(GO, sep="\\|") %>%
   dplyr::filter(GO != "") %>%
-  dplyr::distinct(QX1410, GO) %>% # 11,756 genes
+  dplyr::distinct(NIC58, GO) %>% # 11,756 genes
   dplyr::mutate(GO = str_remove_all(GO, "\\s*\\([^)]*\\)") |> str_squish())
 
 
 ### Now with only arms as the background, not the entire genome
-go_ipr_arms <- go_ipr %>% dplyr::filter(QX1410 %in% arm_genes)
-IPR_GO_bckgrd_arms <- unique(go_ipr_arms$QX1410) # 3,905 genes
+go_ipr_arms <- go_ipr %>% dplyr::filter(NIC58 %in% arm_genes)
+IPR_GO_bckgrd_arms <- unique(go_ipr_arms$NIC58) # 3,905 genes
 
 
-# how_many_HDR_GO_arm_genes <- go_ipr_arms %>% dplyr::filter(QX1410 %in% HD_gene_vector) # 2,105
+# how_many_HDR_GO_arm_genes <- go_ipr_arms %>% dplyr::filter(NIC58 %in% HD_gene_vector) # 2,105
 
 GO_annotations <- AnnotationDbi::select(GO.db,
                                         keys=unique(go_ipr$GO),
@@ -700,7 +686,7 @@ merged_ont <- go_ipr %>%
 # BP
 enGO_HDR_merged_BP <- clusterProfiler::enricher(
   gene = HD_gene_vector,
-  TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(GO,QX1410),
+  TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(GO,NIC58),
   TERM2NAME = GO_annotations %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(TERM,TERM_NAME),
   universe = IPR_GO_bckgrd_arms,
   pvalueCutoff = 0.05,
@@ -762,7 +748,7 @@ plot_GO_BP
 # MF
 enGO_HDR_merged_MF <- clusterProfiler::enricher(
   gene = HD_gene_vector,
-  TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(GO,QX1410),
+  TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(GO,NIC58),
   TERM2NAME = GO_annotations %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(TERM,TERM_NAME),
   universe = IPR_GO_bckgrd_arms,
   pvalueCutoff = 0.05,
@@ -827,5 +813,7 @@ final_plot <- cowplot::plot_grid(
   label_size = 14,
   label_fontface = "bold")
 final_plot
+
+
 
 
