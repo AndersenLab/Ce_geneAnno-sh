@@ -15,25 +15,33 @@ library(stringr)
 # want <- c("N2","ECA1409")
 # want <- c("N2", "NIC195")
 # want <- c("N2","ECA1187","ECA1195","ECA703")
+# want <- c("N2","ECA3012","XZ1516","MY2212","ECA723","NIC1790")
+want <- c("N2", "RC301", "NIC199","QX1791","QX1794","XZ1513")
 
 #read all pairwise genome coordinate comparisons
 # transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/nucmer_runs/115_WI_transformed_coords_FIXED.tsv",col_names = F) # REPLACE
-transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/nucmer_aln_WSs/all_140_nucmer.tsv",col_names = F) 
+
+## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
+transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/all_140_nucmer.tsv",col_names = F) 
 colnames(transformed_coords) <- c("S1","E1","S2","E2","L1","L2","IDY","LENR","LENQ","REF","HIFI","STRAIN") 
-transformed_coords <- transformed_coords #%>%
- # dplyr::filter(STRAIN %in% want)
+transformed_coords <- transformed_coords %>%
+  dplyr::filter(STRAIN %in% want)
 
 #read concatentated gene models of every genome
 # gffCat1 <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/braker_runs/merged_gff/all_WI_braker.clean.gff", col_names = F) 
 # gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/ALL_GFFs_longestIso.tsv", col_names = F) # need to replace iwth Updated Octover results
+
+## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
 gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/140strain_genemRNAfeatures.tsv", col_names = F)
 colnames(gffCat1) <- c("seqid","source","type","start","end","score","strand","phase","attributes","STRAIN")
 gffCat2 <- ape::read.gff("/vast/eande106/projects/Nicolas/c.elegans/N2/wormbase/WS283/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
-gffCat <- rbind(gffCat1,gffCat2) #%>% 
-  # dplyr::filter(STRAIN %in% want)
+gffCat <- rbind(gffCat1,gffCat2) %>% 
+  dplyr::filter(STRAIN %in% want)
 
 #read ortholog relationships among gene models
 # orthos <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_78/OrthoFinder/Results_Mar20/Orthogroups/Orthogroups.tsv")
+
+## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
 orthos <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups.tsv")
 strainCol <- colnames(orthos)
 # strainCol_c1 <- gsub(".braker.protein","", strainCol)
@@ -43,14 +51,30 @@ strainCol_c1.1 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestI
 strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", strainCol_c1.1)
 colnames(orthos) <- strainCol_c2
 
+# Katies association mapping (TOF) QTL
+peak_marker = 16276775
+hdr_chrom = "V"
+hdr_start_pos = peak_marker - 10000
+hdr_end_pos = peak_marker + 10000
+# hdr_start_pos = 15983112 
+# hdr_end_pos = 16599066
+
+# # Foraging QTL
+# hdr_chrom = "V"
+# hdr_start_pos = 15861000
+# hdr_end_pos = 16006000
+
+
+
+
 # hdr_chrom = "V"
 # hdr_start_pos = 16067500
 # hdr_end_pos = 16153000
 
 # smaller right arm of V for BWC
-hdr_chrom = "V"
-hdr_start_pos = 16060000
-hdr_end_pos = 16070000
+# hdr_chrom = "V"
+# hdr_start_pos = 16060000
+# hdr_end_pos = 16070000
 
 # Looking at kola genes
 # K06A9.1
@@ -78,7 +102,7 @@ hdr_end_pos = 16070000
 # hdr_start_pos =  14192000
 # hdr_end_pos = 14240000
 
-# # gly-1
+# gly-1
 # hdr_chrom = "II"
 # hdr_start_pos = 10888000
 # hdr_end_pos = 10918000
@@ -90,7 +114,7 @@ hdr_end_pos = 16070000
 
 
 
-#offset lets you explore adjacent regions
+# offset lets you explore adjacent regions
 offset = 0
 hap_chrom = hdr_chrom
 hap_start = hdr_start_pos - offset
@@ -513,6 +537,8 @@ g_count <- length(unique(N2_ad_corr$Parent))
 # desired_order <- c("N2","ECA1409")
 # desired_order <- c("N2", "NIC195")
 # desired_order <- c("N2","ECA1187","ECA1195","ECA703")
+# desired_order <- c("N2","ECA3012","XZ1516","MY2212","ECA723","NIC1790")
+desired_order <- c("QX1791","QX1794","XZ1513","RC301", "NIC199")
 
 WI_ad <- boundGenes %>% 
   dplyr::filter(!STRAIN=="N2") %>%
@@ -544,7 +570,7 @@ WI_ad <- boundGenes %>%
   dplyr::mutate(order_gene = dplyr::first(first_gene), order_num = dplyr::first(n_gene)) %>% 
   dplyr::ungroup() %>%
   # dplyr::arrange(desc(order_gene), desc(order_num)) %>%
-  dplyr::arrange(desc(order_gene), order_num) %>%
+  dplyr::arrange(STRAIN, desc(order_gene), order_num) %>%
   # dplyr::arrange(desc(STRAIN)) %>%
   dplyr::select(-order_gene, -order_num) %>%
   dplyr::mutate(g_diff = abs(n_gene-g_count)) %>%
@@ -620,20 +646,6 @@ all_hap <- ggplot() +
   scale_fill_manual(values=c("has_local_ortho"="grey","has_distal_ortho"="black","no_known_ortho"="red","no_known_allelic_CB"="blue")) +
   scale_x_continuous(expand = c(0.01,0))
 all_hap
-
-
-
-
-
-
-
-# ======================================================================================================================= #
-plot_ad <- all_ad %>%
-  dplyr::group_by(STRAIN,Parent) %>%
-  dplyr::filter(col==max(col)) %>%
-  dplyr::ungroup() %>%
-  dplyr::distinct(STRAIN,Parent,.keep_all = T) %>%
-  dplyr::mutate(class=ifelse(col==0,"no_known_ortho",ifelse(col==1,"has_distal_ortho","has_local_ortho"))) 
 
 
 # Exclude "non-ortho" from the trapezium joining
@@ -726,12 +738,12 @@ all_hap_bg <- ggplot() +
                aes(x = x, y = y, group = group, fill = alias)) +
   geom_rect(data = plot_ad %>% dplyr::mutate(alias=ifelse(is.na(alias),"Unknown gene",as.character(alias))),
             aes(xmin = start, xmax = end, ymin = y_pos + 0.2, ymax = y_pos - 0.2, fill = alias),color = "black") +
-  geom_segment(
-    data = plot_ad_segments,
-    aes(x = x_start, xend = x_end, y = y_seg, yend = y_seg, color = seg_color),
-    linewidth = 0.5,
-    inherit.aes = FALSE
-  ) +
+  # geom_segment(
+  #   data = plot_ad_segments,
+  #   aes(x = x_start, xend = x_end, y = y_seg, yend = y_seg, color = seg_color),
+  #   linewidth = 0.5,
+  #   inherit.aes = FALSE
+  # ) +
   scale_y_continuous(
     expand = c(0.01, 0),
     breaks = hlines$y_pos,
@@ -742,20 +754,21 @@ all_hap_bg <- ggplot() +
                     breaks = names(final_colors)) +
   scale_color_identity()  +
   #scale_color_manual(values = c("+"="black","-"="red")) +
-  labs(fill="Reference\ngene")+
+  labs(fill="Reference \ngene")+
   xlab("Physical distance (kb)") +
   theme(
     panel.background = element_blank(),
     axis.title = element_blank(),
-    axis.text.y = element_text(size = 8),  # adjust size as needed
+    axis.text= element_text(size = 12, color = 'black'),  # adjust size as needed
     axis.ticks.y = element_blank(),
     axis.line.x = element_line(),
-    axis.title.x = element_text(),
+    axis.title.x = element_text(color = 'black', size  = 14),
+    # legend.position = 'none'
     legend.position = "bottom",
     legend.direction = "horizontal",
     legend.key.size = unit(0.4, "lines"),
-    legend.text = element_text(size = 6),
-    legend.title = element_text(size = 7)
+    legend.text = element_text(size = 16),
+    legend.title = element_text(size = 16)
   ) +
   guides(fill = guide_legend(nrow = 6, byrow = TRUE))
 
