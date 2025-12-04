@@ -16,7 +16,9 @@ library(stringr)
 # want <- c("N2", "NIC195")
 # want <- c("N2","ECA1187","ECA1195","ECA703")
 # want <- c("N2","ECA3012","XZ1516","MY2212","ECA723","NIC1790")
-want <- c("N2", "RC301", "NIC199","QX1791","QX1794","XZ1513")
+# want <- c("N2", "RC301", "NIC199","QX1791","QX1794","XZ1513")
+want <- c("N2", "CB4852", "AB1","MY23")
+
 
 #read all pairwise genome coordinate comparisons
 # transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/nucmer_runs/115_WI_transformed_coords_FIXED.tsv",col_names = F) # REPLACE
@@ -52,17 +54,17 @@ strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.prot
 colnames(orthos) <- strainCol_c2
 
 # Katies association mapping (TOF) QTL
-peak_marker = 16276775
-hdr_chrom = "V"
-hdr_start_pos = peak_marker - 10000
-hdr_end_pos = peak_marker + 10000
+# peak_marker = 16276775
+# hdr_chrom = "V"
+# hdr_start_pos = peak_marker - 10000
+# hdr_end_pos = peak_marker + 10000
 # hdr_start_pos = 15983112 
 # hdr_end_pos = 16599066
 
 # # Foraging QTL
-# hdr_chrom = "V"
-# hdr_start_pos = 15861000
-# hdr_end_pos = 16006000
+hdr_chrom = "V"
+hdr_start_pos = 15861000
+hdr_end_pos = 16006000
 
 
 
@@ -538,7 +540,8 @@ g_count <- length(unique(N2_ad_corr$Parent))
 # desired_order <- c("N2", "NIC195")
 # desired_order <- c("N2","ECA1187","ECA1195","ECA703")
 # desired_order <- c("N2","ECA3012","XZ1516","MY2212","ECA723","NIC1790")
-desired_order <- c("QX1791","QX1794","XZ1513","RC301", "NIC199")
+# desired_order <- c("QX1791","QX1794","XZ1513","RC301", "NIC199")
+desired_order <- c("MY23", "CB4852", "AB1")
 
 WI_ad <- boundGenes %>% 
   dplyr::filter(!STRAIN=="N2") %>%
