@@ -486,12 +486,12 @@ ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotatio
 ipr_gene <- ipr %>%
   dplyr::filter(!is.na(IPR_description) & IPR_description != "-") %>%
   dplyr::select(NIC58, IPR_accession, IPR_description) %>%
-  dplyr::distinct(NIC58,IPR_accession, IPR_description) %>% # 15,289
-  dplyr::filter(NIC58 %in% arm_genes) # 5,301 genes!
+  dplyr::distinct(NIC58,IPR_accession, IPR_description) %>% # 14,260
+  dplyr::filter(NIC58 %in% arm_genes) # 6.957 genes!
 
 # Define universe & HDR membership (annotated-only universe) 
 univ_genes <- unique(ipr_gene$NIC58)
-hdr_genes  <- intersect(HD_gene_vector, univ_genes) # 3,087 genes 
+hdr_genes  <- intersect(HD_gene_vector, univ_genes) # 2,939 genes 
 
 N <- length(univ_genes)
 n <- length(hdr_genes)
@@ -662,7 +662,7 @@ go_ipr <- ipr %>%
   dplyr::filter(!is.na(GO) & GO != "-") %>%
   tidyr::separate_rows(GO, sep="\\|") %>%
   dplyr::filter(GO != "") %>%
-  dplyr::distinct(NIC58, GO) %>% # 11,756 genes
+  dplyr::distinct(NIC58, GO) %>% # 10,985 genes
   dplyr::mutate(GO = str_remove_all(GO, "\\s*\\([^)]*\\)") |> str_squish())
 
 
@@ -767,7 +767,7 @@ enGO_HDR_merged_plot <- as.data.table(enGO_HDR_merged_MF@result) %>%
   dplyr::arrange(desc(p.adjust)) %>%
   dplyr::filter(p.adjust < 0.05) %>%
   dplyr::mutate(plotpoint = dplyr::row_number()) %>%
-  dplyr::mutate(Description = gsub("oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen","oxidoreductase activity (1)", Description))
+  dplyr::mutate(Description = gsub("acyltransferase activity, transferring groups other than amino-acyl groups","acyltransferase activity (1)", Description))
 
 plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
   geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
@@ -814,6 +814,7 @@ final_plot <- cowplot::plot_grid(
   label_fontface = "bold")
 final_plot
 
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/plot/IPR_domain_GO_BpMf_HDR_20251203.png", final_plot,  width = 7.5, height = 7, dpi = 600)
 
 
 
