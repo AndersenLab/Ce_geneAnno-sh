@@ -55,7 +55,7 @@ library(enrichplot)
 # Pulling all genes, coordinates, and alignments for all WSs and N2 #
 # ======================================================================================================================================================================================== #
 # genes_strain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/116_genesOnly_strainRes.tsv", col_names = c("contig","type", "start", "end", "strand", "attributes", "strain")) 
-genes_strain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142_140WSs_andCGC1_longestIsoGenes.tsv", col_names = c("seqid","source", "type", "start", "end", "score", "strand", "phase", "attributes", "strain"))
+genes_strain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142_140WSs_andCGC1_longestIsoGenes.tsv", col_names = c("seqid","source", "type", "start", "end", "score", "strand", "phase", "attributes", "strain")) %>% dplyr::filter(strain != "ECA396")
 N2_gff <- ape::read.gff("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.gff3") %>% dplyr::mutate(strain="N2")
 genes_strain <- rbind(genes_strain,N2_gff)
 all_genes_strain <- genes_strain %>%
@@ -79,7 +79,7 @@ N2_tranGene <- N2_gff %>%
 # write.table(all_genes_strain,"/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/116strain_genes.tsv", quote = F, row.names = F, col.names = T, sep = '\t')
 
 nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
-  dplyr::select(-L1,-L2,-IDY,-LENR,-LENQ)
+  dplyr::select(-L1,-L2,-IDY,-LENR,-LENQ) %>% dplyr::filter(strain != "ECA396")
 # write.table(nucmer,"/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/115WS_nucmer_clean.tsv", quote = F, row.names = F, col.names = T, sep = '\t')
 
 
@@ -761,20 +761,20 @@ n_perms <- 100
  
  
 # # For the pangenome
-# pan_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141 
+# pan_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 142
 # iteration_pan <- 1
-# 
+#
 # for (i in 2:n_strains_total) {
 #   for (it_i in 1:n_perms) {
 #     # pick k random strains
 #     cols <- sample(colnames(all), size = i, replace = FALSE)
 #     subset <- all[, cols, drop = FALSE] # subset all df to k strains
-#     
-#     subset <- subset %>% dplyr::filter(!if_all(everything(), is.na)) 
+# 
+#     subset <- subset %>% dplyr::filter(!if_all(everything(), is.na))
 #     all_OGs <- nrow(subset)
 #     # print(all_OGs)
 #     print(paste0("On strain subset: ",i,", and iteration: ", it_i))
-#     
+# 
 #     pan_list[[iteration_pan]] <- data.frame(
 #       n_strains = i,
 #       replicate = it_i,
@@ -796,7 +796,7 @@ pan_summary <- pan_final %>%
   dplyr::ungroup()
 
 # # For the core pangenome
-# res_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141 
+# res_list <- vector("list", length = n_strains_total - 1) # -1 because we iterate 2 - 141
 # iteration <- 1
 # 
 # for (i in 2:n_strains_total) {
@@ -804,7 +804,7 @@ pan_summary <- pan_final %>%
 #     # pick k random strains
 #     cols <- sample(colnames(all), size = i, replace = FALSE)
 #     subset <- all[, cols, drop = FALSE] # subset all df to k strains
-#     
+# 
 #     # binarize and count core
 #     core_calc <- subset %>%
 #       dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
@@ -812,13 +812,13 @@ pan_summary <- pan_final %>%
 #       dplyr::mutate(freq = (sum / i)) %>%
 #       dplyr::mutate(class = case_when(freq == 1 ~ "core")) %>%
 #       dplyr::filter(class == "core")
-#     
+# 
 #     # print(head(core_calc))
 #     print(paste0("On strain subset: ", i,", and iteration: ", it_i))
-#     
+# 
 #     core_count <- nrow(core_calc)
 #     # print(core_count)
-#   
+# 
 #     res_list[[iteration]] <- data.frame(
 #       n_strains = i,
 #       replicate = it_i,
@@ -876,7 +876,7 @@ core_summary <- core_final %>%
 #     iteration <- iteration + 1
 #   }
 # }
-
+# 
 # accessory_final <- dplyr::bind_rows(res_list)
 
 accessory_summary <- accessory_final %>%
@@ -898,7 +898,7 @@ accessory_summary <- accessory_final %>%
 #     # pick k random strains
 #     cols <- sample(colnames(all), size = i, replace = FALSE)
 #     subset <- all[, cols, drop = FALSE] # subset all df to k strains
-#     
+# 
 #     # binarize and count accessory
 #     priv_calc <- subset %>%
 #       dplyr::mutate(across(everything(), ~ ifelse(is.na(.),0, ifelse(. >= 1, 1, .)))) %>%
@@ -911,13 +911,13 @@ accessory_summary <- accessory_final %>%
 #           freq == 1/i ~ "private",
 #           TRUE ~ "undefined")) %>%
 #       dplyr::filter(class == "private")
-#     
+# 
 #     # print(head(priv_calc))
 #     print(paste0("On strain subset: ", i,", and iteration: ", it_i))
-#     
+# 
 #     priv_count <- nrow(priv_calc)
 #     # print(priv_count)
-#     
+# 
 #     res_list[[iteration]] <- data.frame(
 #       n_strains = i,
 #       replicate = it_i,
@@ -925,7 +925,7 @@ accessory_summary <- accessory_final %>%
 #     iteration <- iteration + 1
 #   }
 # }
-#
+# 
 # priv_final <- dplyr::bind_rows(res_list)
 
 priv_summary <- priv_final %>%
@@ -949,11 +949,11 @@ pan_rarefact <- ggplot() +
   geom_errorbar(data = core_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
   geom_point(data = core_summary, aes(x = n_strains, y = mean_core), color = 'green4', size = 3) +
   # Accessory
-  geom_errorbar(data = accessory_summary, aes(x = n_strains, ymin = mean_accessory - sd_accessory, ymax = mean_accessory + sd_accessory), width = 0.5) +
-  geom_point(data = accessory_summary, aes(x = n_strains, y = mean_accessory), color = '#DB6333', size = 3) +
+  # geom_errorbar(data = accessory_summary, aes(x = n_strains, ymin = mean_accessory - sd_accessory, ymax = mean_accessory + sd_accessory), width = 0.5) +
+  # geom_point(data = accessory_summary, aes(x = n_strains, y = mean_accessory), color = '#DB6333', size = 3) +
   # Private
-  geom_errorbar(data = priv_summary, aes(x = n_strains, ymin = mean_priv - sd_priv, ymax = mean_priv + sd_priv), width = 0.5) +
-  geom_point(data = priv_summary, aes(x = n_strains, y = mean_priv), color = 'magenta3', size = 3) +
+  # geom_errorbar(data = priv_summary, aes(x = n_strains, ymin = mean_priv - sd_priv, ymax = mean_priv + sd_priv), width = 0.5) +
+  # geom_point(data = priv_summary, aes(x = n_strains, y = mean_priv), color = 'magenta3', size = 3) +
   # geom_ribbon(aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), alpha = 0.2) +
   labs(x = "Genomes", y = "Orthogroups") +
   theme(
@@ -964,10 +964,10 @@ pan_rarefact <- ggplot() +
     # legend.position = 'none')
 pan_rarefact
 
-# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_core_acc_priv_rarefaction.png", pan_rarefact, width = 14, height = 12, dpi = 600)
+ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_core_rarefaction.png", pan_rarefact, width = 14, height = 12, dpi = 600)
 
 
-
+# 
 # saveRDS(pan_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
 # saveRDS(core_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
 # saveRDS(accessory_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/acc_iterativeOGcount.rds")
