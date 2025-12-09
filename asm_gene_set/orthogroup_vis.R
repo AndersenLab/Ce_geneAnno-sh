@@ -268,7 +268,7 @@ nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/
 # Converting transcripts to genes and removing all duplicate genes (not needed anymore, using longest isoform) in a dataframe cell:
 # see script - /vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/scripts/Ce_geneAnno-sh/asm_gene_set/tran_gene.sh 
 # ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/May_115_longestIso/N0_0504_genes.tsv")
-ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups.tsv") %>%
+ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups.tsv") %>%
   dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
 # whatever <- ortho_genes_dd %>%
   # dplyr::select(JU1581.braker.longest.protein, N2.longest.protein)
@@ -276,7 +276,11 @@ ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/ass
 strainCol <- colnames(ortho_genes_dd)
 ugh <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
 ugh2 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh)
-strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", ugh2)
+ugh3 <- gsub(".20251124.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh2)
+ugh4 <- gsub(".20251012.inbred.onlyONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh3)
+ugh5 <- gsub(".Nov2025.softMasked.braker.longest.protein","", ugh4)
+ugh6 <- gsub(".20251012.inbred.withONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh5)
+strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", ugh6)
 colnames(ortho_genes_dd) <- strainCol_c2
 
 ortho_count <- ortho_genes_dd
@@ -295,7 +299,7 @@ all_relations_pre <- ortho_count %>%
   dplyr::select(Orthogroup, dplyr::contains("_count"))
 
 
-private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups_UnassignedGenes.tsv") %>%
+private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups_UnassignedGenes.tsv") %>%
   dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
 
 colnames(private_OGs) <- strainCol_c2
