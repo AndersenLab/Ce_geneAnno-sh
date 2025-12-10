@@ -462,11 +462,11 @@ ggplot(data = nHDR_armDomain) +
 # INTERPROSCAN - all genes as background and ALL HDR genes are enrichment set
 
 #==============================================================================================================================================================================================================================#
-allQX <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/ipr/NIC58_tran_gene.tsv", col_names = c("tran","NIC58")) %>%
+allNIC <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/ipr/NIC58_tran_gene.tsv", col_names = c("tran","NIC58")) %>%
   dplyr::mutate(tran = paste0("transcript:",tran))
 
 ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/ipr/output/NIC58_IPR_allApps_20251202.tsv", col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
-  dplyr::left_join(allQX, by = 'tran') %>%
+  dplyr::left_join(allNIC, by = 'tran') %>%
   dplyr::select(-tran) %>%
   dplyr::select(NIC58,signature_accession,signature_description,IPR_accession,IPR_description,GO) 
 
@@ -622,7 +622,7 @@ plot_ipr <- ggplot(data_plt) +
         legend.title = element_text(size=6, color='black', hjust = 1),
         legend.text = element_text(size=5, color='black', hjust = 1),
         legend.position = "inside",
-        legend.position.inside = c(0.6, 0.15),
+        legend.position.inside = c(0.59, 0.15),
         legend.direction = "horizontal", legend.box = "vertical",
         legend.spacing.y = unit(0.00000001, 'cm'),
         legend.key.height = unit(0.000001, "cm"),
@@ -632,7 +632,7 @@ plot_ipr <- ggplot(data_plt) +
         panel.grid = element_blank(),
         panel.background = element_blank(),
         panel.border = element_rect(fill = NA),
-        plot.margin = margin(r = 10, b = 2, l = 20, unit = "pt")) +
+        plot.margin = margin(r = 10, b = 2, l = 20, t = 2, unit = "pt")) +
   # legend.spacing.x = unit(0.02, "cm"),
   # legend.key.size = unit(0.3, 'cm')) +
   guides(
@@ -661,10 +661,10 @@ go_ipr <- ipr %>%
 
 ### Now with only arms as the background, not the entire genome
 go_ipr_arms <- go_ipr %>% dplyr::filter(NIC58 %in% arm_genes)
-IPR_GO_bckgrd_arms <- unique(go_ipr_arms$NIC58) # 3,905 genes
+IPR_GO_bckgrd_arms <- unique(go_ipr_arms$NIC58) # 3,966 genes
 
 
-# how_many_HDR_GO_arm_genes <- go_ipr_arms %>% dplyr::filter(NIC58 %in% HD_gene_vector) # 1,750
+how_many_HDR_GO_arm_genes <- go_ipr_arms %>% dplyr::filter(NIC58 %in% HD_gene_vector) # 1,750
 
 GO_annotations <- AnnotationDbi::select(GO.db,
                                         keys=unique(go_ipr$GO),
@@ -717,7 +717,7 @@ plot_GO_BP <- ggplot(enGO_HDR_merged_plot_BP) +
         legend.title = element_text(size=6, color='black', hjust = 1),
         legend.text = element_text(size=5, color='black', hjust = 1),
         legend.position = "inside",
-        legend.position.inside = c(0.58, 0.5),
+        legend.position.inside = c(0.65, 0.5),
         legend.direction = "horizontal", legend.box = "vertical",
         legend.spacing.y = unit(0.00000001, 'cm'),
         legend.key.height = unit(0.000001, "cm"),
@@ -776,7 +776,7 @@ plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
         legend.title = element_text(size=6, color='black', hjust = 1),
         legend.text = element_text(size=5, color='black', hjust = 1),
         legend.position = "inside",
-        legend.position.inside = c(0.705, 0.5),
+        legend.position.inside = c(0.65, 0.5),
         legend.direction = "horizontal", legend.box = "vertical",
         legend.spacing.y = unit(0.001, 'cm'),
         legend.key.height = unit(0.01, "cm"),
@@ -809,5 +809,220 @@ final_plot
 
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/plot/IPR_domain_GO_BpMf_HDR_20251210.png", final_plot,  width = 7.5, height = 7, dpi = 600)
 
+
+
+
+
+
+
+#==============================================================================================================================================================================================================================#
+
+# INTERPROSCAN (Gene Ontology) - just ARM genes as background - nonHDR arm domain genes
+
+#==============================================================================================================================================================================================================================#
+# BP
+enGO_nHDR_merged_BP <- clusterProfiler::enricher(
+  gene = nHD_gene_vector,
+  TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(GO,NIC58),
+  TERM2NAME = GO_annotations %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(TERM,TERM_NAME),
+  universe = IPR_GO_bckgrd_arms,
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  qvalueCutoff = 0.05,
+)
+
+head(enGO_nHDR_merged_BP)
+
+dotplot(enGO_nHDR_merged_BP, showCategory = 40, title = "BP nHDRs")
+
+enGO_nHDR_merged_plot_BP <- as.data.table(enGO_nHDR_merged_BP@result) %>%
+  tidyr::separate(GeneRatio, into = c("nhdr_gene_term", "nhdr_gene_hit"), sep = "/", convert = TRUE) %>%
+  tidyr::separate(BgRatio, into = c("bgd_term", "bgd_hit"), sep = "/", convert = TRUE) %>%
+  dplyr::mutate(EnrichRatio = (nhdr_gene_term / nhdr_gene_hit) / (bgd_term / bgd_hit)) %>%
+  dplyr::arrange(desc(p.adjust)) %>%
+  dplyr::filter(p.adjust < 0.05) %>%
+  dplyr::mutate(plotpoint = dplyr::row_number())
+
+plot_GO_BP_nHDR <- ggplot(enGO_nHDR_merged_plot_BP) +
+  geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
+  geom_point(aes(x = -log10(p.adjust), y = plotpoint, size = EnrichRatio, fill = Count), shape = 21) +
+  scale_y_continuous(breaks = enGO_nHDR_merged_plot_BP$plotpoint, labels = enGO_nHDR_merged_plot_BP$Description, name = "", expand = c(0.02,0.02)) +
+  scale_fill_gradient(low = "blue", high = "red", breaks = c(round(min(enGO_nHDR_merged_plot_BP$Count, na.rm = TRUE)), round((max(enGO_nHDR_merged_plot_BP$Count, na.rm = TRUE) + min(enGO_nHDR_merged_plot_BP$Count, na.rm = TRUE) ) / 2), round(max(enGO_nHDR_merged_plot_BP$Count, na.rm = TRUE)))) +
+  scale_size_continuous(range = c(0.5, 4), name = "Fold enrichment", breaks = pretty(enGO_nHDR_merged_plot_BP$EnrichRatio, n = 3)) +
+  theme(axis.text.x = element_text(size=8, color='black'),
+        axis.text.y = element_text(size=8, color='black'),
+        # axis.title = element_text(size=9, color='black', face = 'bold'),
+        # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+        plot.title = element_blank(),
+        legend.title = element_text(size=6.5, color='black', hjust = 1),
+        legend.text = element_text(size=5.5, color='black', hjust = 1),
+        legend.position = "inside",
+        legend.position.inside = c(0.7, 0.35),
+        legend.direction = "horizontal", legend.box = "vertical",
+        legend.spacing.y = unit(0.0001, 'cm'),
+        legend.key.height = unit(0.01, "cm"),
+        legend.key.width = unit(0.5, "cm"),
+        legend.box.just = "right",
+        panel.grid = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_rect(fill = NA),
+        plot.margin = margin(t = 15, r = 10, b = 10, l = 22, unit = "pt")) +
+  # legend.spacing.x = unit(0.02, "cm"),
+  # legend.key.size = unit(0.3, 'cm')) +
+  guides(
+    fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
+    size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
+  labs(title = "Enriched GO:MF terms for genes in HDRs", size = "Fold enrichment", fill = "Gene count")
+plot_GO_BP_nHDR
+
+
+
+# MF
+enGO_nHDR_merged_MF <- clusterProfiler::enricher(
+  gene = nHD_gene_vector,
+  TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(GO,NIC58),
+  TERM2NAME = GO_annotations %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(TERM,TERM_NAME),
+  universe = IPR_GO_bckgrd_arms,
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  qvalueCutoff = 0.05,
+)
+
+head(enGO_nHDR_merged_MF)
+
+dotplot(enGO_nHDR_merged_MF, showCategory = 40, title = "MF nHDRs")
+
+enGO_nHDR_merged_plot <- as.data.table(enGO_nHDR_merged_MF@result) %>%
+  tidyr::separate(GeneRatio, into = c("nhdr_gene_term", "nhdr_gene_hit"), sep = "/", convert = TRUE) %>%
+  tidyr::separate(BgRatio, into = c("bgd_term", "bgd_hit"), sep = "/", convert = TRUE) %>%
+  dplyr::mutate(EnrichRatio = (nhdr_gene_term / nhdr_gene_hit) / (bgd_term / bgd_hit)) %>%
+  dplyr::arrange(desc(p.adjust)) %>%
+  dplyr::filter(p.adjust < 0.05) %>%
+  dplyr::mutate(plotpoint = dplyr::row_number())
+
+plot_GO_MF_nHDR <- ggplot(enGO_nHDR_merged_plot) +
+  geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
+  geom_point(aes(x = -log10(p.adjust), y = plotpoint, size = EnrichRatio, fill = Count), shape = 21) +
+  scale_y_continuous(breaks = enGO_nHDR_merged_plot$plotpoint, labels = enGO_nHDR_merged_plot$Description, name = "", expand = c(0.02,0.02)) +
+  scale_fill_gradient(low = "blue", high = "red", breaks = c(round(min(enGO_nHDR_merged_plot$Count, na.rm = TRUE)), round((max(enGO_nHDR_merged_plot$Count, na.rm = TRUE) + min(enGO_nHDR_merged_plot$Count, na.rm = TRUE) ) / 2), round(max(enGO_nHDR_merged_plot$Count, na.rm = TRUE)))) +
+  scale_size_continuous(range = c(0.5, 4), name = "Fold enrichment", breaks = pretty(enGO_nHDR_merged_plot$EnrichRatio, n = 3)) +
+  theme(axis.text.x = element_text(size=8, color='black'),
+        axis.text.y = element_text(size=8, color='black'),
+        axis.title = element_text(size=9, color='black', face = 'bold'),
+        # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+        plot.title = element_blank(),
+        legend.title = element_text(size=6.5, color='black', hjust = 1),
+        legend.text = element_text(size=5.5, color='black', hjust = 1),
+        legend.position = "inside",
+        legend.position.inside = c(0.7, 0.19),
+        legend.direction = "horizontal", legend.box = "vertical",
+        legend.spacing.y = unit(0.0001, 'cm'),
+        legend.key.height = unit(0.01, "cm"),
+        legend.key.width = unit(0.5, "cm"),
+        legend.box.just = "right",
+        panel.grid = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_rect(fill = NA),
+        plot.margin = margin(t = 15, r = 10, b = 10, l = 22, unit = "pt")) +
+  # legend.spacing.x = unit(0.02, "cm"),
+  # legend.key.size = unit(0.3, 'cm')) +
+  guides(
+    fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
+    size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
+  labs(title = "Enriched GO:MF terms for genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
+plot_GO_MF_nHDR
+
+
+final_plot_nHDR <- cowplot::plot_grid(
+  plot_GO_BP_nHDR, plot_GO_MF_nHDR,
+  rel_heights = c(1.5, 3),
+  ncol = 1,
+  align = "v",
+  axis = "lr",
+  labels = c("a", "b"),
+  label_size = 14,
+  label_fontface = "bold")
+final_plot_nHDR
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#==============================================================================================================================================================================================================================#
+
+# Look at Orthology of N2 genes previoulsy shown to be enriched in environmental and pathogenic responses
+
+#==============================================================================================================================================================================================================================#
+# Looking at the innate immune response GO BP term enriched in HDR arm genes with arm genes background
+
+immune <- enGO_HDR_merged_plot_BP %>% dplyr::filter(Description == 'innate immune response') %>% dplyr::select(geneID) %>% tidyr::separate_rows(geneID, sep = '/') %>% dplyr::pull()
+
+NIC_tran_gene <- allNIC %>% dplyr::mutate(tran = gsub("transcript:","", tran))
+
+N2_NIC58_ortho <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/prot_2/OrthoFinder/Results_Dec05/Orthogroups/Orthogroups.tsv") %>% 
+  dplyr::select(c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein,c_tropicalis.NIC58_20251002.csq.longest.protein) %>%
+  dplyr::rename(N2 = c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein, NIC58 = c_tropicalis.NIC58_20251002.csq.longest.protein) %>%
+  dplyr::mutate(N2 = gsub("transcript_","", N2), NIC58 = gsub("transcript_","", NIC58)) %>%
+  tidyr::separate_rows(NIC58, sep = ', ') %>%
+  dplyr::left_join(NIC_tran_gene, by = c("NIC58" = "tran")) %>% 
+  dplyr::filter(NIC58.y %in% immune)
+
+N2_gff <- ape::read.gff("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.gff3") %>% dplyr::mutate(strain="N2")
+
+N2_tranGene <- N2_gff %>%
+  dplyr::filter(type == "mRNA") %>%
+  dplyr::mutate(attributes = gsub("ID=transcript:","",attributes), attributes = gsub("Parent=gene:","",attributes)) %>%
+  tidyr::separate_wider_delim(attributes, delim = ";",names = c("tran", "gene", "rest"), too_many = "merge") %>%
+  dplyr::select(tran,gene, -rest)
+
+N2_orthos <- N2_NIC58_ortho %>%
+  dplyr::filter(!is.na(N2)) %>%
+  tidyr::separate_rows(N2, sep = ', ') %>% 
+  dplyr::left_join(N2_tranGene, by = c("N2" = 'tran'))
+
+N2_name <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/misc/N2_WBGeneID_Name.tsv", col_names = F) %>% dplyr::rename(WBGeneID = X1, name = X2)
+
+N2_ortho_names <- N2_orthos %>%
+  dplyr::left_join(N2_name, by = c("gene" = "WBGeneID"))
+
+
+
+# Looking at xenobiotic metabolic process
+xeno <- enGO_HDR_merged_plot_BP %>% dplyr::filter(Description == 'xenobiotic metabolic process') %>% dplyr::select(geneID) %>% tidyr::separate_rows(geneID, sep = '/') %>% dplyr::pull()
+
+NIC_tran_gene <- allNIC %>% dplyr::mutate(tran = gsub("transcript:","", tran))
+
+N2_NIC58_ortho <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/prot_2/OrthoFinder/Results_Dec05/Orthogroups/Orthogroups.tsv") %>% 
+  dplyr::select(c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein,c_tropicalis.NIC58_20251002.csq.longest.protein) %>%
+  dplyr::rename(N2 = c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein, NIC58 = c_tropicalis.NIC58_20251002.csq.longest.protein) %>%
+  dplyr::mutate(N2 = gsub("transcript_","", N2), NIC58 = gsub("transcript_","", NIC58)) %>%
+  tidyr::separate_rows(NIC58, sep = ', ') %>%
+  dplyr::left_join(NIC_tran_gene, by = c("NIC58" = "tran")) %>% 
+  dplyr::filter(NIC58.y %in% xeno)
+
+
+N2_tranGene <- N2_gff %>%
+  dplyr::filter(type == "mRNA") %>%
+  dplyr::mutate(attributes = gsub("ID=transcript:","",attributes), attributes = gsub("Parent=gene:","",attributes)) %>%
+  tidyr::separate_wider_delim(attributes, delim = ";",names = c("tran", "gene", "rest"), too_many = "merge") %>%
+  dplyr::select(tran,gene, -rest)
+
+N2_orthos <- N2_NIC58_ortho %>%
+  dplyr::filter(!is.na(N2)) %>%
+  tidyr::separate_rows(N2, sep = ', ') %>% 
+  dplyr::left_join(N2_tranGene, by = c("N2" = 'tran'))
+
+N2_ortho_names <- N2_orthos %>%
+  dplyr::left_join(N2_name, by = c("gene" = "WBGeneID"))
 
 
