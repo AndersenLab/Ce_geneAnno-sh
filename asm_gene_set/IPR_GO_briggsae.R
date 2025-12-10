@@ -261,6 +261,7 @@ centers <- nHDR_armDomain %>%
   dplyr::select(-left) %>%
   dplyr::rename(center_start=right)
 
+# Filtering for HDRs NOT in chromosomal centers
 reglist <- list()
 reglist_center <- list()
 for (i in 1:nrow(centers)) {
@@ -275,6 +276,21 @@ for (i in 1:nrow(centers)) {
     dplyr::filter(!start < cstart & !end > cend)
   reglist[[i]] <- temp
   reglist_center[[i]] <- temp2
+}
+HDreg_arm_and_tip <- ldply(reglist,data.frame)
+
+# Filtering for HDRs in arm domains
+reglist2 <- list()
+for (i in 1:nrow(nHDR_armDomain)) {
+  astart <- nHDR_armDomain[i,]$left
+  aend <- nHDR_armDomain[i,]$right
+  aend_lead <- n
+  achrom <- nHDR_armDomain[i,]$Chromosome
+  temp <- HDreg_arm_and_tip %>%
+    dplyr::filter(CHROM==achrom) %>%
+    dplyr::filter((start >= astart & end <= aend) | (start <= astart & end >= astart) | (start <= aend & end >= aend))
+  
+  reglist2[[i]] <- temp
 }
 
 # Read in GFF for extracting QX1410 genes in nHDRs and HDRs
@@ -295,8 +311,8 @@ gffFinal <- gffCB %>%
 #   dplyr::select(-GO) %>%
 #   dplyr::distinct(QX1410, .keep_all = T)
 
-
-HDreg_arm <- ldply(reglist,data.frame)
+# HDR genes in arm domains
+HDreg_arm <- ldply(reglist2, data.frame)
 HDreg_center <- ldply(reglist_center,data.frame)
 HDgene <- getGenesFromBed(gffFinal,HDreg_arm)
 HD_gene_vector <- HDgene[[]]
@@ -311,7 +327,7 @@ HD_gene_vector <- unique(HD_QX_genes$QX1410)
 # HD_QX_genes_all <- (do.call(rbind, HDgene_all))
 # HD_all_gene_vector <- unique(HD_QX_genes_all$QX1410)
 
-nHDreg <- classifyingArms(HDreg_arm %>% dplyr::rename(minStart=start,maxEnd=end), nHDR_armDomain) %>% dplyr::select(-domain)
+nHDreg <- classifyingArms(HDreg_arm_and_tip %>% dplyr::rename(minStart=start,maxEnd=end), nHDR_armDomain) %>% dplyr::select(-domain)
 nHDgene <- getGenesFromBed(gffFinal,nHDreg)
 nHD_QX_genes <- do.call(rbind, nHDgene)
 nHD_gene_vector <- unique(nHD_QX_genes$QX1410) 
@@ -358,6 +374,20 @@ posplot <- ggplot() +
   scale_fill_manual(values=c("nHDR_center"="lightblue","nHDR_arm"="deepskyblue3","HDR_center"="pink","HDR_arm"="firebrick3"))+
   xlab("Physical postion (Mb)")
 posplot
+
+posplot1 <- ggplot() + 
+  geom_rect(data=centers %>% dplyr::rename(CHROM=Chromosome), aes(xmin=center_start,xmax=center_end,ymin=-2,ymax=2, fill="center")) +
+  geom_rect(data = nHDR_armDomain %>% dplyr::rename(CHROM=Chromosome), aes(xmin=left,xmax=right,ymin=-2,ymax=2, fill = "arm_region")) +
+  geom_rect(data = HDreg_arm, aes(xmin = start, xmax = end, ymin = -1, ymax = 1, fill = "HDR_arm_region")) +
+  geom_rect(data = nHDreg, aes(xmin = start, xmax = end, ymin = -1, ymax = 1, fill = "nHDR_arm_region")) +
+  facet_wrap(~CHROM,ncol=1,scales="free_x") +
+  theme_bw() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid = element_blank()) +
+  # scale_fill_manual(values=c("nHDR_center"="lightblue","nHDR_arm"="deepskyblue3","HDR_center"="pink","HDR_arm"="firebrick3"))+
+  xlab("Physical postion (Mb)")
+posplot1
 
 posplot2 <- ggplot() + 
   geom_rect(data=HD_QX_genes, aes(xmin=start,xmax=end,ymin=-1,ymax=1)) +
@@ -753,8 +783,8 @@ plot_ipr <- ggplot(data_plt) +
         axis.title.x = element_blank(),
         # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
         plot.title = element_blank(),
-        legend.title = element_text(size = 5, color='black', hjust = 1),
-        legend.text = element_text(size = 4.5, color='black', hjust = 1),
+        legend.title = element_text(size = 6, color='black', hjust = 1),
+        legend.text = element_text(size = 5, color='black', hjust = 1),
         legend.position = "inside",
         legend.position.inside = c(0.78, 0.2),
         legend.direction = "horizontal", legend.box = "vertical",
@@ -799,7 +829,7 @@ go_ipr_arms <- go_ipr %>% dplyr::filter(QX1410 %in% arm_genes)
 IPR_GO_bckgrd_arms <- unique(go_ipr_arms$QX1410) # 3,905 genes
 
 
-# how_many_HDR_GO_arm_genes <- go_ipr_arms %>% dplyr::filter(QX1410 %in% HD_gene_vector) # 2,105
+how_many_HDR_GO_arm_genes <- go_ipr_arms %>% dplyr::filter(QX1410 %in% HD_gene_vector) # 2,105
 
 GO_annotations <- AnnotationDbi::select(GO.db,
                                         keys=unique(go_ipr$GO),
@@ -849,10 +879,10 @@ plot_GO_BP <- ggplot(enGO_HDR_merged_plot_BP) +
         axis.title.x = element_blank(),
         # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
         plot.title = element_blank(),
-        legend.title = element_text(size=5, color='black', hjust = 1),
-        legend.text = element_text(size=4.5, color='black', hjust = 1),
+        legend.title = element_text(size=6, color='black', hjust = 1),
+        legend.text = element_text(size=5, color='black', hjust = 1),
         legend.position = "inside",
-        legend.position.inside = c(0.65, 0.42),
+        legend.position.inside = c(0.78, 0.42),
         legend.direction = "horizontal", legend.box = "vertical",
         legend.spacing.y = unit(0.0001, 'cm'),
         legend.key.height = unit(0.01, "cm"),
@@ -895,7 +925,8 @@ enGO_HDR_merged_plot <- as.data.table(enGO_HDR_merged_MF@result) %>%
   dplyr::arrange(desc(p.adjust)) %>%
   dplyr::filter(p.adjust < 0.05) %>%
   dplyr::mutate(plotpoint = dplyr::row_number()) %>%
-  dplyr::mutate(Description = gsub("oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen","oxidoreductase activity (1)", Description))
+  dplyr::mutate(Description = gsub("oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen, reduced flavin or flavoprotein as one donor, and incorporation of one atom of oxygen","oxidoreductase activity (2)", Description)) %>%
+  dplyr::mutate(Description = gsub("oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen", "oxidoreductase activity (1)", Description)) 
 
 plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
   geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
@@ -908,10 +939,10 @@ plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
         axis.title = element_text(size=10, color='black', face = 'bold'),
         # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
         plot.title = element_blank(),
-        legend.title = element_text(size=5, color='black', hjust = 1),
-        legend.text = element_text(size=4.5, color='black', hjust = 1),
+        legend.title = element_text(size=6, color='black', hjust = 1),
+        legend.text = element_text(size=5, color='black', hjust = 1),
         legend.position = "inside",
-        legend.position.inside = c(0.65, 0.3),
+        legend.position.inside = c(0.74, 0.3),
         legend.direction = "horizontal", legend.box = "vertical",
         legend.spacing.y = unit(0.0001, 'cm'),
         legend.key.height = unit(0.01, "cm"),
@@ -933,7 +964,7 @@ plot_GO_MF
 
 final_plot <- cowplot::plot_grid(
   plot_ipr, plot_GO_BP, plot_GO_MF,
-  rel_heights = c(1.5, 0.6, 1),
+  rel_heights = c(1.5, 0.75, 0.9),
   ncol = 1,
   align = "v",
   axis = "lr",
@@ -942,7 +973,7 @@ final_plot <- cowplot::plot_grid(
   label_fontface = "bold")
 final_plot
 
-# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/processed_data/final_plotsAndData/IPR_domain_GO_BpMf_HDR_20251007.png", final_plot,  width = 7.5, height = 7, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/processed_data/final_plotsAndData/IPR_domain_GO_BpMf_HDR_20251210.png", final_plot,  width = 7.5, height = 7, dpi = 600)
 
 
 
