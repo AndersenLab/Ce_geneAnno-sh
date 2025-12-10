@@ -1,21 +1,21 @@
 #!/bin/bash
 
-pav="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/pav"
+pav="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/pav/elegans"
 # strain_dirs=($pav/strain_dirs/*/)
 # strain_dir=${strain_dirs[$SLURM_ARRAY_TASK_ID-1]}
-assemblies="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/briggsae" ##### REMEMBER TO CHANGE FOR EACH SPECIES
+assemblies="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/pav/elegans/assemblies" 
 SLURM="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/scripts/SLURM_output"
 
-# tail -n +2 $pav/assemblies_Cb_0423.tsv | while IFS=$'\t' read -r strain path; do
-#     mkdir -p $pav/strain_dirs/$strain
-#     cp $pav/config_Cb.json  $pav/strain_dirs/$strain/config.json
+tail -n +2 $pav/141_strains.tsv | while IFS=$'\t' read -r strain path; do
+    mkdir -p $pav/strain_dirs/$strain
+    cp $pav/config_Cb.json  $pav/strain_dirs/$strain/config.json
 
-#     cd  $pav/strain_dirs/$strain
-#     echo -e "NAME\tHAP_unphased\n$strain\t$path" > $pav/strain_dirs/$strain/assemblies.tsv
+    cd  $pav/strain_dirs/$strain
+    echo -e "NAME\tHAP_unphased\n$strain\t$path" > $pav/strain_dirs/$strain/assemblies.tsv
     
-#     mkdir -p $pav/strain_dirs/$strain/assemblies
-#     cp $assemblies/$strain.hifi.inbred.fa $pav/strain_dirs/$strain/assemblies
-# done
+    mkdir -p $pav/strain_dirs/$strain/assemblies
+    cp $assemblies/$strain.* $pav/strain_dirs/$strain/assemblies
+done
 
 for strain_dir in $pav/strain_dirs/*/; do
     cd $strain_dir
