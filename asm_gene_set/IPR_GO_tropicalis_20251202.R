@@ -172,14 +172,13 @@ all_genes_class_count <- sum_genes %>%
 # Prepping for enrichment analysis
 
 # ======================================================================================================================================================================================== #
-classifyingArms <- function(HDRfile, species_armDomain)
+classifyingArms_nHDR <- function(HDRfile, species_armDomain)
 {
   HDRfile <- HDRfile %>%
     dplyr::rename(C=CHROM, S=minStart, E=maxEnd) %>%
     dplyr::select(C, S, E)
   
-  df_list <- list() # set empty list to append lists of HDRs found within
-  # chromosomal arms
+  df_list <- list() # set empty list to append lists of HDRs found within chromosomal arms
   
   for (i in 1:nrow(species_armDomain)) {
     domChrom = as.character(species_armDomain[i,1]) # iterates by chromosome
@@ -315,16 +314,20 @@ getGenesFromBed <- function(gff,regions) {
   return(regGenes)
 }
 
-nHDR_armDomain <- readr::read_tsv("/vast/eande106/projects/Nicolas/hyperdivergent_regions/tropicalis_legacy/arm_domain_ranges.tsv") %>%
-  dplyr::rename(left=domStart,right=domEnd) %>%
+
+# nHDR_armDomain <- readr::read_tsv("/vast/eande106/projects/Nicolas/hyperdivergent_regions/tropicalis_legacy/arm_domain_ranges.tsv") %>%
+#   dplyr::rename(left=domStart,right=domEnd) %>%
+#   dplyr::select(Chromosome,left,right)
+nHDR_armDomain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/ct_ch_domains.tsv") %>%
+  dplyr::filter(Location == "left_arm" | Location == "right_arm") %>%
+  dplyr::rename(left=start,right=end, Chromosome=CHROM) %>%
   dplyr::select(Chromosome,left,right)
 
 
 ggplot(data = nHDR_armDomain) + 
   geom_rect(aes(xmin = left / 1e6, xmax = right / 1e6, ymin = 0.5, ymax = 1.5, fill = 'red')) +
   facet_wrap(~Chromosome, scales = 'free') + 
-  theme(
-    legend.position = 'none')
+  theme(legend.position = 'none') 
 
 hdr_regions <- readr::read_tsv("/vast/eande106/projects/Nicolas/hyperdivergent_regions/tropicalis/tables/HDR_CT_allStrain_5kbclust_20251201.tsv") %>% dplyr::select(CHROM,minStart,maxEnd,STRAIN) 
 
@@ -337,6 +340,7 @@ centers <- nHDR_armDomain %>%
   dplyr::select(-left) %>%
   dplyr::rename(center_start=right)
 
+# Filtering for HDRs NOT in center domains
 reglist <- list()
 reglist_center <- list()
 for (i in 1:nrow(centers)) {
@@ -352,6 +356,21 @@ for (i in 1:nrow(centers)) {
   reglist[[i]] <- temp
   reglist_center[[i]] <- temp2
 }
+HDreg_arm_and_tip <- ldply(reglist,data.frame)
+
+# Filtering for HDRs in arm domains
+reglist2 <- list()
+for (i in 1:nrow(nHDR_armDomain)) {
+  astart <- nHDR_armDomain[i,]$left
+  aend <- nHDR_armDomain[i,]$right
+  aend_lead <- n
+  achrom <- nHDR_armDomain[i,]$Chromosome
+  temp <- HDreg_arm_and_tip %>%
+    dplyr::filter(CHROM==achrom) %>%
+    dplyr::filter((start >= astart & end <= aend) | (start <= astart & end >= astart) | (start <= aend & end >= aend))
+ 
+  reglist2[[i]] <- temp
+}
 
 # Read in GFF for extracting NIC58 genes in nHDRs and HDRs
 gffCt <- ape::read.gff("/vast/eande106/data/c_tropicalis/genomes/NIC58_nanopore/June2021/gff/c_tropicalis.NIC58_20251002.csq.longest.gff3")
@@ -365,61 +384,26 @@ gffFinal <- gffCt %>%
   dplyr::rename(CHROM = seqid, NIC58 = keep) %>%
   dplyr::distinct(NIC58, .keep_all = T)
 
-
-HDreg_arm <- ldply(reglist,data.frame)
+# HDR genes in arm domains
+HDreg_arm <- ldply(reglist2, data.frame)
 HDreg_center <- ldply(reglist_center,data.frame)
 HDgene <- getGenesFromBed(gffFinal,HDreg_arm)
 HD_gene_vector <- HDgene[[]]
-HD_QX_genes <- (do.call(rbind, HDgene))
-HD_gene_vector <- unique(HD_QX_genes$NIC58) 
+HD_NIC_genes <- (do.call(rbind, HDgene))
+HD_gene_vector <- unique(HD_NIC_genes$NIC58) 
 
-
-## Extracting ALL HDR genes ##
-# HD_all <- dplyr::bind_rows(HDreg_arm, HDreg_center)
-# HDgene_all <- getGenesFromBed(gffFinal,HD_all)
-# HD_all_gene_vector <- HDgene_all[[]]
-# HD_QX_genes_all <- (do.call(rbind, HDgene_all))
-# HD_all_gene_vector <- unique(HD_QX_genes_all$QX1410)
-
-nHDreg <- classifyingArms(HDreg_arm %>% dplyr::rename(minStart=start,maxEnd=end), nHDR_armDomain) %>% dplyr::select(-domain)
+# genes in non-HDRs domains in arms
+nHDreg <- classifyingArms_nHDR(HDreg_arm_and_tip %>% dplyr::rename(minStart=start,maxEnd=end), nHDR_armDomain) %>% dplyr::select(-domain)
 nHDgene <- getGenesFromBed(gffFinal,nHDreg)
-nHD_QX_genes <- do.call(rbind, nHDgene)
-nHD_gene_vector <- unique(nHD_QX_genes$NIC58) 
-
-
-
-
-
-# ========================================================================================================================================================================================== #
-# All HDRs - not JUST arms 
-# hdr_regions_cleaned <- hdr_regions %>% dplyr::rename(start = minStart, end = maxEnd) %>% dplyr::select(CHROM, start, end)
-# hdr_genes <- getGenesFromBed(gffFinal, hdr_regions_cleaned) # 
-# all_HDR_genes <- do.call(rbind, hdr_genes)
-# all_HDR_genes_vector <- unique(all_HDR_genes$QX1410)
-#   
-# all_non_HDR_genes
-# 
-# # ALL HDR GENES
-# posplot <- ggplot() + 
-#   geom_rect(data = hdr_regions, aes(xmin=minStart,xmax=maxEnd,ymin=-1,ymax=1), fill = 'black') +
-#   # geom_rect(data = all_HDR_genes, aes(xmin = , xmax = , ymin = -1, ymax = 1), fill = 'red') +
-#   facet_wrap(~CHROM,ncol=1,scales="free_x") +
-#   theme_bw() +
-#   theme(axis.text.y = element_blank(),
-#         axis.ticks.y = element_blank(),
-#         panel.grid = element_blank()) +
-#   scale_fill_manual(values=c("nHDR_center"="lightblue","nHDR_arm"="deepskyblue3","HDR_center"="pink","HDR_arm"="firebrick3"))+
-#   xlab("Physical postion (Mb)")
-# posplot
-# ========================================================================================================================================================================================== #
-
+nHD_NIC_genes <- do.call(rbind, nHDgene)
+nHD_gene_vector <- unique(nHD_NIC_genes$NIC58) 
 
 
 
 posplot <- ggplot() + 
   geom_rect(data=centers %>% dplyr::rename(CHROM=Chromosome), aes(xmin=center_start,xmax=center_end,ymin=-1,ymax=1,fill="nHDR_center")) +
   # geom_rect(data = hdr_regions, aes(xmin=minStart,xmax=maxEnd,ymin=-1,ymax=1)) +
-  geom_rect(data=rbind(HDreg_arm %>% dplyr::mutate(class="HDR_arm"),nHDreg %>% dplyr::mutate(class="nHDR_arm"), HDreg_center %>% dplyr::mutate(class="HDR_center")), aes(xmin=start,xmax=end,ymin=-1,ymax=1,fill=class)) +
+  geom_rect(data=rbind(HDreg_arm %>% dplyr::mutate(class="HDR_arm"), nHDreg %>% dplyr::mutate(class="nHDR_arm"), HDreg_center %>% dplyr::mutate(class="HDR_center")), aes(xmin=start,xmax=end,ymin=-1,ymax=1,fill=class)) +
   facet_wrap(~CHROM,ncol=1,scales="free_x") +
   theme_bw() +
   theme(axis.text.y = element_blank(),
@@ -429,8 +413,24 @@ posplot <- ggplot() +
   xlab("Physical postion (Mb)")
 posplot
 
+posplot1 <- ggplot() + 
+  # geom_rect(data=rbind(HDreg_arm %>% dplyr::mutate(class="HDR_arm"), nHDreg %>% dplyr::mutate(class="nHDR_arm"), HDreg_center %>% dplyr::mutate(class="HDR_center")), aes(xmin=start,xmax=end,ymin=-1,ymax=1,fill=class)) +
+  geom_rect(data=centers %>% dplyr::rename(CHROM=Chromosome), aes(xmin=center_start,xmax=center_end,ymin=-2,ymax=2, fill="center")) +
+  geom_rect(data = nHDR_armDomain %>% dplyr::rename(CHROM=Chromosome), aes(xmin=left,xmax=right,ymin=-2,ymax=2, fill = "arm_region")) +
+  geom_rect(data = HDreg_arm, aes(xmin = start, xmax = end, ymin = -1, ymax = 1, fill = "HDR_arm_region")) +
+  geom_rect(data = nHDreg, aes(xmin = start, xmax = end, ymin = -1, ymax = 1, fill = "nHDR_arm_region")) +
+  # geom_rect(data = nHDreg, aes(xmin = start, xmax = end, ymin = -3, ymax = 3, fill = "updated_HDR_arm_region")) +
+  facet_wrap(~CHROM,ncol=1,scales="free_x") +
+  theme_bw() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        panel.grid = element_blank()) +
+  # scale_fill_manual(values=c("nHDR_center"="lightblue","nHDR_arm"="deepskyblue3","HDR_center"="pink","HDR_arm"="firebrick3"))+
+  xlab("Physical postion (Mb)")
+posplot1
+
 posplot2 <- ggplot() + 
-  geom_rect(data=HD_QX_genes, aes(xmin=start,xmax=end,ymin=-1,ymax=1)) +
+  geom_rect(data=HD_NIC_genes, aes(xmin=start,xmax=end,ymin=-1,ymax=1)) +
   facet_wrap(~CHROM,ncol=1,scales="free_x") +
   theme_bw() +
   theme(axis.text.y = element_blank(),
@@ -444,15 +444,7 @@ posplot2
 arms <- nHDR_armDomain %>% dplyr::rename(CHROM=Chromosome,start=left,end=right)
 all_arm_genes <- getGenesFromBed(gffFinal,arms)
 all_arm_genes_df <- as.data.frame((do.call(rbind, all_arm_genes)))
-arm_genes <- all_arm_genes_df$NIC58
-
-ggplot(data = nHDR_armDomain) + 
-  geom_rect(aes(xmin = left / 1e6, xmax = right / 1e6, ymin = 0.5, ymax = 1.5), fill = 'black') +
-  geom_rect(data = all_arm_genes_df %>% dplyr::rename(Chromosome = CHROM), aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 0.5, ymax = 1.5), fill = 'gold') +
-  # geom_rect(data = HD_QX_genes %>% dplyr::rename(Chromosome = CHROM), aes(xmin = start / 1e6, xmax = end / 1e6, ymin = 0.75, ymax = 1.25), fill = "blue") +
-  facet_wrap(~Chromosome, scales = 'free') + 
-  theme(
-    legend.position = 'none')
+arm_genes <- all_arm_genes_df$NIC58 # 7,967 genes
 
 ggplot(data = nHDR_armDomain) + 
   geom_rect(aes(xmin = left / 1e6, xmax = right / 1e6, ymin = 0.5, ymax = 1.5), fill = 'black') +
@@ -487,11 +479,11 @@ ipr_gene <- ipr %>%
   dplyr::filter(!is.na(IPR_description) & IPR_description != "-") %>%
   dplyr::select(NIC58, IPR_accession, IPR_description) %>%
   dplyr::distinct(NIC58,IPR_accession, IPR_description) %>% # 14,260
-  dplyr::filter(NIC58 %in% arm_genes) # 6.957 genes!
+  dplyr::filter(NIC58 %in% arm_genes) # 5,411 genes!
 
 # Define universe & HDR membership (annotated-only universe) 
 univ_genes <- unique(ipr_gene$NIC58)
-hdr_genes  <- intersect(HD_gene_vector, univ_genes) # 2,939 genes 
+hdr_genes  <- intersect(HD_gene_vector, univ_genes) # 2,603 genes 
 
 N <- length(univ_genes)
 n <- length(hdr_genes)
@@ -611,7 +603,8 @@ ipr_sig_gene_collapsed2 <- ipr_gene %>%
 
 binded <- ipr_sig_gene_collapsed %>% dplyr::bind_rows(ipr_sig_gene_collapsed2) %>% dplyr::arrange(FDR_p.adjust) 
 
-data_plt <- binded %>% dplyr::slice_head(n = 20) %>% dplyr::arrange(desc(FDR_p.adjust)) %>% dplyr::mutate(plotpoint = dplyr::row_number())
+data_plt <- binded %>% dplyr::slice_head(n = 20) %>% dplyr::arrange(desc(FDR_p.adjust)) %>% dplyr::mutate(plotpoint = dplyr::row_number()) %>%
+  dplyr::mutate(IPR_description = gsub("Domain of unknown function DUF38/FTH, Caenorhabditis species","DUF38/FTH (1)", IPR_description))
 
 plot_ipr <- ggplot(data_plt) +
   geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
@@ -626,20 +619,20 @@ plot_ipr <- ggplot(data_plt) +
         axis.title.x = element_blank(),
         # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
         plot.title = element_blank(),
-        legend.title = element_text(size = 5, color='black', hjust = 1),
-        legend.text = element_text(size = 4.5, color='black', hjust = 1),
+        legend.title = element_text(size=6, color='black', hjust = 1),
+        legend.text = element_text(size=5, color='black', hjust = 1),
         legend.position = "inside",
-        legend.position.inside = c(0.78, 0.2),
+        legend.position.inside = c(0.6, 0.15),
         legend.direction = "horizontal", legend.box = "vertical",
-        legend.spacing.y = unit(0.0001, 'cm'),
-        legend.key.height = unit(0.01, "cm"),
+        legend.spacing.y = unit(0.00000001, 'cm'),
+        legend.key.height = unit(0.000001, "cm"),
         legend.key.width = unit(0.5, "cm"),
         legend.box.just = "right",
         text = element_text(family="Helvetica"),
         panel.grid = element_blank(),
         panel.background = element_blank(),
         panel.border = element_rect(fill = NA),
-        plot.margin = margin(b = 5, t = 10, r = 10, l = 22, unit = "pt")) +
+        plot.margin = margin(r = 10, b = 2, l = 20, unit = "pt")) +
   # legend.spacing.x = unit(0.02, "cm"),
   # legend.key.size = unit(0.3, 'cm')) +
   guides(
@@ -671,7 +664,7 @@ go_ipr_arms <- go_ipr %>% dplyr::filter(NIC58 %in% arm_genes)
 IPR_GO_bckgrd_arms <- unique(go_ipr_arms$NIC58) # 3,905 genes
 
 
-# how_many_HDR_GO_arm_genes <- go_ipr_arms %>% dplyr::filter(NIC58 %in% HD_gene_vector) # 2,105
+# how_many_HDR_GO_arm_genes <- go_ipr_arms %>% dplyr::filter(NIC58 %in% HD_gene_vector) # 1,750
 
 GO_annotations <- AnnotationDbi::select(GO.db,
                                         keys=unique(go_ipr$GO),
@@ -721,20 +714,20 @@ plot_GO_BP <- ggplot(enGO_HDR_merged_plot_BP) +
         axis.title.x = element_blank(),
         # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
         plot.title = element_blank(),
-        legend.title = element_text(size=5, color='black', hjust = 1),
-        legend.text = element_text(size=4.5, color='black', hjust = 1),
+        legend.title = element_text(size=6, color='black', hjust = 1),
+        legend.text = element_text(size=5, color='black', hjust = 1),
         legend.position = "inside",
-        legend.position.inside = c(0.65, 0.42),
+        legend.position.inside = c(0.58, 0.5),
         legend.direction = "horizontal", legend.box = "vertical",
-        legend.spacing.y = unit(0.0001, 'cm'),
-        legend.key.height = unit(0.01, "cm"),
+        legend.spacing.y = unit(0.00000001, 'cm'),
+        legend.key.height = unit(0.000001, "cm"),
         legend.key.width = unit(0.5, "cm"),
         legend.box.just = "right",
         text = element_text(family="Helvetica"),
         panel.grid = element_blank(),
         panel.background = element_blank(),
         panel.border = element_rect(fill = NA),
-        plot.margin = margin(b = 5, r = 10, l = 22, unit = "pt")) +
+        plot.margin = margin(r = 10, b = 2, l = 20, unit = "pt")) +
   # legend.spacing.x = unit(0.02, "cm"),
   # legend.key.size = unit(0.3, 'cm')) +
   guides(
@@ -767,7 +760,7 @@ enGO_HDR_merged_plot <- as.data.table(enGO_HDR_merged_MF@result) %>%
   dplyr::arrange(desc(p.adjust)) %>%
   dplyr::filter(p.adjust < 0.05) %>%
   dplyr::mutate(plotpoint = dplyr::row_number()) %>%
-  dplyr::mutate(Description = gsub("acyltransferase activity, transferring groups other than amino-acyl groups","acyltransferase activity (1)", Description))
+  dplyr::mutate(Description = gsub("oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen, reduced flavin or flavoprotein as one donor, and incorporation of one atom of oxygen","oxidoreductase activity (1)", Description))
 
 plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
   geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
@@ -780,20 +773,20 @@ plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
         axis.title = element_text(size=10, color='black', face = 'bold'),
         # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
         plot.title = element_blank(),
-        legend.title = element_text(size=5, color='black', hjust = 1),
-        legend.text = element_text(size=4.5, color='black', hjust = 1),
+        legend.title = element_text(size=6, color='black', hjust = 1),
+        legend.text = element_text(size=5, color='black', hjust = 1),
         legend.position = "inside",
-        legend.position.inside = c(0.65, 0.3),
+        legend.position.inside = c(0.705, 0.5),
         legend.direction = "horizontal", legend.box = "vertical",
-        legend.spacing.y = unit(0.0001, 'cm'),
+        legend.spacing.y = unit(0.001, 'cm'),
         legend.key.height = unit(0.01, "cm"),
         legend.key.width = unit(0.5, "cm"),
         legend.box.just = "right",
         text = element_text(family="Helvetica"),
         panel.grid = element_blank(),
         panel.background = element_blank(),
-        panel.border = element_rect(fill = NA),
-        plot.margin = margin(r = 10, b = 2, l = 22, unit = "pt")) +
+        panel.border = element_rect(fill = NA), 
+        plot.margin = margin(r = 10, b = 2, l = 20, unit = "pt")) +
   # legend.spacing.x = unit(0.02, "cm"),
   # legend.key.size = unit(0.3, 'cm')) +
   guides(
@@ -805,7 +798,7 @@ plot_GO_MF
 
 final_plot <- cowplot::plot_grid(
   plot_ipr, plot_GO_BP, plot_GO_MF,
-  rel_heights = c(1.5, 0.6, 1),
+  rel_heights = c(2, 0.6, 0.65),
   ncol = 1,
   align = "v",
   axis = "lr",
@@ -814,7 +807,7 @@ final_plot <- cowplot::plot_grid(
   label_fontface = "bold")
 final_plot
 
-# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/plot/IPR_domain_GO_BpMf_HDR_20251203.png", final_plot,  width = 7.5, height = 7, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/plot/IPR_domain_GO_BpMf_HDR_20251210.png", final_plot,  width = 7.5, height = 7, dpi = 600)
 
 
 
