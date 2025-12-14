@@ -199,4 +199,55 @@ inv1 <- ggplot(inv) +
 inv1
 
 
+eca <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
+  dplyr::select(-IDY) %>% dplyr::filter(strain == "ECA3088", N2_chr == "V", contig == "ptg000001l")
 
+eca_call <- filt_calls %>% dplyr::filter(strain == "ECA3088", pos > 18000000 & pos < 20000000)
+
+eca1 <- ggplot(eca) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  geom_rect(data = eca_call %>% dplyr::filter(sv_type != "DEL"), aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf, fill = sv_type), alpha = 0.5) +
+  geom_rect(data = eca_call %>% dplyr::filter(sv_type == "DEL"), aes(xmin = (pos - sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
+  scale_fill_manual(values = c("INS" = "blue", "INV" = "gold")) +
+  theme_bw() +
+  theme(
+    legend.position = 'none',
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
+  coord_cartesian(xlim = c(16, 21.5), ylim = c(0,7)) +
+  ggtitle("ECA3088") +
+  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
+eca1
+
+
+
+# hmm <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
+#   dplyr::select(-IDY) %>% dplyr::filter(N2_chr == "IV")
+# 
+# 
+# hmmplot <- ggplot(hmm %>% dplyr::filter(strain == "JU258")) +
+#   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+#   # geom_rect(data = eca_call %>% dplyr::filter(sv_type != "DEL"), aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf, fill = sv_type), alpha = 0.5) +
+#   # scale_fill_manual(values = c("INS" = "blue", "INV" = "gold")) +
+#   facet_wrap(~strain, scales = "free")+
+#   theme_bw() +
+#   theme(
+#     # legend.position = 'none',
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank(),
+#     axis.title = element_blank(),
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA),
+#     plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
+#   coord_cartesian(xlim = c(15, 19)) +
+#   # ggtitle("ECA3088") +
+#   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
+# hmmplot
+# 
+# 
