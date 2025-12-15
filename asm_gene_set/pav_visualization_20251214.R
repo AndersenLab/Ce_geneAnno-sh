@@ -6,7 +6,7 @@ library(dplyr)
 # for file in *.vcf; do bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%FILTER\t%INFO/SVTYPE\t%INFO/SVLEN' $file | awk -v strain=${file%%.*} -v OFS='\t' '$7 >= 50 || $7 <= -50 {print $1,$2,$3,$4,$5,$6,$7,strain}'; done | grep -w "PASS" | grep -v -w "SNV"
 
 # allcalls <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/pav/elegans/strain_dirs/all_vcfs/141strains_all_variants.tsv", col_names = c("chrom", "pos", "ref", "alt", "sv_type","sv_length","strain" )) # did not include the 'PASS' filter - contains compound variants (variants contianed insidce larger variants)
-allcalls <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/pav/elegans/strain_dirs/all_vcfs/141strains_PASS_variants.tsv", col_names = c("chrom", "pos", "ref", "alt", "sv_type","sv_length","strain" ))
+allcalls <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/pav/elegans/strain_dirs/all_vcfs/141_over50_PASS_variants.tsv", col_names = c("chrom", "pos", "ref", "alt", "filter", "sv_type","sv_length","strain")) %>% dplyr::select(-filter)
 
 filt_calls <- allcalls %>% 
   # dplyr::filter(abs(sv_length) >= 50) %>%
@@ -387,11 +387,11 @@ ecaFour
 
 
 eca <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
-  dplyr::select(-IDY) %>% dplyr::filter(N2_chr == "V") %>% dplyr::filter(strain != "ECA396")
+  dplyr::select(-IDY) %>% dplyr::filter(N2_chr == "IV") %>% dplyr::filter(strain != "ECA396")
 
 ecaAll <- ggplot(eca) +
   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
-  facet_wrap(~strain) +
+  facet_wrap(~strain, scales = 'free') +
   theme(
     legend.position = 'none',
     axis.text = element_blank(),
@@ -401,10 +401,12 @@ ecaAll <- ggplot(eca) +
     panel.grid = element_blank(),
     panel.border = element_rect(fill = NA),
     plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
-  coord_cartesian(xlim = c(18, 20), ylim = c(0,7)) +
+  coord_cartesian(xlim = c(12,18)) +
   # ggtitle("ECA3088") +
   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
 ecaAll
+# large inversion on right arm of chrosome form might also be in: ECA1997, ECA2151, ECA2199, ECA2473, ECA248, ECA259, JU311. NIC1790, QX1791
+# - no WSs have the inversion in the same contig - a lof of contig breaks in the same locus and then an inverted alignment of a new contig
 
 
 hm <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
