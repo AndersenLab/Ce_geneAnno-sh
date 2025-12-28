@@ -2,6 +2,8 @@ library(readr)
 library(ggplot2)
 library(tidyr)
 library(dplyr)
+library(ape)
+install.packages("")
 
 # for file in *.vcf; do bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%FILTER\t%INFO/SVTYPE\t%INFO/SVLEN' $file | awk -v strain=${file%%.*} -v OFS='\t' '$7 >= 50 || $7 <= -50 {print $1,$2,$3,$4,$5,$6,$7,strain}'; done | grep -w "PASS" | grep -v -w "SNV"
 
@@ -315,12 +317,14 @@ inv1gm
 eca <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
   dplyr::select(-IDY) %>% dplyr::filter(strain == "ECA3088", N2_chr == "V", contig == "ptg000001l")
 
+eca_INV <- eca %>% dplyr::filter(N2E > N2S)
+
 eca_call <- filt_calls %>% dplyr::filter(strain == "ECA3088", chrom == 'V', pos > 18000000 & pos < 20000000)
 
 eca1 <- ggplot(eca) +
   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
-  geom_rect(data = eca_call %>% dplyr::filter(sv_type == "DEL"), aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
-  geom_rect(data = eca_call %>% dplyr::filter(sv_type != "DEL"), aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf, fill = sv_type), alpha = 0.5) +
+  # geom_rect(data = eca_call %>% dplyr::filter(sv_type == "DEL"), aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
+  # geom_rect(data = eca_call %>% dplyr::filter(sv_type != "DEL"), aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf, fill = sv_type), alpha = 0.5) +
   scale_fill_manual(values = c("INS" = "blue", "INV" = "gold")) +
   theme_bw() +
   theme(
@@ -332,7 +336,7 @@ eca1 <- ggplot(eca) +
     panel.grid = element_blank(),
     panel.border = element_rect(fill = NA),
     plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
-  coord_cartesian(xlim = c(17, 21), ylim = c(0,7)) +
+  coord_cartesian(xlim = c(18.36, 19.70), ylim = c(0,7)) +
   ggtitle("ECA3088") +
   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
 eca1
@@ -475,5 +479,347 @@ hmm2
 #   # ggtitle("ECA3088") +
 #   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
 # hmmplot
+
+
+
+threeINV <- filt_calls %>% 
+  dplyr::filter(chrom == "IV", sv_type == "INV") %>%
+  dplyr::group_by(pos) %>%
+  dplyr::mutate(count = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::filter(count != "1") %>%
+  dplyr::group_by(pos) %>%
+  dplyr::mutate(pos_count = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::filter(pos_count == max(pos_count))
+
+strains <- threeINV %>%
+  dplyr::distinct(strain) %>%
+  dplyr::pull()
+
+threeINVnucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
+  dplyr::filter(strain %in% strains) %>% dplyr::filter(N2_chr == "IV") %>%
+  dplyr::filter(N2S < 8373000 & N2E < 8375200 & N2E > 8373000 | 
+                  N2S > 8373000 & N2S < 8375200 & N2E > 8375200 | 
+                  N2S > 8373000 & N2E < 8375200) %>%
+  dplyr::group_by(strain, contig) %>%
+  dplyr::mutate(summedL2 = sum(L2)) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(strain) %>%
+  dplyr::filter(summedL2 == max(summedL2)) %>%
+  dplyr::ungroup() %>% 
+  dplyr::mutate(slope = ifelse(N2S < 8373000 | N2E > 8375200, (WSS - WSE)/(N2S-N2E), NA)) %>%
+  dplyr::mutate(inv = ifelse(WSE < WSS, T, F)) %>%
+  dplyr::mutate(intercept = WSS - (slope * N2S)) %>% # to find the y-intercept using point-slope form (b = y1 - mx1)
+  dplyr::mutate(new_start = ifelse(N2S < 8373000 & N2E < 8375200 & inv == F, ((slope * 8373000) + intercept), 
+                                   ifelse(N2S > 8373000 & N2E > 8375200  & inv == T, ((slope * 8373000) + intercept), WSS))) %>%
+  dplyr::mutate(new_end = ifelse(N2S > 8373000 & N2E > 8375200 & inv == F, ((slope * 8375200) + intercept), 
+                                 ifelse(N2S < 8373000 & N2E < 8375200 & inv == T, ((slope * 8373000) + intercept), WSE))) %>%
+  dplyr::select(-IDY,-L2,-L1,-LENR,-LENQ)
+
+
+conservedINV <- ggplot(threeINVnucmer) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = new_start / 1e6, yend = new_end / 1e6, color = contig), linewidth = 1) +
+  geom_rect(data = threeINV %>% dplyr::slice_head(n=1) %>% dplyr::select(chrom,pos,sv_length), aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
+  facet_wrap(~strain, scales = "free") +
+  theme(
+    legend.position = 'none',
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA)) +
+  coord_cartesian(xlim = c(8.363, 8.3852)) +
+  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
+conservedINV
+
+
+
+
+
+
+
+win_start <- 8373000
+win_end   <- 8375200
+
+threeINVnucmer_trimmed <- threeINVnucmer %>%
+  # keep only alignments that overlap the window at all
+  dplyr::filter(N2E >= win_start, N2S <= win_end) %>%
+  # normalize so N2_start < N2_end, and match W coords to that direction
+  dplyr::mutate(
+    N2_start = pmin(N2S, N2E),
+    N2_end   = pmax(N2S, N2E),
+    W_start  = if_else(N2S <= N2E, WSS, WSE),
+    W_end    = if_else(N2S <= N2E, WSE, WSS),
+    slope    = (W_end - W_start) / (N2_end - N2_start),
+    # clip N2 coords to window
+    x1_clip  = pmax(N2_start, win_start),
+    x2_clip  = pmin(N2_end,   win_end),
+    # project clipped N2 positions into W coords
+    y1_clip  = W_start + (x1_clip - N2_start) * slope,
+    y2_clip  = W_start + (x2_clip - N2_start) * slope
+  ) %>%
+  # drop any segments that vanish after clipping
+  dplyr::filter(x1_clip < x2_clip)
+
+
+conservedINV <- ggplot(threeINVnucmer_trimmed) +
+  geom_segment(aes(x    = x1_clip / 1e6,xend = x2_clip / 1e6,y    = y1_clip / 1e6,yend = y2_clip / 1e6,color = contig), linewidth = 1) +
+  geom_rect(data = threeINV %>% dplyr::slice_head(n = 1) %>% dplyr::select(chrom, pos, sv_length), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5, inherit.aes = FALSE) +
+  facet_wrap(~strain, scales = "free") +
+  coord_cartesian(xlims = c(win_start, win_end) / 1e6) +
+  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)") +
+  theme(
+    legend.position  = "none",
+    axis.text        = element_blank(),
+    axis.ticks       = element_blank(),
+    axis.title       = element_blank(),
+    panel.background = element_blank(),
+    panel.grid       = element_blank(),
+    panel.border     = element_rect(fill = NA))
+conservedINV
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# chimeric??? 
+nuc <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
+  dplyr::filter(strain == 'MY1') %>% dplyr::filter(N2_chr == "II" | N2_chr == "III" | N2_chr == "X", contig == "ptg000006l" | contig == "ptg000013l")
+
+conservedINV <- ggplot(nuc) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  facet_wrap(~N2_chr, scales = "free") +
+  theme(
+    # legend.position = 'none',
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
+  # coord_cartesian(xlim = c(8.36, 8.38)) +
+  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
+conservedINV
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ======================================================================================================================================================================================== #
+# Circos variation plot
+# ======================================================================================================================================================================================== #
+snps <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/misc/140WSs_biallelicSNPs.tsv", col_names = c("chrom","pos","ref","alt"))
+merged_SV <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/pav/jasmine_SVmerging/output/summarized_data.tsv")
+hdrs <- readr::read_tsv("/vast/eande106/data/c_elegans/WI/divergent_regions/20250625/20250625_c_elegans_divergent_regions_strain.bed", col_names = c("chrom", "start", "end", "strain"))
+geo_initial <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/elegans_isotypes_sampling_geo.tsv")
+hawaii_islands <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/elegans_isotypes_sampling_geo_hawaii_islands.tsv") %>% dplyr::select(isotype,collection_island_Hawaii)
+WSs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/140_Ce_WSs.tsv", col_names = "strain") %>% dplyr::pull()
+n2_genes_plt <- n2_genes %>%
+  dplyr::rename(chrom = seqid) %>% 
+  dplyr::select(chrom, start, end)
+
+# Isolation site of each wild strain
+geo <- geo_initial %>%
+  dplyr::left_join(hawaii_islands, by = "isotype") %>%
+  dplyr::mutate(geo = ifelse(geo == "Hawaii",collection_island_Hawaii,geo)) %>%
+  dplyr::select(isotype, lat, long, geo) %>%
+  dplyr::filter(isotype %in% WSs)
+
+
+# Calculating snp count per kb
+snps <- snps %>%
+  dplyr::mutate(bin = (pos %/% 1000) * 1000) %>%  # floor to nearest 1000
+  dplyr::count(chrom, bin, name = "variant_count") %>%
+  dplyr::arrange(chrom, bin)
+
+
+# Calculating HDR frequency
+bins <- snps %>% dplyr::select(chrom,bin) %>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::
+bins_dt <- as.data.table(bins)
+setnames(bins_dt, c("binStart", "binEnd"), c("start", "end"))
+bins_dt[, id := .I]  # optional: keep track of bins
+
+hdrs_dt <- as.data.table(hdrs)
+setnames(hdrs_dt, c("minStart", "maxEnd"), c("start", "end"))
+
+setkey(bins_dt, CHROM, start, end)
+setkey(hdrs_dt, CHROM, start, end)
+
+overlaps <- foverlaps(hdrs_dt, bins_dt, nomatch = 0)
+
+# Count unique strains per bin
+counts_PB <- overlaps[, .(n_strains = uniqueN(STRAIN)), by = .(CHROM, start, end)]
+
+# If you want to merge with the full bin list (including 0s):
+bins_wCounts <- merge(bins_dt, counts_PB, by = c("CHROM", "start", "end"), all.x = TRUE)
+bins_wCounts[is.na(n_strains), n_strains := 0]
+
+bins_wFreq <- as.data.frame(bins_wCounts) %>%
+  dplyr::mutate(freq=n_strains/140) #change me to number of isotypes
+
+
+
+
+# Merged SV plot
+jasmine_plt <- ggplot(data = merged_SV %>% dplyr::filter(chrom != "MtDNA") %>% dplyr::select(chrom, pos, sv_type, number_svs_merged)) +
+  geom_rect(aes(xmin = (pos / 1e6) - 0.001, xmax = (pos / 1e6) + 0.001, ymin = 0, ymax = number_svs_merged, fill = sv_type)) + 
+  facet_wrap(~chrom, scales = "free_x") +
+  theme(
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.title = element_text(size = 14, color = 'black'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    # strip.background = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA)) +
+  scale_x_continuous(expand = c(0,0)) +
+  coord_cartesian(ylim = c(0,150)) +
+  scale_y_continuous(expand = c(0,0)) +
+  labs(x = "N2 genome position (Mb)", y = "Number of strains contributing to merged SV")
+jasmine_plt
+
+jasmine_plt_hist <- ggplot(data = merged_SV) +
+  geom_histogram(aes(x = number_svs_merged, fill = sv_type), binwidth = 1, position = position_dodge(width = 0.8)) +
+  theme(
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.title = element_text(size = 14, color = 'black'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_log10(expand = c(0,0)) +
+  labs(x = "Number of strains contributing to merged SV")
+jasmine_plt_hist
+
+
+# N2 genes plot
+genes_plt <- ggplot(n2_genes_plt %>% dplyr::filter(chrom != "MtDNA")) + 
+  geom_rect(aes(xmin = start/1e6, xmax = end/1e6, ymin = 0, ymax = 1), fill = "black") +
+  facet_wrap(~chrom, scales = "free_x", nrow = 1) +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    strip.background = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) 
+genes_plt
+
+
+snps_plt <- ggplot(snps) + 
+  geom_point(aes(x = bin, y = variant_count), color = '#DB6333', alpha = 0.7) +
+  facet_wrap( ~chrom, nrow = 1, scales = "free_x") + 
+  # geom_smooth(aes(x = bin, y = variant_count), method = "loess", se = TRUE, color = "lightblue") +
+  # ylab("Variants per kb") + 
+  theme(
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.y = element_text(size = 14, color = 'black'),
+    panel.grid = element_blank(),
+    # axis.title.y = element_text(size = 14, color = 'black'),
+    axis.title.y = element_blank(),
+    axis.ticks.x = element_blank(),
+    panel.background = element_blank(),
+    strip.text = element_text(size = 16, color = "black"))
+snps_plt 
+
+
+# # Funny supernova plot
+# snps_circ <- snps %>%
+#   arrange(chrom, bin) %>%
+#   group_by(chrom) %>%
+#   mutate(chr_len = max(bin)) %>%
+#   ungroup() %>%
+#   mutate(chr_offset = lag(cumsum(chr_len), default = 0)) %>%
+#   mutate(x_circ = bin + chr_offset)
 # 
+# chr_labs <- snps_circ %>%
+#   group_by(chrom) %>%
+#   summarise(
+#     center = mean(range(x_circ))
+#   )
 # 
+# snps_plt <- ggplot(snps_circ) +
+#   geom_point(
+#     aes(x = x_circ, y = variant_count),
+#     color = "#DB6333",
+#     alpha = 0.7,
+#     size = 0.6
+#   ) +
+#   coord_polar(theta = "x") +
+#   scale_x_continuous(
+#     breaks = chr_labs$center,
+#     labels = chr_labs$chrom
+#   ) +
+#   theme_minimal() +
+#   theme(
+#     axis.text.y = element_blank(),
+#     axis.title = element_blank(),
+#     panel.grid = element_blank(),
+#     axis.text.x = element_text(size = 14),
+#     plot.margin = margin(10,10,10,10)
+#   )
+# snps_plt
+
+
