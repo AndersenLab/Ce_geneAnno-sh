@@ -766,8 +766,8 @@ nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/
 
 # INS found among all WSs
 ins_all <- ggplot(nucmer %>% dplyr::filter(N2_chr == "V")) +
+  geom_rect(data = merged_all %>% dplyr::filter(pos == "6175352"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "blue", alpha = 0.5) +
   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
-  geom_rect(data = merged_all %>% dplyr::filter(pos == "6175352"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
   theme_bw() +
   facet_wrap(~strain) +
   theme(
@@ -783,49 +783,46 @@ ins_all <- ggplot(nucmer %>% dplyr::filter(N2_chr == "V")) +
 ins_all
 
 # DEL found among all WSs
-del_all <- ggplot(nucmer %>% dplyr::filter(N2_chr == "V")) +
+del_all <- ggplot(nucmer %>% dplyr::filter(N2_chr == "I")) +
+  geom_rect(data = merged_all %>% dplyr::filter(pos == "4760886"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
-  geom_rect(data = largest, aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
   theme_bw() +
   facet_wrap(~strain) +
   theme(
     legend.position = 'none',
-    axis.text = element_text(size = 14, color = 'black'),
+    axis.text = element_blank(),
     axis.ticks = element_blank(),
     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
     panel.background = element_blank(),
     panel.grid = element_blank(),
-    panel.border = element_rect(fill = NA),
-    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
-  coord_cartesian(xlim = c(2.1, 2.9)) +
-  ggtitle("Second largest deletion (V)") +
+    panel.border = element_rect(fill = NA)) +
+  coord_cartesian(xlim = c(4.760786, 4.762886)) +
   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
 del_all
 
 
-# INV found among 140 WSs - it is found in CGC1 (what strain is it NOT in????)
+# INV found among 140 WSs - it is found in CGC1 - ECA1286 does not have the INV call
 inv_most <- merged_SV %>%
   dplyr::filter(sv_type == "INV") %>% 
   dplyr::mutate(sv_length = abs(sv_length)) %>%
   dplyr::arrange(desc(number_svs_merged)) %>%
-  dplyr::slice_head(n =3)
+  dplyr::slice_head(n = 3)
 
-inv_140 <- ggplot(nucmer %>% dplyr::filter(N2_chr == "V")) +
+# need to visualize like how I visualized the 88 strain INV!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+inv_140 <- ggplot(nucmer %>% dplyr::filter(N2_chr == "II", strain != "ECA1286")) +
+  geom_rect(data = inv_most %>% dplyr::filter(pos == "5408382"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
-  geom_rect(data = largest, aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
   theme_bw() +
   facet_wrap(~strain) +
   theme(
     legend.position = 'none',
-    axis.text = element_text(size = 14, color = 'black'),
+    axis.text = element_blank(),
     axis.ticks = element_blank(),
     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
     panel.background = element_blank(),
     panel.grid = element_blank(),
-    panel.border = element_rect(fill = NA),
-    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
-  coord_cartesian(xlim = c(2.1, 2.9)) +
-  ggtitle("Second largest deletion (V)") +
+    panel.border = element_rect(fill = NA)) +
+  coord_cartesian(xlim = c(5.408182, 5.411382)) +
   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
 inv_140
 
