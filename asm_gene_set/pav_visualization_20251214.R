@@ -3,7 +3,8 @@ library(ggplot2)
 library(tidyr)
 library(dplyr)
 library(ape)
-install.packages("")
+# install.packages("circlize")
+library(circlize)
 
 # for file in *.vcf; do bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%FILTER\t%INFO/SVTYPE\t%INFO/SVLEN' $file | awk -v strain=${file%%.*} -v OFS='\t' '$7 >= 50 || $7 <= -50 {print $1,$2,$3,$4,$5,$6,$7,strain}'; done | grep -w "PASS" | grep -v -w "SNV"
 
@@ -568,7 +569,7 @@ conservedINV <- ggplot(threeINVnucmer_trimmed) +
   geom_segment(aes(x    = x1_clip / 1e6,xend = x2_clip / 1e6,y    = y1_clip / 1e6,yend = y2_clip / 1e6,color = contig), linewidth = 1) +
   geom_rect(data = threeINV %>% dplyr::slice_head(n = 1) %>% dplyr::select(chrom, pos, sv_length), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5, inherit.aes = FALSE) +
   facet_wrap(~strain, scales = "free") +
-  coord_cartesian(xlims = c(win_start, win_end) / 1e6) +
+  coord_cartesian(xlim = c(win_start, win_end) / 1e6) +
   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)") +
   theme(
     legend.position  = "none",
@@ -726,7 +727,7 @@ jasmine_plt <- ggplot(data = merged_SV %>% dplyr::filter(chrom != "MtDNA") %>% d
   facet_wrap(~chrom, scales = "free_x") +
   theme(
     axis.text = element_text(size = 12, color = 'black'),
-    axis.title = element_text(size = 14, color = 'black'),
+    axis.title = element_text(size = 14, color = 'black', face = 'bold'),
     panel.background = element_blank(),
     panel.grid = element_blank(),
     # strip.background = element_blank(),
@@ -741,14 +742,93 @@ jasmine_plt_hist <- ggplot(data = merged_SV) +
   geom_histogram(aes(x = number_svs_merged, fill = sv_type), binwidth = 1, position = position_dodge(width = 0.8)) +
   theme(
     axis.text = element_text(size = 12, color = 'black'),
-    axis.title = element_text(size = 14, color = 'black'),
+    axis.title = element_text(size = 14, color = 'black', face = 'bold'),
     panel.background = element_blank(),
     panel.grid = element_blank(),
     panel.border = element_rect(color = 'black', fill = NA)) +
   scale_x_continuous(expand = c(0,0)) +
-  scale_y_log10(expand = c(0,0)) +
-  labs(x = "Number of strains contributing to merged SV")
+  scale_y_continuous(expand = c(0,0)) +
+  # scale_y_log10(expand = c(0,0)) +
+  labs(x = "Number of strains contributing to merged SV", y = "Count")
 jasmine_plt_hist
+
+# ensuring merging of SV calls is correct
+merged_all <- merged_SV %>% dplyr::filter(number_svs_merged == "141") %>%
+  dplyr::mutate(sv_length = abs(sv_length)) %>%
+  dplyr::group_by(sv_type) %>%
+  dplyr::arrange(desc(sv_length)) %>%
+  dplyr::slice_head(n = 3) %>%
+  dplyr::ungroup()
+
+
+nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
+  dplyr::select(-IDY) %>% dplyr::filter(strain != "ECA396") 
+
+# INS found among all WSs
+ins_all <- ggplot(nucmer %>% dplyr::filter(N2_chr == "V")) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  geom_rect(data = merged_all %>% dplyr::filter(pos == "6175352"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
+  theme_bw() +
+  facet_wrap(~strain) +
+  theme(
+    legend.position = 'none',
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA)) +
+  coord_cartesian(xlim = c(6.17, 6.2)) +
+  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
+ins_all
+
+# DEL found among all WSs
+del_all <- ggplot(nucmer %>% dplyr::filter(N2_chr == "V")) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  geom_rect(data = largest, aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
+  theme_bw() +
+  facet_wrap(~strain) +
+  theme(
+    legend.position = 'none',
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
+  coord_cartesian(xlim = c(2.1, 2.9)) +
+  ggtitle("Second largest deletion (V)") +
+  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
+del_all
+
+
+# INV found among 140 WSs - it is found in CGC1 (what strain is it NOT in????)
+inv_most <- merged_SV %>%
+  dplyr::filter(sv_type == "INV") %>% 
+  dplyr::mutate(sv_length = abs(sv_length)) %>%
+  dplyr::arrange(desc(number_svs_merged)) %>%
+  dplyr::slice_head(n =3)
+
+inv_140 <- ggplot(nucmer %>% dplyr::filter(N2_chr == "V")) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  geom_rect(data = largest, aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
+  theme_bw() +
+  facet_wrap(~strain) +
+  theme(
+    legend.position = 'none',
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
+  coord_cartesian(xlim = c(2.1, 2.9)) +
+  ggtitle("Second largest deletion (V)") +
+  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
+inv_140
+
 
 
 # N2 genes plot
