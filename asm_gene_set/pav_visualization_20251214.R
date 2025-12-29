@@ -3,8 +3,10 @@ library(ggplot2)
 library(tidyr)
 library(dplyr)
 library(ape)
-# install.packages("circlize")
 library(circlize)
+library(data.table)
+library(ComplexHeatmap)  
+library(grid)           
 
 # for file in *.vcf; do bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%FILTER\t%INFO/SVTYPE\t%INFO/SVLEN' $file | awk -v strain=${file%%.*} -v OFS='\t' '$7 >= 50 || $7 <= -50 {print $1,$2,$3,$4,$5,$6,$7,strain}'; done | grep -w "PASS" | grep -v -w "SNV"
 
@@ -669,8 +671,8 @@ conservedINV
 # ======================================================================================================================================================================================== #
 # Circos variation plot
 # ======================================================================================================================================================================================== #
-snps <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/misc/140WSs_biallelicSNPs.tsv", col_names = c("chrom","pos","ref","alt"))
-merged_SV <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/pav/jasmine_SVmerging/output/summarized_data.tsv")
+snps <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/misc/140WSs_biallelicSNPs.tsv", col_names = c("chrom","pos","ref","alt")) # don't currently have SNP calls for CGC1
+merged_SV <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/pav/jasmine_SVmerging/elegans/output/summarized_data.tsv")
 hdrs <- readr::read_tsv("/vast/eande106/data/c_elegans/WI/divergent_regions/20250625/20250625_c_elegans_divergent_regions_strain.bed", col_names = c("chrom", "start", "end", "strain"))
 geo_initial <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/elegans_isotypes_sampling_geo.tsv")
 hawaii_islands <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/elegans_isotypes_sampling_geo_hawaii_islands.tsv") %>% dplyr::select(isotype,collection_island_Hawaii)
@@ -685,38 +687,6 @@ geo <- geo_initial %>%
   dplyr::mutate(geo = ifelse(geo == "Hawaii",collection_island_Hawaii,geo)) %>%
   dplyr::select(isotype, lat, long, geo) %>%
   dplyr::filter(isotype %in% WSs)
-
-
-# Calculating snp count per kb
-snps <- snps %>%
-  dplyr::mutate(bin = (pos %/% 1000) * 1000) %>%  # floor to nearest 1000
-  dplyr::count(chrom, bin, name = "variant_count") %>%
-  dplyr::arrange(chrom, bin)
-
-
-# Calculating HDR frequency
-bins <- snps %>% dplyr::select(chrom,bin) %>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::
-bins_dt <- as.data.table(bins)
-setnames(bins_dt, c("binStart", "binEnd"), c("start", "end"))
-bins_dt[, id := .I]  # optional: keep track of bins
-
-hdrs_dt <- as.data.table(hdrs)
-setnames(hdrs_dt, c("minStart", "maxEnd"), c("start", "end"))
-
-setkey(bins_dt, CHROM, start, end)
-setkey(hdrs_dt, CHROM, start, end)
-
-overlaps <- foverlaps(hdrs_dt, bins_dt, nomatch = 0)
-
-# Count unique strains per bin
-counts_PB <- overlaps[, .(n_strains = uniqueN(STRAIN)), by = .(CHROM, start, end)]
-
-# If you want to merge with the full bin list (including 0s):
-bins_wCounts <- merge(bins_dt, counts_PB, by = c("CHROM", "start", "end"), all.x = TRUE)
-bins_wCounts[is.na(n_strains), n_strains := 0]
-
-bins_wFreq <- as.data.frame(bins_wCounts) %>%
-  dplyr::mutate(freq=n_strains/140) #change me to number of isotypes
 
 
 
@@ -747,84 +717,167 @@ jasmine_plt_hist <- ggplot(data = merged_SV) +
     panel.grid = element_blank(),
     panel.border = element_rect(color = 'black', fill = NA)) +
   scale_x_continuous(expand = c(0,0)) +
-  scale_y_continuous(expand = c(0,0)) +
-  # scale_y_log10(expand = c(0,0)) +
+  # scale_y_continuous(expand = c(0,0)) +
+  scale_y_log10(expand = c(0,0)) +
   labs(x = "Number of strains contributing to merged SV", y = "Count")
 jasmine_plt_hist
 
 # ensuring merging of SV calls is correct
-merged_all <- merged_SV %>% dplyr::filter(number_svs_merged == "141") %>%
-  dplyr::mutate(sv_length = abs(sv_length)) %>%
-  dplyr::group_by(sv_type) %>%
-  dplyr::arrange(desc(sv_length)) %>%
-  dplyr::slice_head(n = 3) %>%
-  dplyr::ungroup()
-
-
+# merged_all <- merged_SV %>% dplyr::filter(number_svs_merged == "141") %>%
+#   dplyr::mutate(sv_length = abs(sv_length)) %>%
+#   dplyr::group_by(sv_type) %>%
+#   dplyr::arrange(desc(sv_length)) %>%
+#   dplyr::slice_head(n = 3) %>%
+#   dplyr::ungroup()
+# 
+# 
 nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
-  dplyr::select(-IDY) %>% dplyr::filter(strain != "ECA396") 
+  dplyr::select(-IDY) %>% dplyr::filter(strain != "ECA396")
+# 
+# # INS found among all WSs
+# ins_all <- ggplot(nucmer %>% dplyr::filter(N2_chr == "V")) +
+#   geom_rect(data = merged_all %>% dplyr::filter(pos == "6175352"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "blue", alpha = 0.5) +
+#   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+#   theme_bw() +
+#   facet_wrap(~strain) +
+#   theme(
+#     legend.position = 'none',
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank(),
+#     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA)) +
+#   coord_cartesian(xlim = c(6.17, 6.2)) +
+#   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
+# ins_all
+# 
+# # DEL found among all WSs
+# del_all <- ggplot(nucmer %>% dplyr::filter(N2_chr == "I")) +
+#   geom_rect(data = merged_all %>% dplyr::filter(pos == "4760886"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
+#   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+#   theme_bw() +
+#   facet_wrap(~strain) +
+#   theme(
+#     legend.position = 'none',
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank(),
+#     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA)) +
+#   coord_cartesian(xlim = c(4.760786, 4.762886)) +
+#   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
+# del_all
+# 
+# 
+# # INV found among 140 WSs - it is found in CGC1 - ECA1286 does not have the INV call
+# inv_most <- merged_SV %>%
+#   dplyr::filter(sv_type == "INV") %>% 
+#   dplyr::mutate(sv_length = abs(sv_length)) %>%
+#   dplyr::arrange(desc(number_svs_merged)) %>%
+#   dplyr::slice_head(n = 3)
+# 
+# inv_140 <- ggplot(nucmer %>% dplyr::filter(N2_chr == "II", strain != "ECA1286")) +
+#   geom_rect(data = inv_most %>% dplyr::filter(pos == "5408382"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
+#   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+#   theme_bw() +
+#   facet_wrap(~strain) +
+#   theme(
+#     legend.position = 'none',
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank(),
+#     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA)) +
+#   coord_cartesian(xlim = c(5.408182, 5.411382)) +
+#   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
+# inv_140
+# 
+# eca1286 <- ggplot(nucmer %>% dplyr::filter(N2_chr == "II", strain == "ECA1286")) +
+#   geom_rect(data = inv_most %>% dplyr::filter(pos == "5408382"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
+#   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+#   theme_bw() +
+#   facet_wrap(~strain) +
+#   theme(
+#     legend.position = 'none',
+#     axis.text = element_blank(),
+#     axis.ticks = element_blank(),
+#     axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+#     panel.background = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(fill = NA)) +
+#   coord_cartesian(xlim =c(5.408182, 5.411382)) +
+#   labs(x = "N2 genome position (Mb)", y = "ECA1286 contig position (Mb)")
+# eca1286
+# 
+# # need to visualize like how I visualized the 88 strain INV!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# strains <- nucmer %>% dplyr::select(strain) %>% dplyr::distinct() %>% dplyr::pull(strain) #%>% dplyr::filter(strain != "ECA1286") %>% dplyr::pull()
+# 
+# onefourty_INV <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
+#   dplyr::filter(strain %in% strains) %>% dplyr::filter(N2_chr == "II") %>%
+#   dplyr::filter(N2S < 5408182 & N2E < 5411382 & N2E > 5408182 | 
+#                   N2S > 5408182 & N2S < 5411382 & N2E > 5411382 | 
+#                   N2S > 5408182 & N2E < 5411382) #%>%
+#   dplyr::group_by(strain, contig) %>%
+#   dplyr::mutate(summedL2 = sum(L2)) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::group_by(strain) %>%
+#   dplyr::filter(summedL2 == max(summedL2)) %>%
+#   dplyr::ungroup() %>% 
+#   dplyr::mutate(slope = ifelse(N2S < 5408182 | N2E > 5411382, (WSS - WSE)/(N2S-N2E), NA)) %>%
+#   dplyr::mutate(inv = ifelse(WSE < WSS, T, F)) %>%
+#   dplyr::mutate(intercept = WSS - (slope * N2S)) %>% # to find the y-intercept using point-slope form (b = y1 - mx1)
+#   dplyr::mutate(new_start = ifelse(N2S < 5408182 & N2E < 5411382 & inv == F, ((slope * 5408182) + intercept), 
+#                                    ifelse(N2S > 5408182 & N2E > 5411382  & inv == T, ((slope * 5408182) + intercept), WSS))) %>%
+#   dplyr::mutate(new_end = ifelse(N2S > 5408182 & N2E > 5411382 & inv == F, ((slope * 5411382) + intercept), 
+#                                  ifelse(N2S < 5408182 & N2E < 5411382 & inv == T, ((slope * 5408182) + intercept), WSE))) %>%
+#   dplyr::select(-IDY,-L2,-L1,-LENR,-LENQ)
+# 
+# win_start <- 5408182
+# win_end   <- 5411382
+# 
+# onefourty_INV_trimmed <- onefourty_INV %>%
+#   # keep only alignments that overlap the window at all
+#   dplyr::filter(N2E >= win_start, N2S <= win_end) %>%
+#   # normalize so N2_start < N2_end, and match W coords to that direction
+#   dplyr::mutate(
+#     N2_start = pmin(N2S, N2E),
+#     N2_end   = pmax(N2S, N2E),
+#     W_start  = if_else(N2S <= N2E, WSS, WSE),
+#     W_end    = if_else(N2S <= N2E, WSE, WSS),
+#     slope    = (W_end - W_start) / (N2_end - N2_start),
+#     # clip N2 coords to window
+#     x1_clip  = pmax(N2_start, win_start),
+#     x2_clip  = pmin(N2_end,   win_end),
+#     # project clipped N2 positions into W coords
+#     y1_clip  = W_start + (x1_clip - N2_start) * slope,
+#     y2_clip  = W_start + (x2_clip - N2_start) * slope
+#   ) %>%
+#   # drop any segments that vanish after clipping
+#   dplyr::filter(x1_clip < x2_clip)
+# 
+# 
+# conservedINV <- ggplot(onefourty_INV_trimmed) +
+#   geom_segment(aes(x    = x1_clip / 1e6,xend = x2_clip / 1e6,y    = y1_clip / 1e6,yend = y2_clip / 1e6,color = contig), linewidth = 1) +
+#   geom_rect(data = inv_most %>% dplyr::filter(pos == "5408382"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
+#   facet_wrap(~strain, scales = "free") +
+#   coord_cartesian(xlim = c(win_start, win_end) / 1e6) +
+#   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)") +
+#   theme(
+#     legend.position  = "none",
+#     axis.text        = element_blank(),
+#     axis.ticks       = element_blank(),
+#     axis.title       = element_blank(),
+#     panel.background = element_blank(),
+#     panel.grid       = element_blank(),
+#     panel.border     = element_rect(fill = NA))
+# conservedINV
 
-# INS found among all WSs
-ins_all <- ggplot(nucmer %>% dplyr::filter(N2_chr == "V")) +
-  geom_rect(data = merged_all %>% dplyr::filter(pos == "6175352"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "blue", alpha = 0.5) +
-  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
-  theme_bw() +
-  facet_wrap(~strain) +
-  theme(
-    legend.position = 'none',
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    panel.border = element_rect(fill = NA)) +
-  coord_cartesian(xlim = c(6.17, 6.2)) +
-  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
-ins_all
-
-# DEL found among all WSs
-del_all <- ggplot(nucmer %>% dplyr::filter(N2_chr == "I")) +
-  geom_rect(data = merged_all %>% dplyr::filter(pos == "4760886"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "red", alpha = 0.5) +
-  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
-  theme_bw() +
-  facet_wrap(~strain) +
-  theme(
-    legend.position = 'none',
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    panel.border = element_rect(fill = NA)) +
-  coord_cartesian(xlim = c(4.760786, 4.762886)) +
-  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
-del_all
 
 
-# INV found among 140 WSs - it is found in CGC1 - ECA1286 does not have the INV call
-inv_most <- merged_SV %>%
-  dplyr::filter(sv_type == "INV") %>% 
-  dplyr::mutate(sv_length = abs(sv_length)) %>%
-  dplyr::arrange(desc(number_svs_merged)) %>%
-  dplyr::slice_head(n = 3)
 
-# need to visualize like how I visualized the 88 strain INV!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-inv_140 <- ggplot(nucmer %>% dplyr::filter(N2_chr == "II", strain != "ECA1286")) +
-  geom_rect(data = inv_most %>% dplyr::filter(pos == "5408382"), aes(xmin = pos / 1e6, xmax = (pos + sv_length) / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
-  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
-  theme_bw() +
-  facet_wrap(~strain) +
-  theme(
-    legend.position = 'none',
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    panel.border = element_rect(fill = NA)) +
-  coord_cartesian(xlim = c(5.408182, 5.411382)) +
-  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
-inv_140
 
 
 
@@ -844,6 +897,13 @@ genes_plt <- ggplot(n2_genes_plt %>% dplyr::filter(chrom != "MtDNA")) +
 genes_plt
 
 
+# Calculating snp count per kb
+snps <- snps %>%
+  dplyr::mutate(bin = (pos %/% 1000) * 1000) %>%  # floor to nearest 1000
+  dplyr::count(chrom, bin, name = "variant_count") %>%
+  dplyr::arrange(chrom, bin)
+
+# SNP density plot
 snps_plt <- ggplot(snps) + 
   geom_point(aes(x = bin, y = variant_count), color = '#DB6333', alpha = 0.7) +
   facet_wrap( ~chrom, nrow = 1, scales = "free_x") + 
@@ -851,52 +911,410 @@ snps_plt <- ggplot(snps) +
   # ylab("Variants per kb") + 
   theme(
     axis.text.x = element_blank(),
-    axis.title.x = element_blank(),
-    axis.text.y = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    axis.text.y = element_text(size = 12, color = 'black'),
     panel.grid = element_blank(),
-    # axis.title.y = element_text(size = 14, color = 'black'),
-    axis.title.y = element_blank(),
-    axis.ticks.x = element_blank(),
     panel.background = element_blank(),
-    strip.text = element_text(size = 16, color = "black"))
+    strip.text = element_text(size = 16, color = "black")) 
 snps_plt 
 
 
-# # Funny supernova plot
-# snps_circ <- snps %>%
-#   arrange(chrom, bin) %>%
-#   group_by(chrom) %>%
-#   mutate(chr_len = max(bin)) %>%
-#   ungroup() %>%
-#   mutate(chr_offset = lag(cumsum(chr_len), default = 0)) %>%
-#   mutate(x_circ = bin + chr_offset)
-# 
-# chr_labs <- snps_circ %>%
-#   group_by(chrom) %>%
-#   summarise(
-#     center = mean(range(x_circ))
-#   )
-# 
-# snps_plt <- ggplot(snps_circ) +
-#   geom_point(
-#     aes(x = x_circ, y = variant_count),
-#     color = "#DB6333",
-#     alpha = 0.7,
-#     size = 0.6
-#   ) +
-#   coord_polar(theta = "x") +
-#   scale_x_continuous(
-#     breaks = chr_labs$center,
-#     labels = chr_labs$chrom
-#   ) +
-#   theme_minimal() +
-#   theme(
-#     axis.text.y = element_blank(),
-#     axis.title = element_blank(),
-#     panel.grid = element_blank(),
-#     axis.text.x = element_text(size = 14),
-#     plot.margin = margin(10,10,10,10)
-#   )
-# snps_plt
+
+
+# Calculating HDR frequency
+bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
+bins_dt <- as.data.table(bins)
+bins_dt[, id := .I]  # optional: keep track of bins
+
+strains <- nucmer %>% dplyr::select(strain) %>% dplyr::distinct() %>% dplyr::filter(strain != "CGC1") %>% dplyr::pull()
+hdrs <- hdrs %>% dplyr::filter(strain %in% strains)
+hdrs_dt <- as.data.table(hdrs)
+
+setkey(bins_dt, chrom, start, end)
+setkey(hdrs_dt, chrom, start, end)
+
+overlaps <- data.table::foverlaps(hdrs_dt, bins_dt, nomatch = 0)
+
+# Count unique strains per bin
+counts_PB <- overlaps[, .(n_strains = uniqueN(strain)), by = .(chrom, start, end)]
+
+# If you want to merge with the full bin list (including 0s):
+bins_wCounts <- merge(bins_dt, counts_PB, by = c("chrom", "start", "end"), all.x = TRUE)
+bins_wCounts[is.na(n_strains), n_strains := 0]
+
+bins_wFreq <- as.data.frame(bins_wCounts) %>%
+  dplyr::mutate(freq = n_strains/140) #change me to number of isotypes
+
+hdr_bin_plt <- bins_wFreq %>% dplyr::mutate(middle = (end + start) / 2)
+
+hdr_freq <- ggplot(hdr_bin_plt) +
+  geom_point(aes(x = middle, y = freq), color = 'gray') +
+  facet_wrap(~chrom, nrow = 1, scales = "free_x") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    axis.text.y = element_text(size = 12, color = 'black'),
+    panel.grid = element_blank(),
+    panel.background = element_blank(),
+    strip.text = element_text(size = 16, color = "black")) +
+  coord_cartesian(ylim = c(0,1))
+hdr_freq
+
+
+
+# Calculating DEL frequency
+bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
+bins_dt <- as.data.table(bins)
+bins_dt[, id := .I]  # optional: keep track of bins
+
+del_calls <- filt_calls %>% dplyr::filter(sv_type == "DEL") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
+del_calls_dt <- as.data.table(del_calls)
+
+setkey(bins_dt, chrom, start, end)
+setkey(del_calls_dt, chrom, start, end)
+
+overlaps <- data.table::foverlaps(del_calls_dt, bins_dt, nomatch = 0)
+
+# Count unique strains per bin
+counts_PB <- overlaps[, .(n_strains = uniqueN(strain)), by = .(chrom, start, end)]
+
+# If you want to merge with the full bin list (including 0s):
+bins_wCounts <- merge(bins_dt, counts_PB, by = c("chrom", "start", "end"), all.x = TRUE)
+bins_wCounts[is.na(n_strains), n_strains := 0]
+
+bins_wFreq <- as.data.frame(bins_wCounts) %>%
+  dplyr::mutate(freq = n_strains/141) #change me to number of isotypes
+
+del_bin_plt <- bins_wFreq %>% dplyr::mutate(middle = (end + start) / 2)
+
+del_freq <- ggplot(del_bin_plt) +
+  geom_point(aes(x = middle, y = freq), color = 'red') +
+  facet_wrap(~chrom, nrow = 1, scales = "free_x") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    axis.text.y = element_text(size = 12, color = 'black'),
+    panel.grid = element_blank(),
+    panel.background = element_blank(),
+    strip.text = element_text(size = 16, color = "black")) +
+  coord_cartesian(ylim = c(0,1))
+del_freq
+
+
+# Calculating INS frequency
+bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
+bins_dt <- as.data.table(bins)
+bins_dt[, id := .I]  # optional: keep track of bins
+
+ins_calls <- filt_calls %>% dplyr::filter(sv_type == "INS") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
+ins_calls_dt <- as.data.table(ins_calls)
+
+setkey(bins_dt, chrom, start, end)
+setkey(ins_calls_dt, chrom, start, end)
+
+overlaps <- data.table::foverlaps(ins_calls_dt, bins_dt, nomatch = 0)
+
+# Count unique strains per bin
+counts_PB <- overlaps[, .(n_strains = uniqueN(strain)), by = .(chrom, start, end)]
+
+# If you want to merge with the full bin list (including 0s):
+bins_wCounts <- merge(bins_dt, counts_PB, by = c("chrom", "start", "end"), all.x = TRUE)
+bins_wCounts[is.na(n_strains), n_strains := 0]
+
+bins_wFreq <- as.data.frame(bins_wCounts) %>%
+  dplyr::mutate(freq = n_strains/141) #change me to number of isotypes
+
+ins_bin_plt <- bins_wFreq %>% dplyr::mutate(middle = (end + start) / 2)
+
+ins_freq <- ggplot(ins_bin_plt) +
+  geom_point(aes(x = middle, y = freq), color = 'blue') +
+  facet_wrap(~chrom, nrow = 1, scales = "free_x") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    axis.text.y = element_text(size = 12, color = 'black'),
+    panel.grid = element_blank(),
+    panel.background = element_blank(),
+    strip.text = element_text(size = 16, color = "black")) +
+  coord_cartesian(ylim = c(0,1))
+ins_freq
+
+
+
+# Calculating INV frequency
+bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
+bins_dt <- as.data.table(bins)
+bins_dt[, id := .I]  # optional: keep track of bins
+
+inv_calls <- filt_calls %>% dplyr::filter(sv_type == "INV") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
+inv_calls_dt <- as.data.table(inv_calls)
+
+setkey(bins_dt, chrom, start, end)
+setkey(inv_calls_dt, chrom, start, end)
+
+overlaps <- data.table::foverlaps(inv_calls_dt, bins_dt, nomatch = 0)
+
+# Count unique strains per bin
+counts_PB <- overlaps[, .(n_strains = uniqueN(strain)), by = .(chrom, start, end)]
+
+# If you want to merge with the full bin list (including 0s):
+bins_wCounts <- merge(bins_dt, counts_PB, by = c("chrom", "start", "end"), all.x = TRUE)
+bins_wCounts[is.na(n_strains), n_strains := 0]
+
+bins_wFreq <- as.data.frame(bins_wCounts) %>%
+  dplyr::mutate(freq = n_strains/141) #change me to number of isotypes
+
+inv_bin_plt <- bins_wFreq %>% dplyr::mutate(middle = (end + start) / 2)
+
+inv_freq <- ggplot(inv_bin_plt) +
+  geom_point(aes(x = middle, y = freq), color = 'gold') +
+  facet_wrap(~chrom, nrow = 1, scales = "free_x") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    axis.text.y = element_text(size = 12, color = 'black'),
+    panel.grid = element_blank(),
+    panel.background = element_blank(),
+    strip.text = element_text(size = 16, color = "black")) +
+  coord_cartesian(ylim = c(0,1))
+inv_freq
+
+
+
+# Circos plot - example
+# col_fun = colorRamp2(c(-2, 0, 2), c("pink", "purple", "red"))
+# circlize_plot = function() {
+#   set.seed(12345)
+#   sectors = letters[1:12]
+#   circos.initialize(sectors, xlim = c(0, 1))
+#   circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+#     circos.points(runif(20), runif(20), cex = 0.5, pch = 16, col = 2)
+#     circos.points(runif(20), runif(20), cex = 0.5, pch = 16, col = 3)
+#   })
+#   circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
+#     circos.lines(sort(runif(20)), runif(20), col = 4)
+#     circos.lines(sort(runif(20)), runif(20), col = 5)
+#   })
+#   
+#   for(i in 1:12) {
+#     circos.link(sample(sectors, 1), sort(runif(10))[1:2], 
+#                 sample(sectors, 1), sort(runif(10))[1:2],
+#                 col = add_transparency(col_fun(rnorm(1))))
+#   }
+#   circos.clear()
+# }
+# circlize_plot()
+
+
+
+
+
+
+
+
+
+
+
+## =========================
+## CIRCLIZE PLOT (ALL-IN-ONE)
+## Outer chromosome ring with genes plotted + inner tracks:
+##   1) SNP density (points)
+##   2) HDR frequency (points)
+##   3) DEL frequency (points)
+##   4) INS frequency (points)
+##   5) INV frequency (points)
+## Includes legend (ComplexHeatmap::Legend)
+## =========================
+
+bin_size <- 1000
+chr_order <- c("I","II","III","IV","V","X")
+
+## Path to genome .fai (recommended; provides chromosome lengths)
+## If you don't have this, see fallback block below.
+fai_path <- "genome.fa.fai"
+
+## ---- INPUT OBJECTS ASSUMED TO EXIST (from your pipeline) ----
+## n2_genes_plt: data.frame with chrom, start, end (bp)
+## snps: tibble/data.frame with chrom, pos, ref, alt (pos in bp)
+## hdrs: tibble/data.frame with chrom, start, end, strain (BED-like)
+## filt_calls: tibble/data.frame with chrom, pos, sv_length, sv_type, strain
+## nucmer: tibble/data.frame with strain (used to define subset of strains)
+##
+## If any are not loaded, load them before running this block.
+
+## =========================
+## 1) CHROM SIZES
+## =========================
+chrom_sizes <- readr::read_tsv(fai_path, col_names = c("chrom","len","x1","x2","x3"), show_col_types = FALSE) %>%
+  dplyr::select(chrom, len) %>%
+  dplyr::filter(chrom != "MtDNA") %>%
+  dplyr::mutate(chrom = factor(chrom, levels = chr_order)) %>%
+  dplyr::arrange(chrom)
+
+## Fallback (if you don't have .fai):
+## Uncomment to infer lengths from bins/genes if needed.
+# chrom_sizes <- bind_rows(
+#   snps %>% group_by(chrom) %>% summarise(len = max(pos, na.rm=TRUE), .groups="drop"),
+#   n2_genes_plt %>% group_by(chrom) %>% summarise(len = max(end, na.rm=TRUE), .groups="drop")
+# ) %>% group_by(chrom) %>% summarise(len = max(len), .groups="drop") %>%
+#   filter(chrom != "MtDNA") %>%
+#   mutate(chrom = factor(chrom, levels = chr_order)) %>% arrange(chrom)
+
+
+## =========================
+## 3) SNP DENSITY PER BIN (counts per bin_size)
+## =========================
+snps_binned <- snps %>%
+  dplyr::filter(chrom != "MtDNA") %>%
+  dplyr::mutate(bin = (pos %/% bin_size) * bin_size) %>%
+  dplyr::count(chrom, bin, name = "variant_count") %>%
+  dplyr::mutate(pos = bin + bin_size/2) %>%
+  dplyr::select(chrom, pos, value = variant_count)
+
+## =========================
+## 4) HDR FREQUENCY PER BIN
+##    (subset strains from nucmer, excluding CGC1, as you did)
+## =========================
+strains_hdr <- nucmer %>%
+  dplyr::distinct(strain) %>%
+  dplyr::filter(strain != "CGC1") %>%
+  dplyr::pull(strain)
+n_hdr <- length(strains_hdr)
+
+hdrs_sub <- hdrs %>% dplyr::filter(strain %in% strains_hdr, chrom != "MtDNA")
+hdrs_dt  <- as.data.table(hdrs_sub)
+setkey(hdrs_dt, chrom, start, end)
+
+ov_hdr <- foverlaps(hdrs_dt, bins_dt, nomatch = 0L)
+
+hdr_counts <- ov_hdr[, .(n_strains = uniqueN(strain)), by = .(chrom, start, end, id)]
+hdr_w <- merge(bins_dt, hdr_counts, by = c("chrom","start","end","id"), all.x = TRUE)
+hdr_w[is.na(n_strains), n_strains := 0L]
+hdr_w[, value := n_strains / n_hdr]
+hdr_track <- as.data.frame(hdr_w) %>%
+  dplyr::mutate(pos = (start + end)/2) %>%
+  dplyr::select(chrom, pos, value)
+
+## =========================
+## 5) SV FREQUENCY PER BIN (DEL/INS/INV)
+## =========================
+sv_freq_track <- function(filt_calls, svtype, bins_dt, denom_n) {
+  calls <- filt_calls %>%
+    dplyr::filter(sv_type == svtype, chrom != "MtDNA") %>%
+    dplyr::mutate(start = pos,
+                  end   = pos + sv_length) %>%
+    dplyr::select(chrom, start, end, strain)
+  
+  calls_dt <- as.data.table(calls)
+  setkey(calls_dt, chrom, start, end)
+  
+  ov <- foverlaps(calls_dt, bins_dt, nomatch = 0L)
+  counts <- ov[, .(n_strains = uniqueN(strain)), by = .(chrom, start, end, id)]
+  
+  w <- merge(bins_dt, counts, by = c("chrom","start","end","id"), all.x = TRUE)
+  w[is.na(n_strains), n_strains := 0L]
+  w[, value := n_strains / denom_n]
+  
+  as.data.frame(w) %>%
+    dplyr::mutate(pos = (start + end)/2) %>%
+    dplyr::select(chrom, pos, value)
+}
+
+## You used /141 for SV frequencies; keep your convention:
+n_sv <- 141
+
+del_track <- sv_freq_track(filt_calls, "DEL", bins_dt, n_sv)
+ins_track <- sv_freq_track(filt_calls, "INS", bins_dt, n_sv)
+inv_track <- sv_freq_track(filt_calls, "INV", bins_dt, n_sv)
+
+## =========================
+## 6) CIRCLIZE PLOT
+## =========================
+add_point_track <- function(df, col, ylim, track_height = 0.10, label = NULL) {
+  circos.trackPlotRegion(
+    ylim = ylim,
+    track.height = track_height,
+    bg.border = NA,
+    panel.fun = function(x, y) {
+      chr <- CELL_META$sector.index
+      d <- df[df$chrom == chr, , drop = FALSE]
+      if (nrow(d) == 0) return()
+      circos.points(d$pos, d$value, pch = 16, cex = 0.25, col = col)
+    }
+  )
+  if (!is.null(label)) {
+    # Put track label near the first chromosome sector
+    circos.text(
+      x = 0, y = mean(ylim), labels = label,
+      sector.index = chr_order[1],
+      track.index  = get.current.track.index(),
+      facing = "inside", adj = c(1, 0.5), cex = 0.7
+    )
+  }
+}
+
+## Open a device if desired (e.g., PDF):
+## pdf("circos_tracks.pdf", width=8, height=8)
+
+circos.clear()
+circos.par(
+  start.degree = 90,
+  gap.after = c(rep(2, length(chr_order)-1), 8),
+  track.margin = c(0.002, 0.002),
+  cell.padding = c(0, 0, 0, 0)
+)
+
+circos.initialize(
+  factors = chrom_sizes$chrom,
+  xlim = cbind(rep(0, nrow(chrom_sizes)), chrom_sizes$len)
+)
+
+## Outer chromosome ring (ideogram-like) - I NEED TO ADD GENE MODELS
+circos.trackPlotRegion(
+  ylim = c(0, 1),
+  track.height = 0.065,
+  bg.border = NA,
+  panel.fun = function(x, y) {
+    chr <- CELL_META$sector.index
+    xlim <- CELL_META$xlim
+    
+    circos.rect(xlim[1], 0, xlim[2], 1, col = "grey90", border = "white")
+    circos.text(CELL_META$xcenter, 0.55, chr, facing = "bending.inside", cex = 0.9, font = 2)
+    
+    ## Axis ticks (Mb)
+    circos.axis(
+      h = "top",
+      major.at = seq(0, xlim[2], by = 5e6),
+      labels = seq(0, xlim[2], by = 5e6) / 1e6,
+      labels.cex = 0.5,
+      major.tick.length = 0.02,
+      minor.ticks = 4
+    )
+  }
+)
+
+## Tracks
+snp_ylim <- c(0, max(snps_binned$value, na.rm = TRUE))
+add_point_track(snps_binned, col = "#DB6333", ylim = snp_ylim, track_height = 0.12, label = "SNPs/kb")
+add_point_track(hdr_track,  col = "grey40",  ylim = c(0,1),   track_height = 0.10, label = "HDR freq")
+add_point_track(del_track,  col = "red",     ylim = c(0,1),   track_height = 0.08, label = "DEL freq")
+add_point_track(ins_track,  col = "blue",    ylim = c(0,1),   track_height = 0.08, label = "INS freq")
+add_point_track(inv_track,  col = "gold",    ylim = c(0,1),   track_height = 0.08, label = "INV freq")
+
+## Legend (place top-right)
+lgd <- Legend(
+  labels = c("SNP density", "HDR freq", "DEL freq", "INS freq", "INV freq"),
+  type = "points",
+  pch = 16,
+  legend_gp = gpar(col = c("#DB6333", "grey40", "red", "blue", "gold"))
+)
+draw(lgd, x = unit(0.88, "npc"), y = unit(0.88, "npc"))
+
+circos.clear()
 
 
