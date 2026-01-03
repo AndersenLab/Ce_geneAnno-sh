@@ -1286,11 +1286,122 @@ circos.clear()
 MAF_thresh <- round(0.05 * 141)
 
 maf_filt <- merged_SV %>% 
-  dplyr::select(chrom,pos,sv_length,sv_type,number_svs_merged)
+  dplyr::select(chrom,pos,sv_length,sv_type,number_svs_merged) %>%
+  dplyr::filter(number_svs_merged >= MAF_thresh) %>%
+  dplyr::mutate(sv_length = abs(sv_length)) %>%
+  dplyr::mutate(end = pos + sv_length) %>% 
+  dplyr::rename(start = pos) %>%
+  dplyr::select(chrom, start, end, sv_type) %>%
+  dplyr::mutate(overlap = F)
+
+svs_dt <- as.data.table(maf_filt)
+n2_genes_dt <- as.data.table(n2_genes_plt)
+
+setkey(svs_dt, chrom, start, end)
+setkey(n2_genes_dt, chrom, start, end)
+
+svs_inCodingRegions <- data.table::foverlaps(x = svs_dt, y = n2_genes_dt, type = "any") %>% dplyr::filter(!is.na(start)) %>% dplyr::mutate(overlap = T)
+
+
+# Ensuring that the foverlaps command worked correctly
+test <- svs_inCodingRegions %>% dplyr::filter(start > 1600000 & end < 1700000) %>% dplyr::select(chrom,start,end) %>% dplyr::distinct(chrom,start,end)
+
+check <- ggplot(svs_inCodingRegions %>% dplyr::filter(start > 1600000 & end < 1700000)) +
+  geom_rect(data = test, aes(xmin = start / 1e6, xmax = end /1e6, ymin = 0, ymax = 0.99, fill = "N2_genes")) +
+  geom_rect(aes(xmin = i.start / 1e6, xmax = i.end /1e6, ymin = 1.01, ymax = 2, fill = "SVs")) +
+  scale_fill_manual(values = c("N2_genes" = "forestgreen", "SVs" = "purple")) + 
+  facet_wrap(~chrom, nrow = 2, scales = "free_x") +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    axis.text.x = element_text(size = 12, color = 'black'),
+    panel.grid = element_blank(),
+    panel.background = element_blank(),
+    strip.text = element_text(size = 16, color = "black")) 
+check
+
+
+
+overlap <- svs_inCodingRegions %>% dplyr::select(chrom, i.start,i.end, sv_type, overlap) %>% dplyr::rename(start = i.start, end = i.end) %>% dplyr::distinct(chrom,start,end,sv_type, .keep_all = T)
+
+final_stats <- maf_filt %>% 
+  dplyr::left_join(overlap, by = c("chrom", "start", "end", "sv_type")) %>% 
+  dplyr::mutate(region = ifelse(is.na(overlap.y),'non-PC_region','overlaps_PCgene')) %>%
+  dplyr::select(chrom,start,end,sv_type,region) %>%
+  dplyr::group_by(sv_type) %>%
+  dplyr::mutate(total_sv_type = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(sv_type,region) %>%
+  dplyr::mutate(region_count = n()) %>%
+  dplyr::ungroup()
+
+plt_stats <- final_stats %>% dplyr::select(sv_type,region,total_sv_type,region_count) %>%
+  dplyr::mutate(proportion = (region_count / total_sv_type) * 100) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(sv_type = factor(sv_type, levels = c("INS","DEL","INV")))
+
+
+ggplot() +
+  geom_bar(data = plt_stats, aes(x = sv_type, y = proportion, fill = region), stat = "identity") +
+  geom_text(data = plt_stats, aes(x = sv_type, y = proportion, label = region_count, group = region), position = position_stack(vjust = 0.5),color = "white", size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("overlaps_PCgene" = "red", "non-PC_region" = "gray40")) +
+  labs(y = "Proportion (%)", fill = "Region") +
+  theme(panel.border = element_rect(color = 'black', fill = NA),
+        panel.background = element_blank(),
+        panel.grid.major= element_line(color = 'gray80'),
+        panel.grid.major.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 12, color = 'black'),
+        axis.text.x = element_text(color = 'black', size = 12, face = 'bold'),
+        axis.title.y = element_text(size = 14, color = 'black', face = 'bold')) +
+  guides(color = "none") + # to get rid of legend for the horizontal lines
+  scale_y_continuous(expand = c(0,0))
 
 
 
 
 
+### Overlap with an N2 gene or 2kb upstream (encompases promoter region)
+svs_dt <- as.data.table(maf_filt)
+n2_genes_dt <- as.data.table(n2_genes_plt)
+
+setkey(svs_dt, chrom, start, end)
+setkey(n2_genes_dt, chrom, start, end)
+
+svs_inCodingRegions <- data.table::foverlaps(x = svs_dt, y = n2_genes_dt, type = "any") %>% dplyr::filter(!is.na(start)) %>% dplyr::mutate(overlap = T)
+
+overlap <- svs_inCodingRegions %>% dplyr::select(chrom, i.start,i.end, sv_type, overlap) %>% dplyr::rename(start = i.start, end = i.end) %>% dplyr::distinct(chrom,start,end,sv_type, .keep_all = T)
+
+final_stats <- maf_filt %>% 
+  dplyr::left_join(overlap, by = c("chrom", "start", "end", "sv_type")) %>% 
+  dplyr::mutate(region = ifelse(is.na(overlap.y),'non-PC_region','overlaps_PCgene_(plus2kbupstream)')) %>%
+  dplyr::select(chrom,start,end,sv_type,region) %>%
+  dplyr::group_by(sv_type) %>%
+  dplyr::mutate(total_sv_type = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(sv_type,region) %>%
+  dplyr::mutate(region_count = n()) %>%
+  dplyr::ungroup()
+
+plt_stats <- final_stats %>% dplyr::select(sv_type,region,total_sv_type,region_count) %>%
+  dplyr::mutate(proportion = (region_count / total_sv_type) * 100) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(sv_type = factor(sv_type, levels = c("INS","DEL","INV")))
 
 
+ggplot() +
+  geom_bar(data = plt_stats, aes(x = sv_type, y = proportion, fill = region), stat = "identity") +
+  geom_text(data = plt_stats, aes(x = sv_type, y = proportion, label = region_count, group = region), position = position_stack(vjust = 0.5),color = "white", size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("overlaps_PCgene_(plus2kbupstream)" = "pink", "non-PC_region" = "gray")) +
+  labs(y = "Proportion (%)", fill = "Region") +
+  theme(panel.border = element_rect(color = 'black', fill = NA),
+        panel.background = element_blank(),
+        panel.grid.major= element_line(color = 'gray80'),
+        panel.grid.major.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 12, color = 'black'),
+        axis.text.x = element_text(color = 'black', size = 12, face = 'bold'),
+        axis.title.y = element_text(size = 14, color = 'black', face = 'bold')) +
+  guides(color = "none") + # to get rid of legend for the horizontal lines
+  scale_y_continuous(expand = c(0,0))
