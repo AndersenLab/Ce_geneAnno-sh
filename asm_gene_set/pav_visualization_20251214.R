@@ -606,68 +606,6 @@ conservedINV
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# chimeric??? 
-nuc <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
-  dplyr::filter(strain == 'MY1') %>% dplyr::filter(N2_chr == "II" | N2_chr == "III" | N2_chr == "X", contig == "ptg000006l" | contig == "ptg000013l")
-
-conservedINV <- ggplot(nuc) +
-  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
-  facet_wrap(~N2_chr, scales = "free") +
-  theme(
-    # legend.position = 'none',
-    axis.text = element_text(size = 14, color = 'black'),
-    axis.ticks = element_blank(),
-    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    panel.border = element_rect(fill = NA),
-    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
-  # coord_cartesian(xlim = c(8.36, 8.38)) +
-  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
-conservedINV
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ======================================================================================================================================================================================== #
 # Circos variation plot
 # ======================================================================================================================================================================================== #
@@ -879,8 +817,6 @@ nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/
 
 
 
-
-
 # N2 genes plot
 genes_plt <- ggplot(n2_genes_plt %>% dplyr::filter(chrom != "MtDNA")) + 
   geom_rect(aes(xmin = start/1e6, xmax = end/1e6, ymin = 0, ymax = 1), fill = "black") +
@@ -918,7 +854,6 @@ snps_plt <- ggplot(snps) +
     panel.background = element_blank(),
     strip.text = element_text(size = 16, color = "black")) 
 snps_plt 
-
 
 
 
@@ -1085,8 +1020,9 @@ inv_freq <- ggplot(inv_bin_plt) +
 inv_freq
 
 
-
+# ###########################
 # Circos plot - example
+# ###########################
 # col_fun = colorRamp2(c(-2, 0, 2), c("pink", "purple", "red"))
 # circlize_plot = function() {
 #   set.seed(12345)
@@ -1109,12 +1045,6 @@ inv_freq
 #   circos.clear()
 # }
 # circlize_plot()
-
-
-
-
-
-
 
 
 
@@ -1316,5 +1246,51 @@ lgd <- Legend(
 draw(lgd, x = unit(0.88, "npc"), y = unit(0.88, "npc"))
 
 circos.clear()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================== # 
+# SVs in coding regions
+# ============================================== # 
+
+MAF_thresh <- round(0.05 * 141)
+
+maf_filt <- merged_SV %>% 
+  dplyr::select(chrom,pos,sv_length,sv_type,number_svs_merged)
+
+
+
+
+
 
 
