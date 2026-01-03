@@ -1287,7 +1287,7 @@ MAF_thresh <- round(0.05 * 141)
 
 maf_filt <- merged_SV %>% 
   dplyr::select(chrom,pos,sv_length,sv_type,number_svs_merged) %>%
-  dplyr::filter(number_svs_merged >= MAF_thresh) %>%
+  dplyr::filter(number_svs_merged > MAF_thresh) %>%
   dplyr::mutate(sv_length = abs(sv_length)) %>%
   dplyr::mutate(end = pos + sv_length) %>% 
   dplyr::rename(start = pos) %>%
@@ -1363,8 +1363,9 @@ ggplot() +
 
 
 ### Overlap with an N2 gene or 2kb upstream (encompases promoter region)
+twokb_n2_genes_plt <- n2_genes_plt %>% dplyr::mutate(start = start - 2000)
 svs_dt <- as.data.table(maf_filt)
-n2_genes_dt <- as.data.table(n2_genes_plt)
+n2_genes_dt <- as.data.table(twokb_n2_genes_plt)
 
 setkey(svs_dt, chrom, start, end)
 setkey(n2_genes_dt, chrom, start, end)
@@ -1392,7 +1393,7 @@ plt_stats <- final_stats %>% dplyr::select(sv_type,region,total_sv_type,region_c
 
 ggplot() +
   geom_bar(data = plt_stats, aes(x = sv_type, y = proportion, fill = region), stat = "identity") +
-  geom_text(data = plt_stats, aes(x = sv_type, y = proportion, label = region_count, group = region), position = position_stack(vjust = 0.5),color = "white", size = 4, fontface = "bold") +
+  geom_text(data = plt_stats, aes(x = sv_type, y = proportion, label = region_count, group = region), position = position_stack(vjust = 0.5), color = "white", size = 4, fontface = "bold") +
   scale_fill_manual(values = c("overlaps_PCgene_(plus2kbupstream)" = "pink", "non-PC_region" = "gray")) +
   labs(y = "Proportion (%)", fill = "Region") +
   theme(panel.border = element_rect(color = 'black', fill = NA),
