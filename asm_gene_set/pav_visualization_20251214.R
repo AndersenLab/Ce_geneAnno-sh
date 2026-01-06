@@ -485,6 +485,8 @@ hmm2
 
 
 
+
+# Looking at an INV that is found among 
 threeINV <- filt_calls %>% 
   dplyr::filter(chrom == "IV", sv_type == "INV") %>%
   dplyr::group_by(pos) %>%
@@ -1288,7 +1290,6 @@ circos.clear()
 # ============================================== # 
 # SVs in coding regions
 # ============================================== # 
-
 MAF_thresh <- round(0.05 * 141)
 
 maf_filt <- merged_SV %>% 
@@ -1539,6 +1540,101 @@ ggplot() +
   geom_text(data = plt_stats, aes(x = sv_type, y = proportion, label = region_count, group = region), position = position_stack(vjust = 0.5), color = "white", size = 4, fontface = "bold") +
   scale_fill_manual(values = c("overlaps_PCgene_(plus2kbupstream)" = "firebrick", "non-PC_region" = "gray60")) +
   labs(y = "Proportion (%)", fill = "Region") +
+  theme(panel.border = element_rect(color = 'black', fill = NA),
+        panel.background = element_blank(),
+        panel.grid.major= element_line(color = 'gray80'),
+        panel.grid.major.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 12, color = 'black'),
+        axis.text.x = element_text(color = 'black', size = 12, face = 'bold'),
+        axis.title.y = element_text(size = 14, color = 'black', face = 'bold')) +
+  guides(color = "none") + # to get rid of legend for the horizontal lines
+  scale_y_continuous(expand = c(0,0))
+
+
+# ============================================== # 
+# SVs overlapping with specific N2 gene classes
+# ============================================== # 
+common_SVs <- maf_filt %>% 
+  dplyr::select(-overlap)
+
+common_SVs <- merged_SV %>% 
+  dplyr::select(chrom,pos,sv_length,sv_type,number_svs_merged) %>%
+  dplyr::mutate(sv_length = abs(sv_length)) %>%
+  dplyr::mutate(end = pos + sv_length) %>% 
+  dplyr::rename(start = pos) %>%
+  dplyr::select(chrom, start, end, sv_type) 
+
+
+N2_tranGene <- N2_gff %>%
+  dplyr::filter(type == "mRNA") %>%
+  dplyr::mutate(attributes = gsub("ID=transcript:","",attributes), attributes = gsub("Parent=gene:","",attributes)) %>%
+  tidyr::separate_wider_delim(attributes, delim = ";",names = c("tran", "N2", "rest"), too_many = "merge") %>%
+  dplyr::select(tran, N2, -rest) %>%
+  dplyr::mutate(tran = paste0("transcript:",tran))
+
+cleaned_N2_gff <- N2_gff %>%
+  dplyr::filter(type == "gene") %>%
+  dplyr::mutate(attributes = gsub("ID=gene:","",attributes)) %>%
+  dplyr::mutate(attributes = sub(";.*", "", attributes)) %>%
+  dplyr::select(seqid,start,end,attributes) %>%
+  dplyr::rename(chrom = seqid) %>% 
+  dplyr::filter(chrom != "MtDNA") %>% 
+  dplyr::rename(N2 = attributes)
+
+ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/elegans/ipr/output/N2_IPR_allApps_20251019.tsv", 
+                       col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
+  dplyr::left_join(N2_tranGene, by = 'tran') %>%
+  dplyr::select(-tran) %>%
+  dplyr::select(N2,signature_accession,signature_description,IPR_accession,IPR_description,GO)
+
+ipr_gpcrs <- ipr %>% dplyr::filter(grepl("7TM", IPR_description)) %>% dplyr::select(N2, IPR_description) %>% dplyr::distinct(N2, .keep_all = T)
+gpcrs <- cleaned_N2_gff %>%
+  dplyr::left_join(ipr_gpcrs, by = "N2") %>% 
+  dplyr::select(chrom, start, end, N2, IPR_description) %>% 
+  dplyr::filter(!is.na(IPR_description))
+
+gpcrs_list <- gpcrs %>% dplyr::pull(N2)
+total_gpcr <- length(gpcrs_list)
+
+# gpc_test <- ipr %>% dplyr::filter(grepl("7TM", IPR_description)) %>%
+#   dplyr::group_by(N2) %>%
+#   dplyr::mutate(annotation_count = n()) %>%
+#   dplyr::ungroup()
+#  
+# multiple <- gpc_test %>% dplyr::filter(annotation_count > 1) %>% dplyr::distinct(N2)
+#  
+# at_least_one_anno <- gpc_test %>% dplyr::distinct(N2)
+
+svs_dt <- as.data.table(common_SVs)
+gpcrs_dt <- as.data.table(gpcrs)
+
+setkey(svs_dt, chrom, start, end)
+setkey(gpcrs_dt, chrom, start, end)
+
+svs_inCodingRegions <- data.table::foverlaps(x = svs_dt, y = gpcrs_dt, type = "any") %>% dplyr::filter(!is.na(start)) %>% dplyr::mutate(overlap = T)
+
+overlap <- svs_inCodingRegions %>% dplyr::select(chrom, start, end, N2, sv_type, overlap) %>% dplyr::distinct(chrom,start,end,N2,sv_type, .keep_all = T)
+
+plt_stats_juvenile <- overlap %>%
+  dplyr::filter(N2 %in% gpcrs_list) %>%
+  dplyr::distinct(N2, sv_type) %>%          
+  dplyr::count(sv_type, name = "n_genes") %>%
+  dplyr::mutate(total_gpcr = total_gpcr, proportion = 100 * n_genes / total_gpcr) %>%
+  dplyr::mutate(region = T)
+
+plt_stats <- plt_stats_juvenile %>%
+  tidyr::complete(sv_type, fill = list(n_genes = 0, region = "TRUE", total_gpcr = total_gpcr)) %>%
+  dplyr::mutate(n_false = total_gpcr - n_genes) %>%
+  select(sv_type, n_true = n_genes, n_false, total_gpcr) %>%
+  pivot_longer(c(n_true, n_false), names_to = "region", values_to = "n_genes") %>%
+  dplyr::mutate(region = recode(region, n_true = "TRUE", n_false = "FALSE"),proportion = 100 * n_genes / total_gpcr)
+
+ggplot() +
+  geom_bar(data = plt_stats, aes(x = sv_type, y = proportion, fill = region), stat = "identity") +
+  geom_text(data = plt_stats, aes(x = sv_type, y = proportion, label = n_genes, group = region), position = position_stack(vjust = 0.5), color = "white", size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("TRUE" = "olivedrab", "FALSE" = "gray60")) +
+  labs(y = "Proportion of N2 genes (%)", fill = "SV overlap with GPCR") +
   theme(panel.border = element_rect(color = 'black', fill = NA),
         panel.background = element_blank(),
         panel.grid.major= element_line(color = 'gray80'),
