@@ -373,10 +373,7 @@ OG_class_count <- classification %>%
   dplyr::summarise(n_OG = sum(n)) %>%
   dplyr::ungroup()
 
-
-## Create pangenome size and core set curve after iterations ##
-
-# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/gene_set_allOrtho_115.png", gs_allOrtho, height = 5, width = 11, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/gene_set_allOrtho_142.png", gs_allOrtho, height = 5, width = 11, dpi = 600)
 
 
 ### PLOTTING BASED ON GENES ###
@@ -469,6 +466,8 @@ df_long <- final_df %>%
   tidyr::pivot_longer(cols = c(core, accessory, private), names_to = "class", values_to = "n_genes") %>%
   dplyr::mutate(class = factor(class, levels = c("private", "accessory", "core")), strain = factor(strain, levels = rev(unique(strain))))
 
+N2_gene_count <- df_long %>% dplyr::filter(strain == "N2")
+
 ugh <- df_long %>%
   dplyr::group_by(class) %>%
   dplyr::summarise(meann = mean(n_genes))
@@ -542,7 +541,7 @@ contrib <- ggplot(df_percent, aes(x = percent, y = strain, fill = class)) +
   )
 contrib
 
-# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/bar.png", contrib, height = 13, width = 12, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/geneSet_contrib_142.png", contrib, height = 13, width = 12, dpi = 600)
 
 
 
@@ -717,7 +716,7 @@ bw_by_class <- plt_data %>%
 bw_by_class
 
 
-# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/N2_geneSetLoci.png",finalfinal, height = 12, width = 14, dpi = 500)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/N2_geneSetLoci_density.png",finalfinal, height = 12, width = 14, dpi = 500)
 
 # 
 # 
@@ -949,22 +948,23 @@ pan_rarefact <- ggplot() +
   geom_errorbar(data = core_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
   geom_point(data = core_summary, aes(x = n_strains, y = mean_core), color = 'green4', size = 3) +
   # Accessory
-  # geom_errorbar(data = accessory_summary, aes(x = n_strains, ymin = mean_accessory - sd_accessory, ymax = mean_accessory + sd_accessory), width = 0.5) +
-  # geom_point(data = accessory_summary, aes(x = n_strains, y = mean_accessory), color = '#DB6333', size = 3) +
+  geom_errorbar(data = accessory_summary, aes(x = n_strains, ymin = mean_accessory - sd_accessory, ymax = mean_accessory + sd_accessory), width = 0.5) +
+  geom_point(data = accessory_summary, aes(x = n_strains, y = mean_accessory), color = '#DB6333', size = 3) +
   # Private
-  # geom_errorbar(data = priv_summary, aes(x = n_strains, ymin = mean_priv - sd_priv, ymax = mean_priv + sd_priv), width = 0.5) +
-  # geom_point(data = priv_summary, aes(x = n_strains, y = mean_priv), color = 'magenta3', size = 3) +
+  geom_errorbar(data = priv_summary, aes(x = n_strains, ymin = mean_priv - sd_priv, ymax = mean_priv + sd_priv), width = 0.5) +
+  geom_point(data = priv_summary, aes(x = n_strains, y = mean_priv), color = 'magenta3', size = 3) +
   # geom_ribbon(aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), alpha = 0.2) +
   labs(x = "Genomes", y = "Orthogroups") +
   theme(
     panel.background = element_blank(),
     panel.border = element_rect(fill = NA, color = "black"),
     axis.title = element_text(size = 18, face = "bold"),
-    axis.text = element_text(size =14, color = 'black'))
+    axis.text = element_text(size =14, color = 'black')) +
+  coord_cartesian(ylim = c(0,60000))
     # legend.position = 'none')
 pan_rarefact
 
-ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_core_rarefaction.png", pan_rarefact, width = 14, height = 12, dpi = 600)
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_core_rarefaction.png", pan_rarefact, width = 14, height = 12, dpi = 600)
 
 
 # 
@@ -1479,25 +1479,28 @@ geneCount_OGs$strain <- factor(geneCount_OGs$strain, levels = geneCount_OGs$stra
 geneCount_OGs <- geneCount_OGs %>%
   dplyr::mutate(n_genes_scaled = n_genes / 100)
 
-mt_contigs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/nucmer_aln_WSs/numberOfContigsAln_MtDNA.tsv", col_names = F) %>%
-  tidyr::separate(X1, into = c("number","strain"), sep = ' ')
+# mt_contigs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/nucmer_aln_WSs/numberOfContigsAln_MtDNA.tsv", col_names = F) %>%
+#   tidyr::separate(X1, into = c("number","strain"), sep = ' ')
+# 
+# geneCount_OGs <- geneCount_OGs %>% dplyr::left_join(mt_contigs, by = 'strain') %>% dplyr::mutate(number = ifelse(is.na(number),0,number)) %>% dplyr::rename(mt_contigs = number) %>% 
+#   dplyr::mutate(mt_contigs = ifelse(strain == "N2", 1, mt_contigs))
+# 
+# geneCount_OGs$strain <- factor(geneCount_OGs$strain, levels = geneCount_OGs$strain)
 
-geneCount_OGs <- geneCount_OGs %>% dplyr::left_join(mt_contigs, by = 'strain') %>% dplyr::mutate(number = ifelse(is.na(number),0,number)) %>% dplyr::rename(mt_contigs = number) %>% 
-  dplyr::mutate(mt_contigs = ifelse(strain == "N2", 1, mt_contigs))
-
-geneCount_OGs$strain <- factor(geneCount_OGs$strain, levels = geneCount_OGs$strain)
+gene_mean <- geneCount_OGs %>% dplyr::summarise(mean_gene_count = mean(n_genes))
 
 OGs_PCgenes <- ggplot(geneCount_OGs, aes(x = strain)) +
-  geom_col(aes(y = count, fill = mt_contigs), width = 0.6, alpha = 0.5, color = "black", linewidth = 0.3) +
+  geom_col(aes(y = count), fill = "magenta3", width = 0.6, alpha = 0.5, color = "black", linewidth = 0.3) +
   geom_line(aes(y = n_genes_scaled, group = 1), color = "blue", size = 1.2) +
   geom_point(aes(y = n_genes_scaled), color = "blue", size = 2) +
+  geom_text(data = gene_mean, aes(x = 125, y = 250, label = paste0("Mean gene count: ", round(mean_gene_count))), size = 8, color = 'blue') +
   scale_y_continuous(
     expand = c(0.01, 0),
     name = "Private genes",
     sec.axis = sec_axis(~ ., name = "Protein-coding genes (1e02)")  
   ) +
   theme(
-    axis.text.x = element_text(size = 6, color = 'black', angle = 70, hjust = 1),
+    axis.text.x = element_text(size = 8.5, color = 'black', angle = 70, hjust = 1),
     panel.background = element_blank(),
     axis.title = element_text(size = 22, color = 'black', face = 'bold'),
     axis.text.y = element_text(size = 18, color = 'black'),
@@ -1682,6 +1685,17 @@ SE_plot <- ggplot(plot_data, aes(x = prop, y = reorder(strain, prop), fill = gen
     panel.border = element_rect(fill = NA)) +
   scale_x_continuous(expand = c(0,0))
 SE_plot
+
+
+
+
+
+
+
+
+
+
+
 
 
 
