@@ -615,9 +615,15 @@ hdrs <- readr::read_tsv("/vast/eande106/data/c_elegans/WI/divergent_regions/2025
 geo_initial <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/elegans_isotypes_sampling_geo.tsv")
 hawaii_islands <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/elegans_isotypes_sampling_geo_hawaii_islands.tsv") %>% dplyr::select(isotype,collection_island_Hawaii)
 WSs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/140_Ce_WSs.tsv", col_names = "strain") %>% dplyr::pull()
-n2_genes_plt <- n2_genes %>%
+N2_gff <- ape::read.gff("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.gff3") 
+n2_genes_plt <- N2_gff %>%
+  dplyr::filter(type == "gene") %>%
+  dplyr::mutate(attributes = gsub("ID=gene:","",attributes)) %>%
+  dplyr::mutate(attributes = sub(";.*", "", attributes)) %>%
+  dplyr::select(seqid,start,end,attributes) %>%
   dplyr::rename(chrom = seqid) %>% 
-  dplyr::select(chrom, start, end)
+  dplyr::select(chrom, start, end) %>% 
+  dplyr::filter(chrom != "MtDNA")
 
 # Isolation site of each wild strain
 geo <- geo_initial %>%
@@ -1322,7 +1328,6 @@ check <- ggplot(svs_inCodingRegions %>% dplyr::filter(start > 1600000 & end < 17
 check
 
 
-
 overlap <- svs_inCodingRegions %>% dplyr::select(chrom, i.start,i.end, sv_type, overlap) %>% dplyr::rename(start = i.start, end = i.end) %>% dplyr::distinct(chrom,start,end,sv_type, .keep_all = T)
 
 final_stats <- maf_filt %>% 
@@ -1357,6 +1362,144 @@ ggplot() +
         axis.title.y = element_text(size = 14, color = 'black', face = 'bold')) +
   guides(color = "none") + # to get rid of legend for the horizontal lines
   scale_y_continuous(expand = c(0,0))
+
+
+overlapped_n2_genes <- svs_inCodingRegions %>% dplyr::select(chrom, start, end) %>% dplyr::distinct() %>% dplyr::mutate(class = "overlapped")
+prop_n2_genes <- n2_genes_plt %>% dplyr::left_join(overlapped_n2_genes, by = c("chrom","start","end")) %>% dplyr::mutate(class = ifelse(is.na(class),"no_SV_overlap",class))
+
+
+# .... load in variables "count", "ortho_genes_dd", and "private_OGs" from orthogroup_vis.R ............................... #
+ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups.tsv") %>%
+  dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
+
+strainCol <- colnames(ortho_genes_dd)
+ugh <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
+ugh2 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh)
+ugh3 <- gsub(".20251124.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh2)
+ugh4 <- gsub(".20251012.inbred.onlyONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh3)
+ugh5 <- gsub(".Nov2025.softMasked.braker.longest.protein","", ugh4)
+ugh6 <- gsub(".20251012.inbred.withONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh5)
+strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", ugh6)
+colnames(ortho_genes_dd) <- strainCol_c2
+
+ortho_count <- ortho_genes_dd
+
+strainCol_c2_u <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
+
+for (i in 1:length(strainCol_c2_u)) {
+  print(paste0(i,"out of", length(strainCol_c2_u)))
+  temp_colname = paste0(strainCol_c2_u[i], "_count")
+  
+  ortho_count <- ortho_count %>%
+    dplyr::mutate(!!sym(temp_colname) := stringr::str_count(!!sym(strainCol_c2_u[i]),", ") + 1)
+}
+
+all_relations_pre <- ortho_count %>%
+  dplyr::select(Orthogroup, dplyr::contains("_count"))
+
+
+private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups_UnassignedGenes.tsv") %>%
+  dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
+
+colnames(private_OGs) <- strainCol_c2
+
+private_cols <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
+
+private_ortho_count <- private_OGs
+for (i in 1:length(private_cols)) {
+  print(paste0(i, " out of ", length(private_cols)))
+  temp_colname <- paste0(private_cols[i], "_count")
+  
+  private_ortho_count <- private_ortho_count %>%
+    dplyr::mutate(!!sym(temp_colname) := ifelse(is.na(!!sym(private_cols[i])), NA, 1))
+}
+
+all_relations_private <- private_ortho_count %>%
+  dplyr::select(Orthogroup, dplyr::contains("_count"))
+
+all_relations <- all_relations_pre %>%
+  dplyr::bind_rows(all_relations_private)
+
+private_freq = (1/(length(strainCol_c2_u)))
+
+count <- all_relations %>%
+  dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
+  dplyr::mutate(sum = rowSums(across(-1, ~ ., .names = NULL), na.rm = TRUE)) %>%
+  dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
+  dplyr::mutate(
+    class = case_when(
+      freq == 1 ~ "core",
+      freq > private_freq & freq < 1 ~ "accessory",
+      freq == private_freq ~ "private",
+      TRUE ~ "undefined"
+    )
+  )
+# ............................................................................................................................ #
+
+n2_gene <- N2_gff %>%
+  dplyr::filter(type == "gene") %>%
+  tidyr::separate(attributes, into = c("blah","first"), sep = ";") %>%
+  tidyr::separate(first, into = c('blah2','tran'), sep = ',') %>%
+  dplyr::mutate(blah2 = gsub("Alias=","",blah2)) %>%
+  dplyr::mutate(final_tran = ifelse(is.na(tran), blah2, tran)) %>%
+  dplyr::select(-blah,-blah2,-tran) %>%
+  dplyr::rename(tran = final_tran) %>%
+  dplyr::mutate(tran = paste0("transcript_",tran))
+
+n2_table <- ortho_genes_dd %>%
+  dplyr::bind_rows(private_OGs) %>% 
+  dplyr::select(Orthogroup,N2)
+
+ortho_count_wCoord <- count %>%
+  dplyr::left_join(n2_table, by = "Orthogroup") %>%
+  dplyr::select(freq, class, N2) %>%
+  dplyr::filter(!is.na(N2)) %>%
+  tidyr::separate_rows(N2, sep = ",\\s*") %>% # splitting rows so each gene is on a row and it retains is gene set classification
+  ### REMOVE .* for isoform in order to left join!
+  dplyr::mutate(N2 = sub("\\.[^.]*$", "", N2)) %>% # removing the last period in the transcript name and the isoform number
+  dplyr::mutate(N2 = sub("[A-Za-z]$", "", N2)) %>% # removing any letters that are in the last position in a string
+  dplyr::left_join(n2_gene, by = c("N2" = "tran")) %>%
+  dplyr::select(freq,class,N2,seqid,start,end) %>%
+  dplyr::distinct(N2, seqid, start, end, .keep_all = T) %>%
+  dplyr::group_by(N2) %>%
+  dplyr::mutate(count = n()) %>%
+  dplyr::ungroup()
+
+plt_data <- ortho_count_wCoord %>%
+  dplyr::filter(seqid != "MtDNA") %>%
+  dplyr::mutate(mid_mb = (start + end) / 2 / 1e6)
+
+n2_genes_geneSet <- plt_data %>% dplyr::select(seqid,start,end,class) %>% dplyr::rename(chrom = seqid, gene_set = class) %>%
+  dplyr::left_join(prop_n2_genes, by = c("chrom","start","end")) %>% 
+  dplyr::mutate(final_class = ifelse(class == "overlapped",gene_set,class)) %>% 
+  dplyr::select(final_class) %>% 
+  dplyr::group_by(final_class) %>% 
+  dplyr::mutate(total_class = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(total = dplyr::n()) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(prop = total_class / total * 100) %>% 
+  dplyr::mutate(final_class = ifelse(final_class == "no_SV_overlap","none",final_class)) %>%
+  dplyr::mutate(final_class = factor(final_class, levels = c("none","private","accessory","core")))
+
+ggplot() +
+  geom_bar(data = n2_genes_geneSet, aes(x = "N2 genes", y = prop, fill = final_class), stat = "identity") +
+  geom_text(data = n2_genes_geneSet, aes(x = "N2 genes", y = prop, label = total_class, group = final_class), position = position_stack(vjust = 0.5),color = "white", size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("core" = "green4", "none" = "gray40", "accessory" = "#DB6333", "private" = "magenta3")) +
+  labs(y = "Proportion (%)", fill = "SV overlap with N2 genes") +
+  theme(panel.border = element_rect(color = 'black', fill = NA),
+        panel.background = element_blank(),
+        panel.grid.major= element_line(color = 'gray80'),
+        panel.grid.major.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text = element_text(size = 12, color = 'black'),
+        axis.text.x = element_text(color = 'black', size = 12, face = 'bold'),
+        axis.title.y = element_text(size = 14, color = 'black', face = 'bold')) +
+  guides(color = "none") + # to get rid of legend for the horizontal lines
+  scale_y_continuous(expand = c(0,0))
+
+
+
 
 
 
@@ -1394,7 +1537,7 @@ plt_stats <- final_stats %>% dplyr::select(sv_type,region,total_sv_type,region_c
 ggplot() +
   geom_bar(data = plt_stats, aes(x = sv_type, y = proportion, fill = region), stat = "identity") +
   geom_text(data = plt_stats, aes(x = sv_type, y = proportion, label = region_count, group = region), position = position_stack(vjust = 0.5), color = "white", size = 4, fontface = "bold") +
-  scale_fill_manual(values = c("overlaps_PCgene_(plus2kbupstream)" = "pink", "non-PC_region" = "gray")) +
+  scale_fill_manual(values = c("overlaps_PCgene_(plus2kbupstream)" = "firebrick", "non-PC_region" = "gray60")) +
   labs(y = "Proportion (%)", fill = "Region") +
   theme(panel.border = element_rect(color = 'black', fill = NA),
         panel.background = element_blank(),
@@ -1406,3 +1549,4 @@ ggplot() +
         axis.title.y = element_text(size = 14, color = 'black', face = 'bold')) +
   guides(color = "none") + # to get rid of legend for the horizontal lines
   scale_y_continuous(expand = c(0,0))
+
