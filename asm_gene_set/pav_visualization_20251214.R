@@ -1117,12 +1117,149 @@ all_three <- cowplot::plot_grid(
   rel_heights = c(1,1,1))
 all_three
 
+# =============================================================== #
+# Enrichment of SVs in HDRs #
+# =============================================================== #
+library(GenomicRanges)
+library(IRanges)
+
+chrom_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/N2.WS283.cleaned.fa.fai", col_names = c("chrom","start","end"))
 
 # DEL enrichment in HDRs
+hdr_bins <- all_collapsed
+del_calls <- filt_calls %>% dplyr::filter(sv_type == "DEL", strain != "CGC1") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
+
+# helper: tibble (BED-like, 0-based) -> GRanges (1-based)
+to_gr <- function(df) {
+  GRanges(
+    seqnames = df$chrom,
+    ranges   = IRanges(start = df$start + 1, end = df$end)
+  )
+}
+
+genome_gr <- to_gr(chrom_sizes)          # whole genome space
+hdr_gr    <- to_gr(hdr_bins)  
+del_gr    <- to_gr(del_calls)            # DEL intervals
+
+# de-duplicate identical DELs (non-rare HDRs) because we are assessing genomic loci affected by HDRs in or outside of HDRs, not the frequency that a genomic
+# locus is affected by a DEL
+# Keeping duplicated DEL calls - "Among all DEL calls across 140 strain, are calls more frequent per bp in HDRs than outside?"
+# De-duplicating DEL calls - "Are genomic loci that harbor deletions enriched in HDRs vs outside?"
+del_gr_uniq <- unique(del_gr)
+
+# count DEL events overlapping HDR
+in_hdr <- countOverlaps(del_gr_uniq, hdr_gr) > 0
+n_hdr <- sum(in_hdr) # number of DELs that overlap with HDRs
+n_out <- length(del_gr_uniq) - n_hdr # number of DELs that do NOT overlap with HDRs
+
+# bp denominators
+hdr_bp    <- sum(width(hdr_gr)) # summed genome size of HDRs
+genome_bp <- sum(width(genome_gr)) # genome size
+nonhdr_bp <- genome_bp - hdr_bp # summed genome size outside of HDRs
+
+# densities and fold enrichment
+density_hdr <- n_hdr / hdr_bp # normalizing by bps - # of DELs in HDRs / # bps in HDRs
+density_out <- n_out / nonhdr_bp
+
+fold_enrichment <- density_hdr / density_out
+
+# report
+list(
+  total_DEL = length(del_gr_uniq),
+  DEL_in_HDR = n_hdr,
+  DEL_out_HDR = n_out,
+  HDR_bp = hdr_bp,
+  nonHDR_bp = nonhdr_bp,
+  density_HDR = density_hdr,
+  density_nonHDR = density_out,
+  fold_enrichment = fold_enrichment)
+
 
 # INS enrichment in HDRs
+hdr_bins <- all_collapsed
+ins_calls <- filt_calls %>% dplyr::filter(sv_type == "INS", strain != "CGC1") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
+
+to_gr <- function(df) {
+  GRanges(
+    seqnames = df$chrom,
+    ranges   = IRanges(start = df$start + 1, end = df$end)
+  )
+}
+
+genome_gr <- to_gr(chrom_sizes)          # whole genome space
+hdr_gr    <- to_gr(hdr_bins)  
+ins_gr    <- to_gr(ins_calls)            # ins intervals
+
+
+ins_gr_uniq <- unique(ins_gr)
+
+in_hdr <- countOverlaps(ins_gr_uniq, hdr_gr) > 0
+n_hdr <- sum(in_hdr) # number of INSs that overlap with HDRs
+n_out <- length(ins_gr_uniq) - n_hdr # number of INSs that do NOT overlap with HDRs
+
+hdr_bp    <- sum(width(hdr_gr)) # summed genome size of HDRs
+genome_bp <- sum(width(genome_gr)) # genome size
+nonhdr_bp <- genome_bp - hdr_bp # summed genome size outside of HDRs
+
+density_hdr <- n_hdr / hdr_bp # normalizing by bps - # of INSs in HDRs / # bps in HDRs
+density_out <- n_out / nonhdr_bp
+
+fold_enrichment <- density_hdr / density_out
+
+# report
+list(
+  total_ins = length(ins_gr_uniq),
+  ins_in_HDR = n_hdr,
+  ins_out_HDR = n_out,
+  HDR_bp = hdr_bp,
+  nonHDR_bp = nonhdr_bp,
+  density_HDR = density_hdr,
+  density_nonHDR = density_out,
+  fold_enrichment = fold_enrichment)
+
 
 # INV enrichment in HDRs
+hdr_bins <- all_collapsed
+INV_calls <- filt_calls %>% dplyr::filter(sv_type == "INV", strain != "CGC1") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
+
+to_gr <- function(df) {
+  GRanges(
+    seqnames = df$chrom,
+    ranges   = IRanges(start = df$start + 1, end = df$end)
+  )
+}
+
+genome_gr <- to_gr(chrom_sizes)          # whole genome space
+hdr_gr    <- to_gr(hdr_bins)  
+INV_gr    <- to_gr(INV_calls)            # ins intervals
+
+
+INV_gr_uniq <- unique(INV_gr)
+
+in_hdr <- countOverlaps(INV_gr_uniq, hdr_gr) > 0
+n_hdr <- sum(in_hdr) # number of INSs that overlap with HDRs
+n_out <- length(INV_gr_uniq) - n_hdr # number of INSs that do NOT overlap with HDRs
+
+hdr_bp    <- sum(width(hdr_gr)) # summed genome size of HDRs
+genome_bp <- sum(width(genome_gr)) # genome size
+nonhdr_bp <- genome_bp - hdr_bp # summed genome size outside of HDRs
+
+density_hdr <- n_hdr / hdr_bp # normalizing by bps - # of INSs in HDRs / # bps in HDRs
+density_out <- n_out / nonhdr_bp
+
+fold_enrichment <- density_hdr / density_out
+
+# report
+list(
+  total_ins = length(INV_gr_uniq),
+  INV_in_HDR = n_hdr,
+  INV_out_HDR = n_out,
+  HDR_bp = hdr_bp,
+  nonHDR_bp = nonhdr_bp,
+  density_HDR = density_hdr,
+  density_nonHDR = density_out,
+  fold_enrichment = fold_enrichment)
+
 
 
 
