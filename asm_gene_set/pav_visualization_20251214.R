@@ -1,4 +1,5 @@
 library(readr)
+library(plyr)
 library(ggplot2)
 library(tidyr)
 library(dplyr)
@@ -900,10 +901,82 @@ hdr_freq <- ggplot(hdr_bin_plt) +
     axis.title = element_blank(),
     axis.text.y = element_text(size = 12, color = 'black'),
     panel.grid = element_blank(),
+    # panel.grid.major= element_line(color = 'gray80'),
+    # panel.grid.major.x = element_blank(),
     panel.background = element_blank(),
     strip.text = element_text(size = 16, color = "black")) +
   coord_cartesian(ylim = c(0,1))
 hdr_freq
+
+
+
+
+
+# COLLAPSING HDRS AMONG 140 WSs
+all_regions <- hdrs %>%
+  dplyr::rename(START = start, CHROM = chrom, END = end) %>%
+  dplyr::arrange(CHROM,START) %>%
+  dplyr::group_split(CHROM)
+
+strain_count <- hdrs %>% dplyr::distinct(strain, .keep_all = T)
+print(nrow(strain_count)) # SHOULD BE 140
+
+# Collapsing all HDRs
+getRegFreq <- function(all_regions) {
+  all_collapsed <- list()
+  for (i in 1:length(all_regions)) {
+    temp <- all_regions[[i]]
+    k=1
+    j=1
+    while (k==1) {
+      print(paste0("chrom:",i,"/iteration:",j))
+      checkIntersect <- temp %>%
+        dplyr::arrange(CHROM,START) %>%
+        dplyr::mutate(check=ifelse(lead(START) <= END,T,F)) %>%
+        dplyr::mutate(check=ifelse(is.na(check),F,check))
+
+      #print(nrow(checkIntersect %>% dplyr::filter(check==T)))
+
+      if(nrow(checkIntersect %>% dplyr::filter(check==T)) == 0) {
+        print("NO MORE INTERSECTS")
+        k=0
+      } else {
+
+        temp <- checkIntersect %>%
+          dplyr::mutate(gid=data.table::rleid(check)) %>%
+          dplyr::mutate(gid=ifelse((check==F| is.na(check)) & lag(check)==T,lag(gid),gid))
+
+        collapse <- temp %>%
+          dplyr::filter(check==T | (check==F & lag(check)==T)) %>%
+          dplyr::group_by(gid) %>%
+          dplyr::mutate(newStart=min(START)) %>%
+          dplyr::mutate(newEnd=max(END)) %>%
+          dplyr::ungroup() %>%
+          dplyr::distinct(gid,.keep_all = T)  %>%
+          dplyr::mutate(START=newStart,END=newEnd) %>%
+          dplyr::select(-newEnd,-newStart)
+
+        retain <- temp %>%
+          dplyr::filter(check==F & lag(check)==F)
+
+        temp <- rbind(collapse,retain) %>%
+          dplyr::select(-gid,-check)
+
+        j=j+1
+      }
+    }
+    print(head(temp))
+    all_collapsed[[i]] <- temp
+  }
+  return(all_collapsed)
+}
+
+HDR_collapse_master <- getRegFreq(all_regions)
+
+all_collapsed <- plyr::ldply(HDR_collapse_master, data.frame) %>%
+  dplyr::select(-strain)
+
+colnames(all_collapsed) <- c("chrom","start","end")
 
 
 
@@ -912,7 +985,7 @@ bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::
 bins_dt <- as.data.table(bins)
 bins_dt[, id := .I]  # optional: keep track of bins
 
-del_calls <- filt_calls %>% dplyr::filter(sv_type == "DEL") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
+del_calls <- filt_calls %>% dplyr::filter(sv_type == "DEL", strain != "CGC1") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
 del_calls_dt <- as.data.table(del_calls)
 
 setkey(bins_dt, chrom, start, end)
@@ -933,6 +1006,7 @@ bins_wFreq <- as.data.frame(bins_wCounts) %>%
 del_bin_plt <- bins_wFreq %>% dplyr::mutate(middle = (end + start) / 2)
 
 del_freq <- ggplot(del_bin_plt) +
+  geom_rect(data = all_collapsed, aes(xmin = start, xmax = end, ymin = -Inf, ymax = Inf), fill = 'gray', alpha = 0.7) +
   geom_point(aes(x = middle, y = freq), color = 'red') +
   facet_wrap(~chrom, nrow = 1, scales = "free_x") +
   theme(
@@ -940,10 +1014,12 @@ del_freq <- ggplot(del_bin_plt) +
     axis.ticks = element_blank(),
     axis.title = element_blank(),
     axis.text.y = element_text(size = 12, color = 'black'),
-    panel.grid = element_blank(),
+    # panel.grid = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
     panel.background = element_blank(),
     strip.text = element_text(size = 16, color = "black")) +
-  coord_cartesian(ylim = c(0,1))
+  coord_cartesian(ylim = c(0,1.01)) +
+  scale_y_continuous(expand = c(0,0))
 del_freq
 
 
@@ -952,7 +1028,7 @@ bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::
 bins_dt <- as.data.table(bins)
 bins_dt[, id := .I]  # optional: keep track of bins
 
-ins_calls <- filt_calls %>% dplyr::filter(sv_type == "INS") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
+ins_calls <- filt_calls %>% dplyr::filter(sv_type == "INS", strain != "CGC1") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
 ins_calls_dt <- as.data.table(ins_calls)
 
 setkey(bins_dt, chrom, start, end)
@@ -973,6 +1049,7 @@ bins_wFreq <- as.data.frame(bins_wCounts) %>%
 ins_bin_plt <- bins_wFreq %>% dplyr::mutate(middle = (end + start) / 2)
 
 ins_freq <- ggplot(ins_bin_plt) +
+  geom_rect(data = all_collapsed, aes(xmin = start, xmax = end, ymin = -Inf, ymax = Inf), fill = 'gray', alpha = 0.7) +
   geom_point(aes(x = middle, y = freq), color = 'blue') +
   facet_wrap(~chrom, nrow = 1, scales = "free_x") +
   theme(
@@ -980,10 +1057,12 @@ ins_freq <- ggplot(ins_bin_plt) +
     axis.ticks = element_blank(),
     axis.title = element_blank(),
     axis.text.y = element_text(size = 12, color = 'black'),
-    panel.grid = element_blank(),
+    # panel.grid = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
     panel.background = element_blank(),
     strip.text = element_text(size = 16, color = "black")) +
-  coord_cartesian(ylim = c(0,1))
+  coord_cartesian(ylim = c(0,1.01)) +
+  scale_y_continuous(expand = c(0,0))
 ins_freq
 
 
@@ -993,7 +1072,7 @@ bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::
 bins_dt <- as.data.table(bins)
 bins_dt[, id := .I]  # optional: keep track of bins
 
-inv_calls <- filt_calls %>% dplyr::filter(sv_type == "INV") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
+inv_calls <- filt_calls %>% dplyr::filter(sv_type == "INV", strain != "CGC1") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
 inv_calls_dt <- as.data.table(inv_calls)
 
 setkey(bins_dt, chrom, start, end)
@@ -1014,18 +1093,37 @@ bins_wFreq <- as.data.frame(bins_wCounts) %>%
 inv_bin_plt <- bins_wFreq %>% dplyr::mutate(middle = (end + start) / 2)
 
 inv_freq <- ggplot(inv_bin_plt) +
-  geom_point(aes(x = middle, y = freq), color = 'gold') +
+  geom_rect(data = all_collapsed, aes(xmin = start, xmax = end, ymin = -Inf, ymax = Inf), fill = 'gray', alpha = 0.7) +
+  geom_point(aes(x = middle, y = freq), color = 'gold1') +
   facet_wrap(~chrom, nrow = 1, scales = "free_x") +
   theme(
     axis.text.x = element_blank(),
     axis.ticks = element_blank(),
     axis.title = element_blank(),
     axis.text.y = element_text(size = 12, color = 'black'),
-    panel.grid = element_blank(),
+    # panel.grid = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
     panel.background = element_blank(),
     strip.text = element_text(size = 16, color = "black")) +
-  coord_cartesian(ylim = c(0,1))
+  coord_cartesian(ylim = c(0,1.01)) +
+  scale_y_continuous(expand = c(0,0))
 inv_freq
+
+
+all_three <- cowplot::plot_grid(
+  del_freq, ins_freq, inv_freq,
+  nrow = 3,
+  align = "v",
+  rel_heights = c(1,1,1))
+all_three
+
+
+# DEL enrichment in HDRs
+
+# INS enrichment in HDRs
+
+# INV enrichment in HDRs
+
 
 
 # ###########################
