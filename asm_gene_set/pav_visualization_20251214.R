@@ -609,6 +609,46 @@ conservedINV
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ======================================================================================================================================================================================== #
 # Circos variation plot
 # ======================================================================================================================================================================================== #
@@ -2040,18 +2080,201 @@ SVs_geo <- merged_SV %>%
   dplyr::rename(start = pos) %>%
   tidyr::pivot_longer(
        cols = -c(chrom, start, end, sv_type, sv_length, number_svs_merged),  # Keep chrom, pos, and info as identifiers
-       names_to = "sample",          # New column for sample names
+       names_to = "strain",          # New column for sample names
        values_to = "genotype"           # New column for sample values
        ) %>%
      dplyr::mutate(genotype=ifelse(genotype=="./.",0,1)) %>%
-  dplyr::left_join(geo, by = c("sample" = "isotype")) %>%
-  dplyr::select(chrom, start, end, sv_type, sv_length, number_svs_merged, sample, genotype, geo)
+  dplyr::left_join(geo, by = c("strain" = "isotype")) %>%
+  dplyr::select(chrom, start, end, sv_type, sv_length, number_svs_merged, strain, genotype, geo) %>%
+  dplyr::filter(genotype != "0") %>%
+  dplyr::mutate(geo = ifelse(strain == "CGC1", "England", geo)) %>%
+  dplyr::mutate(geo2 = ifelse(geo == "Oahu" | geo == "Big Island" | geo == "Maui" | geo == "Kauai", "Hawaii", geo)) 
+
+############### NO ISLAND RESOLUTION ON HAWAII ######################################
+clustering <- SVs_geo %>%
+  dplyr::group_by(chrom,start,end,geo2) %>%
+  dplyr::mutate(geo_max_count = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(chrom,start,end) %>%
+  dplyr::mutate(prop = max(geo_max_count) / dplyr::n()) %>%
+  dplyr::ungroup()
+
+cleaned <- clustering %>% 
+  dplyr::select(chrom, start, sv_type, sv_length, number_svs_merged, geo, geo2, geo_max_count, prop) %>%
+  dplyr::group_by(chrom, start, sv_length) %>%
+  dplyr::filter(geo_max_count == max(geo_max_count)) %>%
+  dplyr::distinct(chrom, start, sv_length,geo2, .keep_all = T) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(chrom,start,sv_length) %>%
+  dplyr::mutate(number_in_group = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(final_geo = ifelse(number_in_group > 1, "max_in_multiple_locations",geo2))
+
+final <- cleaned %>% 
+  dplyr::select(chrom, start, sv_type, sv_length, number_svs_merged, geo_max_count, prop, final_geo) %>%
+  dplyr::distinct() %>%
+  dplyr::filter(chrom != "MtDNA") %>%
+  dplyr::mutate(sv_type = factor(sv_type, levels = c("INS", "DEL", "INV"))) %>%
+  dplyr::mutate(final_geo = factor(final_geo, levels = c("Africa","Atlantic","Europe","Hawaii","North America","Oceania","max_in_multiple_locations")))
 
 
+geo.colors <- c("Hawaii"="#66C2A5", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
+                "Oceania" ="orange", "max_in_multiple_locations" = 'grey')
+
+sv_corr_geo <- ggplot(data = final) +
+  geom_point(aes(x = start / 1e6, y = prop, fill = final_geo, shape = sv_type), size = 2) + 
+  scale_fill_manual(values = geo.colors) +
+  scale_shape_manual(values = c("INS" = 22, "DEL" = 23, "INV" = 24)) +
+  facet_wrap(~chrom, scales = "free_x") +
+  theme(
+    # panel.grid.minor.y = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 16, color = 'black'),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.text = element_text(size = 13, color = 'black'),
+    ) +
+  labs(x = "N2 genome coordinates (Mb)", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
+  guides(size = guide_legend(override.aes = list(size = c(2, 4, 6))),fill = guide_legend(override.aes = list(shape = 21, color = 'black', size = 7))) +
+  scale_y_continuous(expand = c(0.01,0.01))
+sv_corr_geo
+
+sv_corr_geo_noH <- ggplot(data = final %>% dplyr::filter(final_geo != "Hawaii")) +
+  geom_point(aes(x = start / 1e6, y = prop, fill = final_geo, shape = sv_type), size = 2) + 
+  scale_fill_manual(values = geo.colors) +
+  scale_shape_manual(values = c("INS" = 22, "DEL" = 23, "INV" = 24)) +
+  facet_wrap(~chrom, scales = "free_x") +
+  theme(
+    # panel.grid.minor.y = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 16, color = 'black'),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.text = element_text(size = 13, color = 'black'),
+  ) +
+  labs(x = "N2 genome coordinates (Mb)", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
+  guides(size = guide_legend(override.aes = list(size = c(2, 4, 6))),fill = guide_legend(override.aes = list(shape = 21, color = 'black',size = 7))) +
+  scale_y_continuous(expand = c(0.01,0.01))
+sv_corr_geo_noH
 
 
+final_freq <- final %>% dplyr::mutate(MAF = number_svs_merged / 141)
+  
+sv_corr_freq <- ggplot(data = final_freq) +
+  geom_point(aes(x = MAF, y = prop, fill = final_geo, shape = sv_type), size = 2) +
+  scale_fill_manual(values = geo.colors) +
+  scale_shape_manual(values = c("INS" = 22, "DEL" = 23, "INV" = 24)) +
+  facet_wrap(~chrom, scales = "free_x") +
+  theme(
+    # panel.grid.minor.y = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 16, color = 'black'),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.text = element_text(size = 13, color = 'black'),
+  ) +
+  labs(x = "Minor allele frequency", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
+  guides(size = guide_legend(override.aes = list(size = c(2, 4, 6))), fill = guide_legend(override.aes = list(shape = 21, color = 'black', size = 7))) +
+  scale_y_continuous(expand = c(0.01,0.01)) +
+  scale_x_continuous(expand = c(0.01,0.01))
+sv_corr_freq
 
 
+############################ ISLAND RESOLUTION ON HAWAII ##############################################
+clustering <- SVs_geo %>%
+  dplyr::select(-geo2) %>%
+  dplyr::group_by(chrom,start,end,geo) %>%
+  dplyr::mutate(geo_max_count = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(chrom,start,end) %>%
+  dplyr::mutate(prop = max(geo_max_count) / dplyr::n()) %>%
+  dplyr::ungroup()
+
+cleaned <- clustering %>% 
+  dplyr::select(chrom, start, sv_type, sv_length, number_svs_merged, geo, geo_max_count, prop) %>%
+  dplyr::group_by(chrom, start, sv_length) %>%
+  dplyr::filter(geo_max_count == max(geo_max_count)) %>%
+  dplyr::distinct(chrom, start, sv_length,geo, .keep_all = T) %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(chrom,start,sv_length) %>%
+  dplyr::mutate(number_in_group = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(final_geo = ifelse(number_in_group > 1, "max_in_multiple_locations",geo))
+
+final <- cleaned %>% 
+  dplyr::select(chrom, start, sv_type, sv_length, number_svs_merged, geo_max_count, prop, final_geo) %>%
+  dplyr::distinct() %>%
+  dplyr::filter(chrom != "MtDNA") %>%
+  dplyr::mutate(sv_type = factor(sv_type, levels = c("INS", "DEL", "INV"))) %>%
+  dplyr::mutate(final_geo = factor(final_geo, levels = c("Africa","Atlantic","Big Island","Europe","Kauai","Maui","North America","Oahu","Oceania","max_in_multiple_locations")))
+
+
+geo.colors <- c("Big Island"="#66C2A5", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
+                "Oceania" ="orange", "max_in_multiple_locations" = 'grey')
+
+sv_corr_geo <- ggplot(data = final) +
+  geom_point(aes(x = start / 1e6, y = prop, fill = final_geo, shape = sv_type), size = 2) + 
+  scale_fill_manual(values = geo.colors) +
+  scale_shape_manual(values = c("INS" = 22, "DEL" = 23, "INV" = 24)) +
+  facet_wrap(~chrom, scales = "free_x") +
+  theme(
+    # panel.grid.minor.y = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 16, color = 'black'),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.text = element_text(size = 13, color = 'black'),
+  ) +
+  labs(x = "N2 genome coordinates (Mb)", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
+  guides(size = guide_legend(override.aes = list(size = c(2, 4, 6))),fill = guide_legend(override.aes = list(shape = 21, color = 'black', size = 7))) +
+  scale_y_continuous(expand = c(0.01,0.01))
+sv_corr_geo
+
+sv_corr_geo_noH <- ggplot(data = final %>% dplyr::filter(final_geo != "Oahu" & final_geo != "Maui" & final_geo != "Big Island" & final_geo != "Kauai")) +
+  geom_point(aes(x = start / 1e6, y = prop, fill = final_geo, shape = sv_type), size = 2) + 
+  scale_fill_manual(values = geo.colors) +
+  scale_shape_manual(values = c("INS" = 22, "DEL" = 23, "INV" = 24)) +
+  facet_wrap(~chrom, scales = "free_x") +
+  theme(
+    # panel.grid.minor.y = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 16, color = 'black'),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.text = element_text(size = 13, color = 'black'),
+  ) +
+  labs(x = "N2 genome coordinates (Mb)", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
+  guides(size = guide_legend(override.aes = list(size = c(2, 4, 6))),fill = guide_legend(override.aes = list(shape = 21, color = 'black',size = 7))) +
+  scale_y_continuous(expand = c(0.01,0.01))
+sv_corr_geo_noH
+
+
+final_freq <- final %>% dplyr::mutate(MAF = number_svs_merged / 141)
+
+sv_corr_freq <- ggplot(data = final_freq) +
+  geom_point(aes(x = MAF, y = prop, fill = final_geo, shape = sv_type), size = 2) +
+  scale_fill_manual(values = geo.colors) +
+  scale_shape_manual(values = c("INS" = 22, "DEL" = 23, "INV" = 24)) +
+  facet_wrap(~chrom, scales = "free_x") +
+  theme(
+    # panel.grid.minor.y = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 16, color = 'black'),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.text = element_text(size = 13, color = 'black'),
+  ) +
+  labs(x = "Minor allele frequency", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
+  guides(size = guide_legend(override.aes = list(size = c(2, 4, 6))), fill = guide_legend(override.aes = list(shape = 21, color = 'black', size = 7))) +
+  scale_y_continuous(expand = c(0.01,0.01)) +
+  scale_x_continuous(expand = c(0.01,0.01))
+sv_corr_freq
 
 
 
