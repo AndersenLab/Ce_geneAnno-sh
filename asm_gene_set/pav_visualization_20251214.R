@@ -2072,6 +2072,8 @@ ggplot() +
 # ============================================== # 
 # SV's correlation with geography
 # ============================================== # 
+MAF_thresh <- round(0.05 * 141)
+
 SVs_geo <- merged_SV %>% 
   dplyr::select(-ref,-alt) %>%
   dplyr::filter(number_svs_merged > MAF_thresh) %>%
@@ -2209,10 +2211,10 @@ final <- cleaned %>%
   dplyr::distinct() %>%
   dplyr::filter(chrom != "MtDNA") %>%
   dplyr::mutate(sv_type = factor(sv_type, levels = c("INS", "DEL", "INV"))) %>%
-  dplyr::mutate(final_geo = factor(final_geo, levels = c("Africa","Atlantic","Big Island","Europe","Kauai","Maui","North America","Oahu","Oceania","max_in_multiple_locations")))
+  dplyr::mutate(final_geo = factor(final_geo, levels = c("Africa","Atlantic","Big Island","Europe","Kauai","Maui", "Molokai", "North America","Oahu","Oceania","max_in_multiple_locations")))
 
 
-geo.colors <- c("Big Island"="#66C2A5", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
+geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
                 "Oceania" ="orange", "max_in_multiple_locations" = 'grey')
 
 sv_corr_geo <- ggplot(data = final) +
@@ -2275,6 +2277,204 @@ sv_corr_freq <- ggplot(data = final_freq) +
   scale_y_continuous(expand = c(0.01,0.01)) +
   scale_x_continuous(expand = c(0.01,0.01))
 sv_corr_freq
+
+
+
+
+
+
+
+
+
+
+# ========================================================================================= #
+# PCA on SVs
+# ========================================================================================= #
+common_vcf <- merged_SV %>% 
+  dplyr::filter(number_svs_merged > MAF_thresh & number_svs_merged != "141") %>%
+  dplyr::select(-chrom, -pos, -ref, -alt, -sv_type, -sv_length, -number_svs_merged) %>%
+  as.matrix()
+
+common_vcf[common_vcf == "./."] <- 0
+sv_mat <- apply(common_vcf, 2, as.numeric)
+
+sv_mat_t <- t(sv_mat)
+
+sv_mat_t[is.na(sv_mat_t)] <- colMeans(sv_mat_t, na.rm = TRUE)
+
+# sv_pca <- prcomp(sv_mat_t, center = TRUE, scale. = TRUE)
+sv_pca <- prcomp(sv_mat_t, center = TRUE, scale. = FALSE) # correcting for SV-burden - otherwise PC1 is strictly based on having a lot of SVs - isolates more structurally diverse strains
+
+
+pca_df <- as.data.frame(sv_pca$x)
+pca_df$strain <- rownames(pca_df)
+
+strain_geo <- geo %>% dplyr::rename(strain = isotype) %>% dplyr::select(strain,geo)
+
+pca_df <- pca_df %>%
+  dplyr::left_join(strain_geo, by = "strain") %>%
+  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo))
+
+
+geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
+                "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
+
+ggplot(pca_df, aes(PC1, PC2, color = geo)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values = geo.colors) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.title = element_text(size = 12, color = 'black', face = 'bold'),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
+    plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
+  labs(color = "Collection location",title = "All SVs", x = paste0("PC1 (", round(100 * summary(sv_pca)$importance[2,1], 1), "%)"),y = paste0("PC2 (", round(100 * summary(sv_pca)$importance[2,2], 1), "%)"))+
+  guides(color = guide_legend(override.aes = list(size = 7))) 
+
+
+
+sv_var <- apply(sv_mat_t, 2, var)
+summary(sv_var)
+
+sum(sv_var == 0)          # truly constant SVs
+sum(sv_var < 1e-6)        # near-constant SVs
+
+
+sv_burden <- rowSums(sv_mat_t)
+summary(sv_burden)
+
+cor(sv_burden, sv_pca$x[,1]) # PC1 is 94% correlated with number of SVs per strain
+
+
+
+### DELETIONS ###
+common_vcf <- merged_SV %>% 
+  dplyr::filter(number_svs_merged > MAF_thresh & number_svs_merged != "141", sv_type == "DEL") %>%
+  dplyr::select(-chrom, -pos, -ref, -alt, -sv_type, -sv_length, -number_svs_merged) %>%
+  as.matrix()
+
+common_vcf[common_vcf == "./."] <- 0
+sv_mat <- apply(common_vcf, 2, as.numeric)
+
+sv_mat_t <- t(sv_mat)
+
+sv_mat_t[is.na(sv_mat_t)] <- colMeans(sv_mat_t, na.rm = TRUE)
+
+sv_pca <- prcomp(sv_mat_t, center = TRUE, scale. = TRUE)
+
+pca_df <- as.data.frame(sv_pca$x)
+pca_df$strain <- rownames(pca_df)
+
+strain_geo <- geo %>% dplyr::rename(strain = isotype) %>% dplyr::select(strain,geo)
+
+pca_df <- pca_df %>%
+  dplyr::left_join(strain_geo, by = "strain") %>%
+  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo))
+
+
+geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
+                "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
+
+ggplot(pca_df, aes(PC1, PC2, color = geo)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values = geo.colors) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.title = element_text(size = 12, color = 'black', face = 'bold'),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
+    plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
+  labs(color = "Collection location",title = "Deletions", x = paste0("PC1 (", round(100 * summary(sv_pca)$importance[2,1], 1), "%)"),y = paste0("PC2 (", round(100 * summary(sv_pca)$importance[2,2], 1), "%)"))+
+  guides(color = guide_legend(override.aes = list(size = 7))) 
+
+
+### INSERTIONS ###
+common_vcf <- merged_SV %>% 
+  dplyr::select(-ref,-alt) %>%
+  dplyr::filter(number_svs_merged > MAF_thresh & number_svs_merged != "141", sv_type == "INS") %>%
+  dplyr::select(-chrom, -pos, -sv_type, -sv_length, -number_svs_merged) %>%
+  as.matrix()
+
+common_vcf[common_vcf == "./."] <- 0
+sv_mat <- apply(common_vcf, 2, as.numeric)
+
+sv_mat_t <- t(sv_mat)
+
+sv_mat_t[is.na(sv_mat_t)] <- colMeans(sv_mat_t, na.rm = TRUE)
+
+sv_pca <- prcomp(sv_mat_t, center = TRUE, scale. = TRUE)
+
+pca_df <- as.data.frame(sv_pca$x)
+pca_df$strain <- rownames(pca_df)
+
+strain_geo <- geo %>% dplyr::rename(strain = isotype) %>% dplyr::select(strain,geo)
+
+pca_df <- pca_df %>%
+  dplyr::left_join(strain_geo, by = "strain") %>%
+  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo))
+
+
+geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
+                "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
+
+ggplot(pca_df, aes(PC1, PC2, color = geo)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values = geo.colors) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.title = element_text(size = 12, color = 'black', face = 'bold'),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
+    plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
+  labs(color = "Collection location", title = "Insertions", x = paste0("PC1 (", round(100 * summary(sv_pca)$importance[2,1], 1), "%)"),y = paste0("PC2 (", round(100 * summary(sv_pca)$importance[2,2], 1), "%)"))+
+  guides(color = guide_legend(override.aes = list(size = 7))) 
+
+
+### INVERSIONS ###
+common_vcf <- merged_SV %>% 
+  dplyr::select(-ref,-alt) %>%
+  dplyr::filter(number_svs_merged > MAF_thresh & number_svs_merged != "141", sv_type == "INV") %>%
+  dplyr::select(-chrom, -pos, -sv_type, -sv_length, -number_svs_merged) %>%
+  as.matrix()
+
+common_vcf[common_vcf == "./."] <- 0
+sv_mat <- apply(common_vcf, 2, as.numeric)
+
+sv_mat_t <- t(sv_mat)
+
+sv_mat_t[is.na(sv_mat_t)] <- colMeans(sv_mat_t, na.rm = TRUE)
+
+sv_pca <- prcomp(sv_mat_t, center = TRUE, scale. = TRUE)
+
+pca_df <- as.data.frame(sv_pca$x)
+pca_df$strain <- rownames(pca_df)
+
+strain_geo <- geo %>% dplyr::rename(strain = isotype) %>% dplyr::select(strain,geo)
+
+pca_df <- pca_df %>%
+  dplyr::left_join(strain_geo, by = "strain") %>%
+  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo))
+
+
+geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
+                "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
+
+ggplot(pca_df, aes(PC1, PC2, color = geo)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values = geo.colors) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.title = element_text(size = 12, color = 'black', face = 'bold'),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
+    plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
+  labs(color = "Collection location",title = "Inversions", x = paste0("PC1 (", round(100 * summary(sv_pca)$importance[2,1], 1), "%)"),y = paste0("PC2 (", round(100 * summary(sv_pca)$importance[2,2], 1), "%)")) +
+  guides(color = guide_legend(override.aes = list(size = 7))) 
+  
 
 
 
