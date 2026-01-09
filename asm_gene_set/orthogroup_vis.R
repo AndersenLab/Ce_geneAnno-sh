@@ -967,7 +967,6 @@ pan_rarefact
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_core_rarefaction.png", pan_rarefact, width = 14, height = 12, dpi = 600)
 
 
-# 
 # saveRDS(pan_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_iterativeOGcount.rds")
 # saveRDS(core_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/core_iterativeOGcount.rds")
 # saveRDS(accessory_final, file = "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/acc_iterativeOGcount.rds")
@@ -1430,6 +1429,167 @@ rfc_genes
 # rfc_genes_fit
 
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/rarefaction_115_labelled_fit.png", height = 5, width = 9, rfc_genes_fit, dpi = 600)
+
+
+
+
+
+# ======================================================================================================================================================================================== #
+# Plotting gene class rarefaction #
+# ======================================================================================================================================================================================== #
+n2_trankey <- N2_tranGene %>% dplyr::mutate(tran = paste0("transcript:",tran))
+
+n2_ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/elegans/ipr/output/N2_IPR_allApps_20251019.tsv", 
+                       col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
+  dplyr::left_join(n2_trankey, by = 'tran') %>%
+  dplyr::select(-tran) %>%
+  dplyr::mutate(strain = "N2") %>%
+  dplyr::select(strain,gene,signature_accession,signature_description,IPR_accession,IPR_description,GO)
+
+# pan_ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/elegans/ipr/pangenome/proteomes/output/140WSs_andCGC1.tsv", 
+#                        col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
+#   dplyr::select(tran,signature_accession,signature_description,IPR_accession,IPR_description,GO) %>%
+#   tidyr::separate(tran, into = c("strain", "gene"), sep = "_") %>%
+#   dplyr::bind_rows(n2_ipr)
+
+# saveRDS(pan_ipr, file = "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/elegans/ipr/pangenome/proteomes/output/PAN_142WSs_IPR_annotations.rds") 
+# write.table(pan_ipr, "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/elegans/ipr/pangenome/proteomes/output/PAN_142WSs_IPR_annotations.tsv", quote = F, row.names = F, col.names = T) ######## SUPPLEMENTARY TABLE XX
+
+pan_ipr <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/elegans/ipr/pangenome/proteomes/output/PAN_142WSs_IPR_annotations.rds")
+
+pan_ipr_cleaned <- pan_ipr %>% dplyr::select(strain,gene,IPR_description) %>% dplyr::filter(IPR_description != "-")
+
+pan_gpcrs <- pan_ipr_cleaned %>% 
+  dplyr::filter(grepl("7TM", IPR_description)) %>% 
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(n_gpcrs = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::arrange(desc(n_gpcrs)) 
+
+plt_gp <- pan_gpcrs %>% dplyr::distinct(strain,n_gpcrs) %>% dplyr::mutate(strain = factor(strain, levels = strain))
+
+ggplot(data = plt_gp) + 
+  geom_col(aes(x = strain, y = n_gpcrs), fill = 'olivedrab', color = 'black') + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 14, color = 'black', face = 'bold'),
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.text.x = element_text(size = 12, color = 'black', angle = 60, hjust = 1),
+    panel.background = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA)
+  ) +
+  labs(y = "IPR GPCR count (thousands)")+
+  scale_y_continuous(expand = c(0,0))
+
+
+
+
+
+
+# it_gpcr_table <- plt_gp %>% tidyr::pivot_wider(names_from = strain, values_from = n_gpcrs)
+# 
+# res_list <- vector("list", length = n_strains_total -1)
+# iteration <- 1
+# 
+# for (i in 2:n_strains_total) {              # NEED TO BEGIN ITERATION ON A SINLE STRAIN WHEN CALCULATING PRIVATE
+#   for (it_i in 1:n_perms) {
+#     # pick k random strains
+#     cols <- sample(colnames(it_gpcr_table), size = i, replace = FALSE)
+#     subset <- it_gpcr_table[, cols, drop = FALSE] # subset all df to k strains
+# 
+#     # binarize and count accessory
+#     gpcr_calc <- subset %>%
+#       dplyr::mutate(sum = rowSums(across(everything()))) %>%
+#       dplyr::mutate(mean = (sum / i)) 
+# 
+#     print(paste0("On strain subset: ", i,", and iteration: ", it_i))
+# 
+#     mean_gpcr_count <- gpcr_calc %>% dplyr::pull(mean)
+#     # print(mean_gpcr_count)
+# 
+#     res_list[[iteration]] <- data.frame(
+#       n_strains = i,
+#       replicate = it_i,
+#       gpcr_mean = mean_gpcr_count)
+#     iteration <- iteration + 1
+#   }
+# }
+# 
+# gpcr_final <- dplyr::bind_rows(res_list)
+# 
+# gpcr_summary <- gpcr_final %>%
+#   dplyr::group_by(n_strains) %>%
+#   dplyr::summarise(
+#     median_gpcr = median(gpcr_mean),
+#     mean_gpcr   = mean(gpcr_mean),
+#     sd_gpcr     = sd(gpcr_mean),
+#     q05         = quantile(gpcr_mean, 0.05),
+#     q95         = quantile(gpcr_mean, 0.95)) %>%
+#   dplyr::ungroup()
+# 
+# 
+# # Plotting
+# gpcr_rarefact <- ggplot() +
+#   # Private
+#   geom_errorbar(data = gpcr_summary, aes(x = n_strains, ymin = mean_gpcr - sd_gpcr, ymax = mean_gpcr + sd_gpcr), width = 0.5) +
+#   geom_point(data = gpcr_summary, aes(x = n_strains, y = mean_gpcr), color = 'olivedrab', size = 3) +
+#   # geom_ribbon(aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), alpha = 0.2) +
+#   labs(x = "Genomes", y = "GPCR count") +
+#   theme(
+#     panel.background = element_blank(),
+#     panel.border = element_rect(fill = NA, color = "black"),
+#     axis.title = element_text(size = 18, face = "bold"),
+#     axis.text = element_text(size =14, color = 'black')) 
+# # legend.position = 'none')
+# gpcr_rarefact
+
+
+
+################ NEED TO PLOT RAREFACTION BASED ON THE CLASSIFICATION OF GPCRS AS BEING PRIVATE - RAREFACTION OF THE NUMBER OF PRIVATE GPCRS
+rarefact <- plt_gp %>%
+  dplyr::mutate(iterative_sum = cumsum(n_gpcrs)) %>%
+  dplyr::mutate(number_genomes = row_number()) %>%
+  dplyr::mutate(number_genomes = factor(number_genomes, levels = number_genomes))
+
+ggplot(data = rarefact) + 
+  geom_point(aes(x = number_genomes, y = iterative_sum / 1e3), color = 'olivedrab', size = 3) +
+  theme(
+        panel.background = element_blank(),
+        panel.border = element_rect(fill = NA, color = "black"),
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size =14, color = 'black'),
+        axis.text.x = element_text(size = 14, color = 'black', angle = 60, hjust = 1)) +
+  labs(y = "Number of GPCRs (thousands)", x = "Number of genomes")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
