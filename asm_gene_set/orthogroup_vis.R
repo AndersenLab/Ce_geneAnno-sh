@@ -1434,17 +1434,27 @@ rfc_genes
 
 
 
+
+
+
+
+
+
+
+
+
+
 # ======================================================================================================================================================================================== #
 # Plotting gene class rarefaction #
 # ======================================================================================================================================================================================== #
 n2_trankey <- N2_tranGene %>% dplyr::mutate(tran = paste0("transcript:",tran))
 
-n2_ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/elegans/ipr/output/N2_IPR_allApps_20251019.tsv", 
-                       col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
-  dplyr::left_join(n2_trankey, by = 'tran') %>%
-  dplyr::select(-tran) %>%
-  dplyr::mutate(strain = "N2") %>%
-  dplyr::select(strain,gene,signature_accession,signature_description,IPR_accession,IPR_description,GO)
+# n2_ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/elegans/ipr/output/N2_IPR_allApps_20251019.tsv", 
+#                        col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
+#   dplyr::left_join(n2_trankey, by = 'tran') %>%
+#   dplyr::select(-tran) %>%
+#   dplyr::mutate(strain = "N2") %>%
+#   dplyr::select(strain,gene,signature_accession,signature_description,IPR_accession,IPR_description,GO)
 
 # pan_ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/elegans/ipr/pangenome/proteomes/output/140WSs_andCGC1.tsv", 
 #                        col_names = c("tran", "MD5_digest", "seq_length", "app", "signature_accession", "signature_description", "start", "end", "score", "status", "date", "IPR_accession","IPR_description","GO", "pathways")) %>%
@@ -1460,7 +1470,8 @@ pan_ipr <- readRDS("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO
 pan_ipr_cleaned <- pan_ipr %>% dplyr::select(strain,gene,IPR_description) %>% dplyr::filter(IPR_description != "-")
 
 pan_gpcrs <- pan_ipr_cleaned %>% 
-  dplyr::filter(grepl("7TM", IPR_description)) %>% 
+  dplyr::filter(grepl("7TM", IPR_description)) %>%
+  dplyr::distinct(strain,gene) %>%
   dplyr::group_by(strain) %>%
   dplyr::mutate(n_gpcrs = n()) %>%
   dplyr::ungroup() %>%
@@ -1478,12 +1489,81 @@ ggplot(data = plt_gp) +
     panel.background = element_blank(),
     panel.border = element_rect(color = 'black', fill = NA)
   ) +
-  labs(y = "IPR GPCR count (thousands)")+
+  labs(y = "IPR GPCR count")+
   scale_y_continuous(expand = c(0,0))
 
 
+priv <- all_relations %>%
+  dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
+  dplyr::mutate(sum = rowSums(across(-1, ~ ., .names = NULL), na.rm = TRUE)) %>%
+  dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
+  dplyr::mutate(
+    class = case_when(
+      freq == 1 ~ "core",
+      freq > private_freq & freq < 1 ~ "accessory",
+      freq == private_freq ~ "private",
+      TRUE ~ "undefined"
+    )
+  ) %>%
+  dplyr::select(Orthogroup, class) %>%
+  dplyr::filter(class == "private") %>%
+  dplyr::pull(Orthogroup)
+
+priv_expanded <- ortho_genes_dd %>% dplyr::bind_rows(private_OGs) %>% dplyr::filter(Orthogroup %in% priv) %>% tidyr::separate_rows(everything(), sep = ', ') 
+
+priv_wide <- priv_expanded %>% tidyr::pivot_longer(cols = -Orthogroup, names_to = "strain", values_to = "gene") %>% dplyr::filter(!is.na(gene)) %>% dplyr::select(-Orthogroup)
+
+merged <- priv_wide %>% dplyr::left_join(pan_gpcrs, by = "strain") %>% dplyr::mutate(priv_gpcrs = ifelse(gene.x == gene.y, T, F)) 
+
+priv_gpcrs <- merged %>% dplyr::filter(priv_gpcrs == T) %>% dplyr::group_by(strain) %>% dplyr::mutate(number_priv_gpcrs = n()) %>% dplyr::ungroup() %>% dplyr::arrange(desc(number_priv_gpcrs))
+
+rarefact <- priv_gpcrs %>% dplyr::select(strain,number_priv_gpcrs) %>% dplyr::distinct() %>%
+  dplyr::mutate(iterative_sum = cumsum(number_priv_gpcrs)) %>%
+  dplyr::mutate(number_genomes = row_number()) %>%
+  dplyr::mutate(number_genomes = factor(number_genomes, levels = number_genomes))
+
+ggplot(data = rarefact) +
+  geom_point(aes(x = number_genomes, y = iterative_sum), color = 'olivedrab', size = 3) +
+  theme(
+        panel.background = element_blank(),
+        panel.border = element_rect(fill = NA, color = "black"),
+        axis.title = element_text(size = 18, face = "bold"),
+        axis.text = element_text(size =14, color = 'black'),
+        axis.text.x = element_text(size = 14, color = 'black', angle = 60, hjust = 1)) +
+  labs(y = "Number of private GPCRs", x = "Number of genomes")
+
+bar <- rarefact %>% dplyr::mutate(strain = factor(strain, levels = strain))
+
+ggplot(data = bar) + 
+  geom_col(aes(x = strain, y = number_priv_gpcrs), fill = 'olivedrab', color = 'black') + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 14, color = 'black', face = 'bold'),
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.text.x = element_text(size = 12, color = 'black', angle = 60, hjust = 1),
+    panel.background = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA)
+  ) +
+  labs(y = "Private GPCR count")+
+  scale_y_continuous(expand = c(0,0))
+
+prop <- merged %>% dplyr::group_by(strain,gene.x) %>% dplyr::mutate(n_priv = n()) %>% dplyr::ungroup() %>% dplyr::group_by(strain,priv_gpcrs) %>% dplyr::mutate(n_priv_gpcrs = n()) %>%
+  dplyr::ungroup() %>% dplyr::filter(priv_gpcrs == T) %>% dplyr::mutate(prop = n_priv_gpcrs / n_priv) %>% dplyr::distinct(strain,n_priv_gpcrs,n_priv,prop) %>%
+  dplyr::arrange(desc(prop)) %>% dplyr::mutate(strain = factor(strain, levels = strain))
 
 
+ggplot(data = prop) + 
+  geom_col(aes(x = strain, y = prop * 100), fill = 'olivedrab', color = 'black') + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 14, color = 'black', face = 'bold'),
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.text.x = element_text(size = 12, color = 'black', angle = 60, hjust = 1),
+    panel.background = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA)
+  ) +
+  labs(y = "Proportion of GPCRs in private genome ")+
+  scale_y_continuous(expand = c(0,0))
 
 
 # it_gpcr_table <- plt_gp %>% tidyr::pivot_wider(names_from = strain, values_from = n_gpcrs)
@@ -1540,28 +1620,28 @@ ggplot(data = plt_gp) +
 #     panel.border = element_rect(fill = NA, color = "black"),
 #     axis.title = element_text(size = 18, face = "bold"),
 #     axis.text = element_text(size =14, color = 'black')) 
-# # legend.position = 'none')
+# # legend.positison = 'none')
 # gpcr_rarefact
 
 
+################ NEED TO PLOT RAREFACTION BASED ON THE CLASSIFICATION OF GPCRS AS BEING PRIVATE - RAREFACTION OF THE NUMBER OF PRIVATE GPCRS
+# rarefact <- plt_gp %>%
+#   dplyr::mutate(iterative_sum = cumsum(n_gpcrs)) %>%
+#   dplyr::mutate(number_genomes = row_number()) %>%
+#   dplyr::mutate(number_genomes = factor(number_genomes, levels = number_genomes))
+# 
+# ggplot(data = rarefact) + 
+#   geom_point(aes(x = number_genomes, y = iterative_sum / 1e3), color = 'olivedrab', size = 3) +
+#   theme(
+#         panel.background = element_blank(),
+#         panel.border = element_rect(fill = NA, color = "black"),
+#         axis.title = element_text(size = 18, face = "bold"),
+#         axis.text = element_text(size =14, color = 'black'),
+#         axis.text.x = element_text(size = 14, color = 'black', angle = 60, hjust = 1)) +
+#   labs(y = "Number of GPCRs (thousands)", x = "Number of genomes")
+
 
 ################ NEED TO PLOT RAREFACTION BASED ON THE CLASSIFICATION OF GPCRS AS BEING PRIVATE - RAREFACTION OF THE NUMBER OF PRIVATE GPCRS
-rarefact <- plt_gp %>%
-  dplyr::mutate(iterative_sum = cumsum(n_gpcrs)) %>%
-  dplyr::mutate(number_genomes = row_number()) %>%
-  dplyr::mutate(number_genomes = factor(number_genomes, levels = number_genomes))
-
-ggplot(data = rarefact) + 
-  geom_point(aes(x = number_genomes, y = iterative_sum / 1e3), color = 'olivedrab', size = 3) +
-  theme(
-        panel.background = element_blank(),
-        panel.border = element_rect(fill = NA, color = "black"),
-        axis.title = element_text(size = 18, face = "bold"),
-        axis.text = element_text(size =14, color = 'black'),
-        axis.text.x = element_text(size = 14, color = 'black', angle = 60, hjust = 1)) +
-  labs(y = "Number of GPCRs (thousands)", x = "Number of genomes")
-
-
 
 
 
