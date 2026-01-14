@@ -715,6 +715,8 @@ bw_by_class <- plt_data %>%
   dplyr::summarise(bw = density(mid_mb)$bw)
 bw_by_class
 
+class_count <- rects %>% dplyr::group_by(`Gene set`) %>% dplyr::mutate(number = n()) %>% dplyr::distinct(`Gene set`,number)
+
 
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/N2_geneSetLoci_density.png",finalfinal, height = 12, width = 14, dpi = 500)
 
@@ -1019,6 +1021,7 @@ strain_order_acc <- pav_long %>%
   dplyr::distinct(strain,.keep_all = T) %>%
   dplyr::pull(strain) 
 
+# Tiles are colored by gene set classification
 ggplot(pav_long %>%
          dplyr::mutate(strain=factor(strain,levels=strain_order_acc)),
        aes(x = Orthogroup, y = strain, fill = class_presence)) +
@@ -1042,6 +1045,49 @@ ggplot(pav_long %>%
     axis.text.y = element_text(size = 6, color = 'black'),
     axis.title.x = element_text(color = 'black', size = 12, face = 'bold'),
     axis.title.y = element_blank())
+
+# All tiles are colored gray but there are colored bars above indicating gene set classification of orthogroups
+og_strip <- pav_mat %>%
+  dplyr::select(Orthogroup, class) %>%
+  dplyr::distinct() %>%
+  dplyr::mutate(Orthogroup = factor(Orthogroup, levels = levels(pav_mat$Orthogroup)))
+
+p_heat <- ggplot(pav_long %>% dplyr::mutate(strain = factor(strain, levels = strain_order_acc)),aes(x = Orthogroup, y = strain, fill = factor(presence))) +
+  geom_tile() +
+  scale_fill_manual(values = c(`0` = "white", `1` = "gray40"), guide = "none") +
+  labs(x = "Orthogroups", y = "Strain") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA),
+    axis.text.y = element_text(size = 6, color = "black"),
+    axis.title.x = element_text(color = "black", size = 12, face = "bold"),
+    axis.title.y = element_blank(),
+    plot.margin = margin(t = 0, r = 5, b = 5, l = 5))
+
+p_strip <- ggplot(og_strip, aes(x = Orthogroup, y = 1, fill = class)) +
+  geom_tile() +
+  scale_fill_manual(values = c(core = "green4", accessory = "#DB6333", private = "magenta3"),guide = "none") +
+  theme_void() +
+  theme(
+    plot.margin = margin(t = 5, r = 5, b = 0, l = 5))
+
+cowplot::plot_grid(p_strip, p_heat, ncol = 1, rel_heights = c(0.04, 1), align = "v", axis = "lr")
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1531,6 +1577,19 @@ ggplot(data = rarefact) +
         axis.text = element_text(size =14, color = 'black'),
         axis.text.x = element_text(size = 14, color = 'black', angle = 60, hjust = 1)) +
   labs(y = "Number of private GPCRs", x = "Number of genomes")
+
+strains_132 <- rarefact %>% dplyr::arrange(strain) %>% dplyr::pull(strain)
+
+all_strains_142 <- priv_wide %>% dplyr::distinct(strain) %>% dplyr::arrange(strain) %>% dplyr::pull()
+
+length(unique(strains_132))
+length(unique(all_strains_142))
+
+intersect(strains_132, all_strains_142)
+
+setdiff(all_strains_142, strains_132)
+
+
 
 bar <- rarefact %>% dplyr::mutate(strain = factor(strain, levels = strain))
 
