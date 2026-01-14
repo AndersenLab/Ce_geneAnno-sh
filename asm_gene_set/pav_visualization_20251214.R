@@ -1988,7 +1988,7 @@ ggplot() +
 
 
 
-################## XXXX! #####################
+################## Histones.... #####################
 ipr_test <- ipr %>% dplyr::select(IPR_description) %>% dplyr::distinct()
 # ipr_histone <- ipr %>% dplyr::filter(grepl("Histone", IPR_description) & !grepl('ase', IPR_description) & !grepl('link', IPR_description) & !grepl('fold', IPR_description)) %>% dplyr::select(N2, IPR_description) %>% dplyr::distinct(N2, .keep_all = T)
 ipr_histone <- ipr %>% dplyr::filter(grepl("Histone H", IPR_description) & !grepl('ase', IPR_description) & !grepl("CENP", IPR_description)) %>% dplyr::select(N2, IPR_description) %>% dplyr::distinct(N2, .keep_all = T)
@@ -2178,11 +2178,36 @@ sv_corr_freq <- ggplot(data = final_freq) +
     panel.border = element_rect(color = 'black', fill = NA),
     axis.text = element_text(size = 13, color = 'black'),
   ) +
-  labs(x = "Minor allele frequency", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
+  labs(x = "Allele frequency", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
   guides(size = guide_legend(override.aes = list(size = c(2, 4, 6))), fill = guide_legend(override.aes = list(shape = 21, color = 'black', size = 7))) +
   scale_y_continuous(expand = c(0.01,0.01)) +
   scale_x_continuous(expand = c(0.01,0.01))
 sv_corr_freq
+
+
+norm_freq <- SVs_geo %>% dplyr::select(strain,geo2) %>% dplyr::distinct() %>% dplyr::group_by(geo2) %>% dplyr::mutate(geo_count = n()) %>% dplyr::ungroup()
+final_norm_freq <- final_freq %>% dplyr::left_join(norm_freq, by = c("final_geo"= "geo2")) %>% dplyr::mutate(norm_af = geo_max_count / geo_count) %>%
+  dplyr::filter(final_geo != "max_in_multiple_locations")
+
+sv_corr_freq_norm <- ggplot(data = final_norm_freq) +
+  geom_point(aes(x = norm_af, y = prop, fill = final_geo, shape = sv_type), size = 2) +
+  scale_fill_manual(values = geo.colors) +
+  scale_shape_manual(values = c("INS" = 22, "DEL" = 23, "INV" = 24)) +
+  facet_wrap(~chrom, scales = "free_x") +s
+  theme(
+    # panel.grid.minor.y = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 16, color = 'black'),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.text = element_text(size = 13, color = 'black'),
+  ) +
+  labs(x = "Normalized allele frequency", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
+  guides(size = guide_legend(override.aes = list(size = c(2, 4, 6))), fill = guide_legend(override.aes = list(shape = 21, color = 'black', size = 7))) +
+  scale_y_continuous(expand = c(0.01,0.01)) +
+  scale_x_continuous(expand = c(0.01,0.01))
+sv_corr_freq_norm  
 
 
 ############################ ISLAND RESOLUTION ON HAWAII ##############################################
@@ -2272,12 +2297,37 @@ sv_corr_freq <- ggplot(data = final_freq) +
     panel.border = element_rect(color = 'black', fill = NA),
     axis.text = element_text(size = 13, color = 'black'),
   ) +
-  labs(x = "Minor allele frequency", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
+  labs(x = "Allele frequency", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
   guides(size = guide_legend(override.aes = list(size = c(2, 4, 6))), fill = guide_legend(override.aes = list(shape = 21, color = 'black', size = 7))) +
   scale_y_continuous(expand = c(0.01,0.01)) +
   scale_x_continuous(expand = c(0.01,0.01))
 sv_corr_freq
 
+
+
+norm_freq <- SVs_geo %>% dplyr::select(strain,geo) %>% dplyr::distinct() %>% dplyr::group_by(geo) %>% dplyr::mutate(geo_count = n()) %>% dplyr::ungroup()
+final_norm_freq <- final_freq %>% dplyr::left_join(norm_freq, by = c("final_geo"= "geo")) %>% dplyr::mutate(norm_af = geo_max_count / geo_count) %>%
+  dplyr::filter(final_geo != "max_in_multiple_locations")
+
+sv_corr_freq_norm <- ggplot(data = final_norm_freq) +
+  geom_point(aes(x = norm_af, y = prop, fill = final_geo, shape = sv_type), size = 2) +
+  scale_fill_manual(values = geo.colors) +
+  scale_shape_manual(values = c("INS" = 22, "DEL" = 23, "INV" = 24)) +
+  facet_wrap(~chrom, scales = "free_x") +
+  theme(
+    # panel.grid.minor.y = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 16, color = 'black'),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.text = element_text(size = 13, color = 'black'),
+  ) +
+  labs(x = "Normalized allele frequency", y = "Proportion of strain geographic isolation with ALT allele / all strains with ALT allele", fill = "Isolation location", size = "SV type") +
+  guides(size = guide_legend(override.aes = list(size = c(2, 4, 6))), fill = guide_legend(override.aes = list(shape = 21, color = 'black', size = 7))) +
+  scale_y_continuous(expand = c(0.01,0.01)) +
+  scale_x_continuous(expand = c(0.01,0.01))
+sv_corr_freq_norm 
 
 
 
