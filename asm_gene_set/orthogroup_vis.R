@@ -7,15 +7,15 @@ library(stringr)
 library(ape)
 library(tidyr)
 library(data.table)
-library(tibble)
 library(clusterProfiler) ## BiocManager::install("clusterProfiler") # need this and the next package???
 library(enrichplot)
 library(cowplot)
-library(mgcv)
 library(org.Ce.eg.db)
 library(GO.db)
 library(clusterProfiler) ## BiocManager::install("clusterProfiler") # need this and the next package???
 library(enrichplot)
+library(ggtree)
+library(patchwork)
 
 
 # ======================================================================================================================================================================================== #
@@ -1022,29 +1022,29 @@ strain_order_acc <- pav_long %>%
   dplyr::pull(strain) 
 
 # Tiles are colored by gene set classification
-ggplot(pav_long %>%
-         dplyr::mutate(strain=factor(strain,levels=strain_order_acc)),
-       aes(x = Orthogroup, y = strain, fill = class_presence)) +
-  geom_tile() +
-  scale_fill_manual(
-    values = c(
-      core_present       = "green4",
-      core_absent        = "white",
-      accessory_present  = "#DB6333",
-      accessory_absent   = "white",
-      private_present    = "magenta3",
-      private_absent     = "white")) +
-  labs(x = "Orthogroups", y = "Strain", fill = "Class × presence") +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_blank(),      
-    axis.ticks.x = element_blank(),
-    panel.grid = element_blank(),
-    legend.position = 'none',
-    panel.border = element_rect(color = 'black', fill = NA),
-    axis.text.y = element_text(size = 6, color = 'black'),
-    axis.title.x = element_text(color = 'black', size = 12, face = 'bold'),
-    axis.title.y = element_blank())
+# ggplot(pav_long %>%
+#          dplyr::mutate(strain=factor(strain,levels=strain_order_acc)),
+#        aes(x = Orthogroup, y = strain, fill = class_presence)) +
+#   geom_tile() +
+#   scale_fill_manual(
+#     values = c(
+#       core_present       = "green4",
+#       core_absent        = "white",
+#       accessory_present  = "#DB6333",
+#       accessory_absent   = "white",
+#       private_present    = "magenta3",
+#       private_absent     = "white")) +
+#   labs(x = "Orthogroups", y = "Strain", fill = "Class × presence") +
+#   theme_minimal() +
+#   theme(
+#     axis.text.x = element_blank(),      
+#     axis.ticks.x = element_blank(),
+#     panel.grid = element_blank(),
+#     legend.position = 'none',
+#     panel.border = element_rect(color = 'black', fill = NA),
+#     axis.text.y = element_text(size = 6, color = 'black'),
+#     axis.title.x = element_text(color = 'black', size = 12, face = 'bold'),
+#     axis.title.y = element_blank())
 
 # All tiles are colored gray but there are colored bars above indicating gene set classification of orthogroups
 og_strip <- pav_mat %>%
@@ -1052,7 +1052,41 @@ og_strip <- pav_mat %>%
   dplyr::distinct() %>%
   dplyr::mutate(Orthogroup = factor(Orthogroup, levels = levels(pav_mat$Orthogroup)))
 
-p_heat <- ggplot(pav_long %>% dplyr::mutate(strain = factor(strain, levels = strain_order_acc)),aes(x = Orthogroup, y = strain, fill = factor(presence))) +
+# p_heat <- ggplot(pav_long %>% dplyr::mutate(strain = factor(strain, levels = strain_order_acc)),aes(x = Orthogroup, y = strain, fill = factor(presence))) +
+#   geom_tile() +
+#   scale_fill_manual(values = c(`0` = "white", `1` = "gray40"), guide = "none") +
+#   labs(x = "Orthogroups", y = "Strain") +
+#   theme_minimal() +
+#   theme(
+#     axis.text.x = element_blank(),
+#     axis.ticks.x = element_blank(),
+#     panel.grid = element_blank(),
+#     panel.border = element_rect(color = "black", fill = NA),
+#     axis.text.y = element_text(size = 6, color = "black"),
+#     axis.title.x = element_text(color = "black", size = 12, face = "bold"),
+#     axis.title.y = element_blank(),
+#     plot.margin = margin(t = 0, r = 5, b = 5, l = 5))
+
+p_strip <- ggplot(og_strip, aes(x = Orthogroup, y = 1, fill = class)) +
+  geom_tile() +
+  scale_fill_manual(values = c(core = "green4", accessory = "#DB6333", private = "magenta3"),guide = "none") +
+  theme_void() +
+  theme(
+    plot.margin = margin(t = 5, r = 5, b = 0, l = 5))
+
+# cowplot::plot_grid(p_strip, p_heat, ncol = 1, rel_heights = c(0.04, 1), align = "v", axis = "lr")
+
+
+tree_file <- "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/busco_phylogeny/busco2phylo-nf/busco2phylo-20260114/iqtree/supermatrix.fa.contree"
+busco_tree <- read.tree(tree_file)
+busco_tree_scaled <- ape::compute.brlen(busco_tree, method = "Grafen")
+strain_order_tree <- busco_tree$tip.label
+
+# Double check
+setdiff(strain_order_tree, unique(pav_long$strain))
+setdiff(unique(pav_long$strain), strain_order_tree)
+
+p_heat <- ggplot(pav_long %>% dplyr::mutate(strain = factor(strain, levels = strain_order_tree)),aes(x = Orthogroup, y = strain, fill = factor(presence))) +
   geom_tile() +
   scale_fill_manual(values = c(`0` = "white", `1` = "gray40"), guide = "none") +
   labs(x = "Orthogroups", y = "Strain") +
@@ -1065,28 +1099,27 @@ p_heat <- ggplot(pav_long %>% dplyr::mutate(strain = factor(strain, levels = str
     axis.text.y = element_text(size = 6, color = "black"),
     axis.title.x = element_text(color = "black", size = 12, face = "bold"),
     axis.title.y = element_blank(),
-    plot.margin = margin(t = 0, r = 5, b = 5, l = 5))
+    plot.margin = margin(t = 0, r = 0, b = , l = -1)) +
+  scale_y_discrete(expand = c(0, 0)) 
 
-p_strip <- ggplot(og_strip, aes(x = Orthogroup, y = 1, fill = class)) +
-  geom_tile() +
-  scale_fill_manual(values = c(core = "green4", accessory = "#DB6333", private = "magenta3"),guide = "none") +
-  theme_void() +
+p_tree <- ggtree(busco_tree_scaled) +
+  scale_y_continuous(breaks = seq_along(strain_order_tree), expand = c(0, 2)) +
+  # theme_tree2() +
   theme(
-    plot.margin = margin(t = 5, r = 5, b = 0, l = 5))
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    plot.margin = margin(40, 0, 5, 5))
+# p_tree
 
-cowplot::plot_grid(p_strip, p_heat, ncol = 1, rel_heights = c(0.04, 1), align = "v", axis = "lr")
-
-
-
-
-
-
-
-
-
-
-
-
+cowplot::plot_grid(
+  p_tree,
+  p_strip / p_heat + plot_layout(heights = c(0.04, 1)),
+  ncol = 2,
+  rel_widths = c(0.12, 1),
+  # align = "v",
+  axis = "tb")
 
 
 
