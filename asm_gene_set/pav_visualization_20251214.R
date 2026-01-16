@@ -657,7 +657,7 @@ merged_SV <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_ann
 hdrs <- readr::read_tsv("/vast/eande106/data/c_elegans/WI/divergent_regions/20250625/20250625_c_elegans_divergent_regions_strain.bed", col_names = c("chrom", "start", "end", "strain"))
 geo_initial <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/elegans_isotypes_sampling_geo.tsv")
 hawaii_islands <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/elegans_isotypes_sampling_geo_hawaii_islands.tsv") %>% dplyr::select(isotype,collection_island_Hawaii)
-WSs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/140_Ce_WSs.tsv", col_names = "strain") %>% dplyr::pull()
+WSs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/140_correct.tsv", col_names = "strain") %>% dplyr::pull()
 N2_gff <- ape::read.gff("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.gff3") 
 n2_genes_plt <- N2_gff %>%
   dplyr::filter(type == "gene") %>%
@@ -2340,8 +2340,14 @@ sv_corr_freq_norm
 # ========================================================================================= #
 # PCA on SVs
 # ========================================================================================= #
+# Filter for MAF > 0.05
+n <- 141
+maf <- 0.05
+least <- ceiling(maf * n)      #8
+most  <- floor((1 - maf) * n)  #133
+
 common_vcf <- merged_SV %>% 
-  dplyr::filter(number_svs_merged > MAF_thresh & number_svs_merged != "141") %>%
+  dplyr::filter(number_svs_merged >= least & number_svs_merged <= most) %>%
   dplyr::select(-chrom, -pos, -ref, -alt, -sv_type, -sv_length, -number_svs_merged) %>%
   as.matrix()
 
@@ -2363,8 +2369,7 @@ strain_geo <- geo %>% dplyr::rename(strain = isotype) %>% dplyr::select(strain,g
 
 pca_df <- pca_df %>%
   dplyr::left_join(strain_geo, by = "strain") %>%
-  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo))
-
+  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo)) 
 
 geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
                 "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
@@ -2400,7 +2405,7 @@ cor(sv_burden, sv_pca$x[,1]) # PC1 is 94% correlated with number of SVs per stra
 
 ### DELETIONS ###
 common_vcf <- merged_SV %>% 
-  dplyr::filter(number_svs_merged > MAF_thresh & number_svs_merged != "141", sv_type == "DEL") %>%
+  dplyr::filter(number_svs_merged >= least & number_svs_merged <= most & sv_type == "DEL") %>%
   dplyr::select(-chrom, -pos, -ref, -alt, -sv_type, -sv_length, -number_svs_merged) %>%
   as.matrix()
 
@@ -2420,8 +2425,7 @@ strain_geo <- geo %>% dplyr::rename(strain = isotype) %>% dplyr::select(strain,g
 
 pca_df <- pca_df %>%
   dplyr::left_join(strain_geo, by = "strain") %>%
-  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo))
-
+  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo)) 
 
 geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
                 "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
@@ -2443,7 +2447,7 @@ ggplot(pca_df, aes(PC1, PC2, color = geo)) +
 ### INSERTIONS ###
 common_vcf <- merged_SV %>% 
   dplyr::select(-ref,-alt) %>%
-  dplyr::filter(number_svs_merged > MAF_thresh & number_svs_merged != "141", sv_type == "INS") %>%
+  dplyr::filter(number_svs_merged >= least & number_svs_merged <= most & sv_type == "INS") %>%
   dplyr::select(-chrom, -pos, -sv_type, -sv_length, -number_svs_merged) %>%
   as.matrix()
 
@@ -2463,8 +2467,7 @@ strain_geo <- geo %>% dplyr::rename(strain = isotype) %>% dplyr::select(strain,g
 
 pca_df <- pca_df %>%
   dplyr::left_join(strain_geo, by = "strain") %>%
-  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo))
-
+  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo)) 
 
 geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
                 "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
@@ -2486,7 +2489,7 @@ ggplot(pca_df, aes(PC1, PC2, color = geo)) +
 ### INVERSIONS ###
 common_vcf <- merged_SV %>% 
   dplyr::select(-ref,-alt) %>%
-  dplyr::filter(number_svs_merged > MAF_thresh & number_svs_merged != "141", sv_type == "INV") %>%
+  dplyr::filter(number_svs_merged >= least & number_svs_merged <= most & sv_type == "INV") %>%
   dplyr::select(-chrom, -pos, -sv_type, -sv_length, -number_svs_merged) %>%
   as.matrix()
 
@@ -2506,8 +2509,7 @@ strain_geo <- geo %>% dplyr::rename(strain = isotype) %>% dplyr::select(strain,g
 
 pca_df <- pca_df %>%
   dplyr::left_join(strain_geo, by = "strain") %>%
-  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo))
-
+  dplyr::mutate(geo = ifelse(strain == "CGC1", "CGC1",geo)) 
 
 geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
                 "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
