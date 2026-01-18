@@ -7,7 +7,9 @@ library(ape)
 library(circlize)
 library(data.table)
 library(ComplexHeatmap)  
-library(grid)           
+library(grid)      
+library(GenomicRanges)
+library(IRanges)
 
 # for file in *.vcf; do bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%FILTER\t%INFO/SVTYPE\t%INFO/SVLEN' $file | awk -v strain=${file%%.*} -v OFS='\t' '$7 >= 50 || $7 <= -50 {print $1,$2,$3,$4,$5,$6,$7,strain}'; done | grep -w "PASS" | grep -v -w "SNV"
 
@@ -1157,12 +1159,333 @@ all_three <- cowplot::plot_grid(
   rel_heights = c(1,1,1))
 all_three
 
+
+
+
+
+# =======================================================#
+# Making circlize plot #
+# =======================================================#
+
+# Outer ring of chromosomes (gene map of gene models represented with black rectangles)
+## Chromosome IDs and sizes (start is always equal to zero)
+chr_order <- c("I","II","III","IV","V","X")
+chrom_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/N2.WS283.cleaned.fa.fai", col_names = c("chrom","start","end")) %>%
+  dplyr::mutate(chrom = factor(chrom, levels = chr_order)) 
+  
+
+## N2 gene modesl in BED format
+n2_genes_bed <- n2_genes_plt %>% dplyr::filter(chrom != "MtDNA")
+
+
+# Next ring in will have HDRs (represented with gray40 rectangles)
+## HDRs in BED format
+hdrs_collapsed_bed <- all_collapsed
+
+
+# Next ring in will have SNV count per kb (plot fitted LOESS line?) 
+## SNV count in table: "chrom", "bin", "variant_count"
+snps_per_bin <- snps
+
+
+# Next ring in will plot DEL frequncy (plotted as LOESS line) - make sure CGC1 is filtered out
+## DEL calls with "chrom", "middle" (of the 1 kb bin), and "freq"
+del_bin_freq <- del_bin_plt %>% dplyr::select(chrom, middle, freq)
+
+
+# Next ring in will plot INS frequency (plotted as LOESS line) - make sure CGC1 is filtered out
+## INS calls with "chrom", "middle" (of the 1 kb bin), and "freq"
+ins_bin_freq <- ins_bin_plt %>% dplyr::select(chrom, middle, freq)
+
+
+# Then the final, more inner ring will have INV frequency (plotted as LOESS line) - make sure CGC1 is filtered out
+## INV calls with "chrom", "middle" (of the 1 kb bin), and "freq"
+inv_bin_freq <- inv_bin_plt %>% dplyr::select(chrom, middle, freq)
+
+## =========================
+##  Plotting!
+## =========================
+add_point_track <- function(df, col, ylim, track_height = 0.10, label = NULL) {
+  circos.trackPlotRegion(
+    ylim = ylim,
+    track.height = track_height,
+    bg.border = NA,
+    panel.fun = function(x, y) {
+      chr <- CELL_META$sector.index
+      d <- df[df$chrom == chr, , drop = FALSE]
+      if (nrow(d) == 0) return()
+      circos.points(d$pos, d$value, pch = 16, cex = 0.25, col = col)
+    }
+  )
+  if (!is.null(label)) {
+    # Put track label near the first chromosome sector
+    circos.text(
+      x = 0, y = mean(ylim), labels = label,
+      sector.index = chr_order[1],
+      track.index  = get.current.track.index(),
+      facing = "inside", adj = c(1, 0.5), cex = 0.7
+    )
+  }
+}
+
+circos.clear()
+circos.par(
+  start.degree = 90,
+  gap.after = c(rep(2, length(chr_order)-1), 8),
+  track.margin = c(0.002, 0.002),
+  cell.padding = c(0, 0, 0, 0)
+)
+
+circos.initialize(
+  factors = chrom_sizes$chrom,
+  xlim = cbind(rep(0, nrow(chrom_sizes)), chrom_sizes$end)
+)
+
+## Outer chromosome ring (ideogram-like) - I NEED TO ADD GENE MODELS
+circos.trackPlotRegion(
+  ylim = c(0, 1),
+  track.height = 0.065,
+  bg.border = NA,
+  panel.fun = function(x, y) {
+    chr <- CELL_META$sector.index
+    xlim <- CELL_META$xlim
+    
+    circos.rect(xlim[1], 0, xlim[2], 1, col = "grey90", border = "white")
+    circos.text(CELL_META$xcenter, 0.55, chr, facing = "bending.inside", cex = 0.9, font = 2)
+    
+    ## Axis ticks (Mb)
+    circos.axis(
+      h = "top",
+      major.at = seq(0, xlim[2], by = 5e6),
+      labels = seq(0, xlim[2], by = 5e6) / 1e6,
+      labels.cex = 0.5,
+      major.tick.length = 0.02,
+      minor.ticks = 4
+    )
+  }
+)
+
+## Tracks
+snp_ylim <- c(0, max(snps_per_bin$variant_count, na.rm = TRUE))
+add_point_track(snps_per_bin, col = "#DB6333", ylim = snp_ylim, track_height = 0.12, label = "SNPs/kb")
+add_point_track(hdrs_collapsed_bed,  col = "grey40",  ylim = c(0,1),   track_height = 0.10, label = "HDR freq")
+add_point_track(del_bin_freq,  col = "red",     ylim = c(0,1),   track_height = 0.08, label = "DEL freq")
+add_point_track(ins_bin_freq,  col = "blue",    ylim = c(0,1),   track_height = 0.08, label = "INS freq")
+add_point_track(inv_bin_freq,  col = "gold",    ylim = c(0,1),   track_height = 0.08, label = "INV freq")
+
+## Legend (place top-right)
+lgd <- Legend(
+  labels = c("SNP density", "HDR freq", "DEL freq", "INS freq", "INV freq"),
+  type = "points",
+  pch = 16,
+  legend_gp = gpar(col = c("#DB6333", "grey40", "red", "blue", "gold"))
+)
+draw(lgd, x = unit(0.88, "npc"), y = unit(0.88, "npc"))
+
+circos.clear()
+
+
+
+
+
+library(dplyr)
+library(circlize)
+library(ComplexHeatmap)
+library(grid)
+
+chr_order <- c("I","II","III","IV","V","X")
+
+chrom_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/N2.WS283.cleaned.fa.fai",col_names = c("chrom","start","end")) %>%
+  dplyr::mutate(chrom = factor(chrom, levels = chr_order)) %>%
+  dplyr::arrange(chrom)
+
+# Genes BED must have: chrom, start, end
+# (Assuming n2_genes_plt has start/end already)
+n2_genes_bed <- n2_genes_plt %>%
+  dplyr::filter(chrom %in% chr_order) %>%
+  transmute(chrom = as.character(chrom), start = as.numeric(start), end = as.numeric(end))
+
+# HDRs BED must have: chrom, start, end
+hdrs_collapsed_bed <- all_collapsed %>%
+  dplyr::filter(chrom %in% chr_order) %>%
+  transmute(chrom = as.character(chrom), start = as.numeric(start), end = as.numeric(end))
+
+# SNP bins must have: chrom, pos, value (pos = bin mid)
+snps_per_bin2 <- snps_per_bin %>%
+  dplyr::filter(chrom %in% chr_order) %>%
+  dplyr::mutate(bin = bin + 500) %>%
+  transmute(chrom = as.character(chrom),
+            pos   = as.numeric(bin),                 # if `bin` is start, change to `bin + 500`
+            value = as.numeric(variant_count))
+
+# SV frequency tracks must have: chrom, pos, value
+del_bin_freq2 <- del_bin_freq %>%
+  dplyr::filter(chrom %in% chr_order) %>%
+  transmute(chrom = as.character(chrom), pos = as.numeric(middle), value = as.numeric(freq))
+
+ins_bin_freq2 <- ins_bin_freq %>%
+  dplyr::filter(chrom %in% chr_order) %>%
+  transmute(chrom = as.character(chrom), pos = as.numeric(middle), value = as.numeric(freq))
+
+inv_bin_freq2 <- inv_bin_freq %>%
+  dplyr::filter(chrom %in% chr_order) %>%
+  transmute(chrom = as.character(chrom), pos = as.numeric(middle), value = as.numeric(freq))
+
+
+add_rect_track <- function(bed, col, track_height = 0.08, label = NULL) {
+  circos.trackPlotRegion(
+    ylim = c(0, 1),
+    track.height = track_height,
+    bg.border = NA,
+    panel.fun = function(x, y) {
+      chr <- CELL_META$sector.index
+      d <- bed[bed$chrom == chr, , drop = FALSE]
+      if (nrow(d) == 0) return()
+      circos.rect(d$start, 0, d$end, 1, col = col, border = NA)
+    }
+  )
+  
+  if (!is.null(label)) {
+    circos.text(
+      x = 0, y = 0.5, labels = label,
+      sector.index = chr_order[1],
+      track.index  = get.current.track.index(),
+      facing = "inside", adj = c(1, 0.5), cex = 0.7
+    )
+  }
+}
+
+
+add_value_track <- function(df, col, ylim, track_height = 0.10, label = NULL,
+                            type = c("line","points"), add_loess = FALSE, span = 0.2) {
+  type <- match.arg(type)
+  
+  circos.trackPlotRegion(
+    ylim = ylim,
+    track.height = track_height,
+    bg.border = NA,
+    panel.fun = function(x, y) {
+      chr <- CELL_META$sector.index
+      d <- df[df$chrom == chr, , drop = FALSE]
+      if (nrow(d) == 0) return()
+      
+      d <- d[order(d$pos), , drop = FALSE]
+      
+      if (type == "points") {
+        circos.points(d$pos, d$value, pch = 16, cex = 0.25, col = col)
+      } else {
+        circos.lines(d$pos, d$value, col = col, lwd = 1)
+      }
+      
+      if (add_loess && nrow(d) >= 50) {
+        fit <- stats::loess(value ~ pos, data = d, span = span)
+        xs  <- d$pos
+        ys  <- stats::predict(fit, newdata = data.frame(pos = xs))
+        ok  <- is.finite(ys)
+        if (any(ok)) circos.lines(xs[ok], ys[ok], col = col, lwd = 2)
+      }
+    }
+  )
+  
+  if (!is.null(label)) {
+    circos.text(
+      x = 0, y = mean(ylim), labels = label,
+      sector.index = chr_order[1],
+      track.index  = get.current.track.index(),
+      facing = "inside", adj = c(1, 0.5), cex = 0.7
+    )
+  }
+}
+
+
+circos.clear()
+circos.par(start.degree = 90, gap.after = c(rep(2, length(chr_order)-1), 8), track.margin = c(0.002, 0.002), cell.padding = c(0, 0, 0, 0))
+circos.initialize(factors = as.character(chrom_sizes$chrom), xlim = cbind(rep(0, nrow(chrom_sizes)), chrom_sizes$end))
+
+# Outer ideogram-like ring + gene models inside it
+circos.trackPlotRegion(
+  ylim = c(0, 1),
+  track.height = 0.10,
+  bg.border = NA,
+  panel.fun = function(x, y) {
+    chr <- CELL_META$sector.index
+    xlim <- CELL_META$xlim
+    
+    # background chromosome band
+    circos.rect(xlim[1], 0, xlim[2], 1, col = "grey90", border = "white")
+    
+    # gene models as black rectangles (thin band)
+    g <- n2_genes_bed[n2_genes_bed$chrom == chr, , drop = FALSE]
+    if (nrow(g) > 0) {
+      circos.rect(g$start, 0.05, g$end, 0.25, col = "black", border = NA)
+    }
+    
+    # chromosome label
+    circos.text(CELL_META$xcenter, 0.70, chr, facing = "bending.inside", cex = 0.9, font = 2)
+    
+    # axis ticks
+    circos.axis(
+      h = "top",
+      major.at = seq(0, xlim[2], by = 5e6),
+      labels = seq(0, xlim[2], by = 5e6) / 1e6,
+      labels.cex = 0.5,
+      major.tick.length = 0.02,
+      minor.ticks = 4
+    )
+  }
+)
+
+# HDR intervals (rectangles)
+add_rect_track(hdrs_collapsed_bed, col = "grey40", track_height = 0.08, label = "HDRs")
+# SNP density (line or points)
+snp_ylim <- c(0, max(snps_per_bin2$value, na.rm = TRUE))
+add_value_track(snps_per_bin2, col = "#DB6333", ylim = snp_ylim, track_height = 0.12, label = "SNPs/kb", type = "line", add_loess = TRUE, span = 0.15)
+# SV frequencies (lines)
+add_value_track(del_bin_freq2, col = "red",  ylim = c(0, 1), track_height = 0.08, label = "DEL freq", type = "line", add_loess = TRUE, span = 0.2)
+add_value_track(ins_bin_freq2, col = "blue", ylim = c(0, 1), track_height = 0.08, label = "INS freq", type = "line", add_loess = TRUE, span = 0.2)
+add_value_track(inv_bin_freq2, col = "gold", ylim = c(0, 1), track_height = 0.08, label = "INV freq", type = "line", add_loess = TRUE, span = 0.2)
+
+# Legend
+lgd <- Legend(labels = c("SNP density", "HDRs", "DEL freq", "INS freq", "INV freq"), type = "lines", legend_gp = gpar(col = c("#DB6333", "grey40", "red", "blue", "gold")),lwd = c(2, 8, 2, 2, 2))
+draw(lgd, x = unit(0.88, "npc"), y = unit(0.88, "npc"))
+
+circos.clear()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # =============================================================== #
 # Enrichment of SVs in HDRs #
 # =============================================================== #
-library(GenomicRanges)
-library(IRanges)
-
 chrom_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/N2.WS283.cleaned.fa.fai", col_names = c("chrom","start","end"))
 
 # DEL enrichment in HDRs
@@ -1299,303 +1622,6 @@ list(
   density_HDR = density_hdr,
   density_nonHDR = density_out,
   fold_enrichment = fold_enrichment)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ###########################
-# Circos plot - example
-# ###########################
-# col_fun = colorRamp2(c(-2, 0, 2), c("pink", "purple", "red"))
-# circlize_plot = function() {
-#   set.seed(12345)
-#   sectors = letters[1:12]
-#   circos.initialize(sectors, xlim = c(0, 1))
-#   circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-#     circos.points(runif(20), runif(20), cex = 0.5, pch = 16, col = 2)
-#     circos.points(runif(20), runif(20), cex = 0.5, pch = 16, col = 3)
-#   })
-#   circos.track(ylim = c(0, 1), panel.fun = function(x, y) {
-#     circos.lines(sort(runif(20)), runif(20), col = 4)
-#     circos.lines(sort(runif(20)), runif(20), col = 5)
-#   })
-#   
-#   for(i in 1:12) {
-#     circos.link(sample(sectors, 1), sort(runif(10))[1:2], 
-#                 sample(sectors, 1), sort(runif(10))[1:2],
-#                 col = add_transparency(col_fun(rnorm(1))))
-#   }
-#   circos.clear()
-# }
-# circlize_plot()
-
-
-
-
-
-## =========================
-## CIRCLIZE PLOT (ALL-IN-ONE)
-## Outer chromosome ring with genes plotted + inner tracks:
-##   1) SNP density (points)
-##   2) HDR frequency (points)
-##   3) DEL frequency (points)
-##   4) INS frequency (points)
-##   5) INV frequency (points)
-## Includes legend (ComplexHeatmap::Legend)
-## =========================
-
-bin_size <- 1000
-chr_order <- c("I","II","III","IV","V","X")
-
-## Path to genome .fai (recommended; provides chromosome lengths)
-## If you don't have this, see fallback block below.
-fai_path <- "genome.fa.fai"
-
-## ---- INPUT OBJECTS ASSUMED TO EXIST (from your pipeline) ----
-## n2_genes_plt: data.frame with chrom, start, end (bp)
-## snps: tibble/data.frame with chrom, pos, ref, alt (pos in bp)
-## hdrs: tibble/data.frame with chrom, start, end, strain (BED-like)
-## filt_calls: tibble/data.frame with chrom, pos, sv_length, sv_type, strain
-## nucmer: tibble/data.frame with strain (used to define subset of strains)
-##
-## If any are not loaded, load them before running this block.
-
-## =========================
-## 1) CHROM SIZES
-## =========================
-chrom_sizes <- readr::read_tsv(fai_path, col_names = c("chrom","len","x1","x2","x3"), show_col_types = FALSE) %>%
-  dplyr::select(chrom, len) %>%
-  dplyr::filter(chrom != "MtDNA") %>%
-  dplyr::mutate(chrom = factor(chrom, levels = chr_order)) %>%
-  dplyr::arrange(chrom)
-
-## Fallback (if you don't have .fai):
-## Uncomment to infer lengths from bins/genes if needed.
-# chrom_sizes <- bind_rows(
-#   snps %>% group_by(chrom) %>% summarise(len = max(pos, na.rm=TRUE), .groups="drop"),
-#   n2_genes_plt %>% group_by(chrom) %>% summarise(len = max(end, na.rm=TRUE), .groups="drop")
-# ) %>% group_by(chrom) %>% summarise(len = max(len), .groups="drop") %>%
-#   filter(chrom != "MtDNA") %>%
-#   mutate(chrom = factor(chrom, levels = chr_order)) %>% arrange(chrom)
-
-
-## =========================
-## 3) SNP DENSITY PER BIN (counts per bin_size)
-## =========================
-snps_binned <- snps %>%
-  dplyr::filter(chrom != "MtDNA") %>%
-  dplyr::mutate(bin = (pos %/% bin_size) * bin_size) %>%
-  dplyr::count(chrom, bin, name = "variant_count") %>%
-  dplyr::mutate(pos = bin + bin_size/2) %>%
-  dplyr::select(chrom, pos, value = variant_count)
-
-## =========================
-## 4) HDR FREQUENCY PER BIN
-##    (subset strains from nucmer, excluding CGC1, as you did)
-## =========================
-strains_hdr <- nucmer %>%
-  dplyr::distinct(strain) %>%
-  dplyr::filter(strain != "CGC1") %>%
-  dplyr::pull(strain)
-n_hdr <- length(strains_hdr)
-
-hdrs_sub <- hdrs %>% dplyr::filter(strain %in% strains_hdr, chrom != "MtDNA")
-hdrs_dt  <- as.data.table(hdrs_sub)
-setkey(hdrs_dt, chrom, start, end)
-
-ov_hdr <- foverlaps(hdrs_dt, bins_dt, nomatch = 0L)
-
-hdr_counts <- ov_hdr[, .(n_strains = uniqueN(strain)), by = .(chrom, start, end, id)]
-hdr_w <- merge(bins_dt, hdr_counts, by = c("chrom","start","end","id"), all.x = TRUE)
-hdr_w[is.na(n_strains), n_strains := 0L]
-hdr_w[, value := n_strains / n_hdr]
-hdr_track <- as.data.frame(hdr_w) %>%
-  dplyr::mutate(pos = (start + end)/2) %>%
-  dplyr::select(chrom, pos, value)
-
-## =========================
-## 5) SV FREQUENCY PER BIN (DEL/INS/INV)
-## =========================
-sv_freq_track <- function(filt_calls, svtype, bins_dt, denom_n) {
-  calls <- filt_calls %>%
-    dplyr::filter(sv_type == svtype, chrom != "MtDNA") %>%
-    dplyr::mutate(start = pos,
-                  end   = pos + sv_length) %>%
-    dplyr::select(chrom, start, end, strain)
-  
-  calls_dt <- as.data.table(calls)
-  setkey(calls_dt, chrom, start, end)
-  
-  ov <- foverlaps(calls_dt, bins_dt, nomatch = 0L)
-  counts <- ov[, .(n_strains = uniqueN(strain)), by = .(chrom, start, end, id)]
-  
-  w <- merge(bins_dt, counts, by = c("chrom","start","end","id"), all.x = TRUE)
-  w[is.na(n_strains), n_strains := 0L]
-  w[, value := n_strains / denom_n]
-  
-  as.data.frame(w) %>%
-    dplyr::mutate(pos = (start + end)/2) %>%
-    dplyr::select(chrom, pos, value)
-}
-
-## You used /141 for SV frequencies; keep your convention:
-n_sv <- 141
-
-del_track <- sv_freq_track(filt_calls, "DEL", bins_dt, n_sv)
-ins_track <- sv_freq_track(filt_calls, "INS", bins_dt, n_sv)
-inv_track <- sv_freq_track(filt_calls, "INV", bins_dt, n_sv)
-
-## =========================
-## 6) CIRCLIZE PLOT
-## =========================
-add_point_track <- function(df, col, ylim, track_height = 0.10, label = NULL) {
-  circos.trackPlotRegion(
-    ylim = ylim,
-    track.height = track_height,
-    bg.border = NA,
-    panel.fun = function(x, y) {
-      chr <- CELL_META$sector.index
-      d <- df[df$chrom == chr, , drop = FALSE]
-      if (nrow(d) == 0) return()
-      circos.points(d$pos, d$value, pch = 16, cex = 0.25, col = col)
-    }
-  )
-  if (!is.null(label)) {
-    # Put track label near the first chromosome sector
-    circos.text(
-      x = 0, y = mean(ylim), labels = label,
-      sector.index = chr_order[1],
-      track.index  = get.current.track.index(),
-      facing = "inside", adj = c(1, 0.5), cex = 0.7
-    )
-  }
-}
-
-## Open a device if desired (e.g., PDF):
-## pdf("circos_tracks.pdf", width=8, height=8)
-
-circos.clear()
-circos.par(
-  start.degree = 90,
-  gap.after = c(rep(2, length(chr_order)-1), 8),
-  track.margin = c(0.002, 0.002),
-  cell.padding = c(0, 0, 0, 0)
-)
-
-circos.initialize(
-  factors = chrom_sizes$chrom,
-  xlim = cbind(rep(0, nrow(chrom_sizes)), chrom_sizes$len)
-)
-
-## Outer chromosome ring (ideogram-like) - I NEED TO ADD GENE MODELS
-circos.trackPlotRegion(
-  ylim = c(0, 1),
-  track.height = 0.065,
-  bg.border = NA,
-  panel.fun = function(x, y) {
-    chr <- CELL_META$sector.index
-    xlim <- CELL_META$xlim
-    
-    circos.rect(xlim[1], 0, xlim[2], 1, col = "grey90", border = "white")
-    circos.text(CELL_META$xcenter, 0.55, chr, facing = "bending.inside", cex = 0.9, font = 2)
-    
-    ## Axis ticks (Mb)
-    circos.axis(
-      h = "top",
-      major.at = seq(0, xlim[2], by = 5e6),
-      labels = seq(0, xlim[2], by = 5e6) / 1e6,
-      labels.cex = 0.5,
-      major.tick.length = 0.02,
-      minor.ticks = 4
-    )
-  }
-)
-
-## Tracks
-snp_ylim <- c(0, max(snps_binned$value, na.rm = TRUE))
-add_point_track(snps_binned, col = "#DB6333", ylim = snp_ylim, track_height = 0.12, label = "SNPs/kb")
-add_point_track(hdr_track,  col = "grey40",  ylim = c(0,1),   track_height = 0.10, label = "HDR freq")
-add_point_track(del_track,  col = "red",     ylim = c(0,1),   track_height = 0.08, label = "DEL freq")
-add_point_track(ins_track,  col = "blue",    ylim = c(0,1),   track_height = 0.08, label = "INS freq")
-add_point_track(inv_track,  col = "gold",    ylim = c(0,1),   track_height = 0.08, label = "INV freq")
-
-## Legend (place top-right)
-lgd <- Legend(
-  labels = c("SNP density", "HDR freq", "DEL freq", "INS freq", "INV freq"),
-  type = "points",
-  pch = 16,
-  legend_gp = gpar(col = c("#DB6333", "grey40", "red", "blue", "gold"))
-)
-draw(lgd, x = unit(0.88, "npc"), y = unit(0.88, "npc"))
-
-circos.clear()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -2358,8 +2384,7 @@ sv_mat_t <- t(sv_mat)
 
 sv_mat_t[is.na(sv_mat_t)] <- colMeans(sv_mat_t, na.rm = TRUE)
 
-# sv_pca <- prcomp(sv_mat_t, center = TRUE, scale. = TRUE)
-sv_pca <- prcomp(sv_mat_t, center = TRUE, scale. = FALSE) # correcting for SV-burden - otherwise PC1 is strictly based on having a lot of SVs - isolates more structurally diverse strains
+sv_pca <- prcomp(sv_mat_t, center = TRUE, scale. = TRUE) 
 
 
 pca_df <- as.data.frame(sv_pca$x)
@@ -2388,19 +2413,40 @@ ggplot(pca_df, aes(PC1, PC2, color = geo)) +
   guides(color = guide_legend(override.aes = list(size = 7))) 
 
 
-
-sv_var <- apply(sv_mat_t, 2, var)
-summary(sv_var)
-
-sum(sv_var == 0)          # truly constant SVs
-sum(sv_var < 1e-6)        # near-constant SVs
+dim(sv_mat_t)
+summary(rowSums(sv_mat_t))
+cor(rowSums(sv_mat_t), sv_pca$x[,1])  # PC1 is 93% correlated with number of SVs per strain
 
 
-sv_burden <- rowSums(sv_mat_t)
-summary(sv_burden)
+# PC3/4
+ggplot(pca_df, aes(PC3, PC4, color = geo)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values = geo.colors) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.title = element_text(size = 12, color = 'black', face = 'bold'),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
+    plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
+  labs(color = "Collection location",title = "All SVs", x = paste0("PC3 (", round(100 * summary(sv_pca)$importance[2,3], 1), "%)"),y = paste0("PC4 (", round(100 * summary(sv_pca)$importance[2,4], 1), "%)"))+
+  guides(color = guide_legend(override.aes = list(size = 7))) 
 
-cor(sv_burden, sv_pca$x[,1]) # PC1 is 94% correlated with number of SVs per strain
+# Scree plot:
+scree <- data.frame(PC = seq_along(sv_pca$sdev),variance = sv_pca$sdev^2 / sum(sv_pca$sdev^2))
 
+ggplot(scree[1:10,], aes(PC, variance * 100)) +
+  geom_col(fill = "black") +
+  theme(
+    axis.text = element_text(size = 16, color = 'black'),
+    panel.background = element_blank(),
+    plot.margin = margin(10,10,10,10),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold')) +
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(breaks = 1:10) +
+  coord_cartesian(ylim = c(0,16)) +
+  labs(y = "Proportion of variance explained (%)", x = "Principal component")
 
 
 ### DELETIONS ###
@@ -2442,6 +2488,40 @@ ggplot(pca_df, aes(PC1, PC2, color = geo)) +
     plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
   labs(color = "Collection location",title = "Deletions", x = paste0("PC1 (", round(100 * summary(sv_pca)$importance[2,1], 1), "%)"),y = paste0("PC2 (", round(100 * summary(sv_pca)$importance[2,2], 1), "%)"))+
   guides(color = guide_legend(override.aes = list(size = 7))) 
+
+
+# PC3/4
+ggplot(pca_df, aes(PC3, PC4, color = geo)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values = geo.colors) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.title = element_text(size = 12, color = 'black', face = 'bold'),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
+    plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
+  labs(color = "Collection location",title = "Deletions", x = paste0("PC3 (", round(100 * summary(sv_pca)$importance[2,3], 1), "%)"),y = paste0("PC4 (", round(100 * summary(sv_pca)$importance[2,4], 1), "%)"))+
+  guides(color = guide_legend(override.aes = list(size = 7))) 
+
+# Scree plot:
+scree <- data.frame(PC = seq_along(sv_pca$sdev),variance = sv_pca$sdev^2 / sum(sv_pca$sdev^2))
+
+ggplot(scree[1:10,], aes(PC, variance * 100)) +
+  geom_col(fill = "red") +
+  theme(
+    axis.text = element_text(size = 16, color = 'black'),
+    panel.background = element_blank(),
+    plot.margin = margin(10,10,10,10),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold')) +
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(breaks = 1:10) +
+  coord_cartesian(ylim = c(0,16)) +
+  labs(y = "Proportion of variance explained (%)", x = "Principal component")
+
+
+
 
 
 ### INSERTIONS ###
@@ -2486,6 +2566,38 @@ ggplot(pca_df, aes(PC1, PC2, color = geo)) +
   guides(color = guide_legend(override.aes = list(size = 7))) 
 
 
+# PC3/4
+ggplot(pca_df, aes(PC3, PC4, color = geo)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values = geo.colors) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.title = element_text(size = 12, color = 'black', face = 'bold'),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
+    plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
+  labs(color = "Collection location",title = "Insertions", x = paste0("PC3 (", round(100 * summary(sv_pca)$importance[2,3], 1), "%)"),y = paste0("PC4 (", round(100 * summary(sv_pca)$importance[2,4], 1), "%)"))+
+  guides(color = guide_legend(override.aes = list(size = 7))) 
+
+# Scree plot:
+scree <- data.frame(PC = seq_along(sv_pca$sdev),variance = sv_pca$sdev^2 / sum(sv_pca$sdev^2))
+
+ggplot(scree[1:10,], aes(PC, variance * 100)) +
+  geom_col(fill = "blue") +
+  theme(
+    axis.text = element_text(size = 16, color = 'black'),
+    panel.background = element_blank(),
+    plot.margin = margin(10,10,10,10),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold')) +
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(breaks = 1:10) +
+  coord_cartesian(ylim = c(0,17)) +
+  labs(y = "Proportion of variance explained (%)", x = "Principal component")
+
+
+
 ### INVERSIONS ###
 common_vcf <- merged_SV %>% 
   dplyr::select(-ref,-alt) %>%
@@ -2527,6 +2639,36 @@ ggplot(pca_df, aes(PC1, PC2, color = geo)) +
   labs(color = "Collection location",title = "Inversions", x = paste0("PC1 (", round(100 * summary(sv_pca)$importance[2,1], 1), "%)"),y = paste0("PC2 (", round(100 * summary(sv_pca)$importance[2,2], 1), "%)")) +
   guides(color = guide_legend(override.aes = list(size = 7))) 
   
+
+# PC3/4
+ggplot(pca_df, aes(PC3, PC4, color = geo)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values = geo.colors) +
+  theme_bw() +
+  theme(
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.title = element_text(size = 12, color = 'black', face = 'bold'),
+    legend.text = element_text(size = 14, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
+    plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
+  labs(color = "Collection location",title = "Inversions", x = paste0("PC3 (", round(100 * summary(sv_pca)$importance[2,3], 1), "%)"),y = paste0("PC4 (", round(100 * summary(sv_pca)$importance[2,4], 1), "%)"))+
+  guides(color = guide_legend(override.aes = list(size = 7))) 
+
+# Scree plot:
+scree <- data.frame(PC = seq_along(sv_pca$sdev),variance = sv_pca$sdev^2 / sum(sv_pca$sdev^2))
+
+ggplot(scree[1:10,], aes(PC, variance * 100)) +
+  geom_col(fill = "gold") +
+  theme(
+    axis.text = element_text(size = 16, color = 'black'),
+    panel.background = element_blank(),
+    plot.margin = margin(10,10,10,10),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold')) +
+  scale_y_continuous(expand = c(0,0))+
+  scale_x_continuous(breaks = 1:10) +
+  coord_cartesian(ylim = c(0,16)) +
+  labs(y = "Proportion of variance explained (%)", x = "Principal component")
 
 
 
