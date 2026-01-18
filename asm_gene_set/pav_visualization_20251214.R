@@ -885,31 +885,52 @@ genes_plt
 
 
 # Calculating snp count per kb
-snps <- snps %>%
-  dplyr::mutate(bin = (pos %/% 1000) * 1000) %>%  # floor to nearest 1000
-  dplyr::count(chrom, bin, name = "variant_count") %>%
-  dplyr::arrange(chrom, bin)
-
-# SNP density plot
-snps_plt <- ggplot(snps) + 
-  geom_point(aes(x = bin, y = variant_count), color = '#DB6333', alpha = 0.7) +
-  facet_wrap( ~chrom, nrow = 1, scales = "free_x") + 
-  # geom_smooth(aes(x = bin, y = variant_count), method = "loess", se = TRUE, color = "lightblue") +
-  # ylab("Variants per kb") + 
-  theme(
-    axis.text.x = element_blank(),
-    axis.ticks = element_blank(),
-    axis.title = element_blank(),
-    axis.text.y = element_text(size = 12, color = 'black'),
-    panel.grid = element_blank(),
-    panel.background = element_blank(),
-    strip.text = element_text(size = 16, color = "black")) 
-snps_plt 
+# snps <- snps %>%
+#   dplyr::mutate(bin = (pos %/% 1000) * 1000) %>%  # floor to nearest 1000
+#   dplyr::count(chrom, bin, name = "variant_count") %>%
+#   dplyr::arrange(chrom, bin)
+# 
+# # SNP density plot
+# snps_plt <- ggplot(snps) + 
+#   geom_point(aes(x = bin, y = variant_count), color = '#DB6333', alpha = 0.7) +
+#   facet_wrap( ~chrom, nrow = 1, scales = "free_x") + 
+#   # geom_smooth(aes(x = bin, y = variant_count), method = "loess", se = TRUE, color = "lightblue") +
+#   # ylab("Variants per kb") + 
+#   theme(
+#     axis.text.x = element_blank(),
+#     axis.ticks = element_blank(),
+#     axis.title = element_blank(),
+#     axis.text.y = element_text(size = 12, color = 'black'),
+#     panel.grid = element_blank(),
+#     panel.background = element_blank(),
+#     strip.text = element_text(size = 16, color = "black")) 
+# snps_plt 
 
 
 
 # Calculating HDR frequency
-bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
+chr_order <- c("I","II","III","IV","V","X")
+chrom_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/N2.WS283.cleaned.fa.fai", col_names = c("chrom","start","end")) %>%
+  dplyr::mutate(chrom = factor(chrom, levels = chr_order)) %>%
+  dplyr::mutate(chrom = as.character(chrom))
+
+bin_size <- 1000L
+
+bins <- chrom_sizes %>%
+  dplyr::group_by(chrom) %>%
+  dplyr::do({
+    chr_len <- .$end[1]
+    starts <- seq(0, chr_len - 1, by = bin_size)
+    tibble(
+      chrom = .$chrom[1],
+      start = starts,
+      end   = pmin(starts + bin_size, chr_len)
+    )
+  }) %>%
+  dplyr::ungroup()
+
+
+# bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
 bins_dt <- as.data.table(bins)
 bins_dt[, id := .I]  # optional: keep track of bins
 
@@ -1023,7 +1044,7 @@ colnames(all_collapsed) <- c("chrom","start","end")
 
 
 # Calculating DEL frequency
-bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
+# bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
 bins_dt <- as.data.table(bins)
 bins_dt[, id := .I]  # optional: keep track of bins
 
@@ -1066,7 +1087,7 @@ del_freq
 
 
 # Calculating INS frequency
-bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
+# bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
 bins_dt <- as.data.table(bins)
 bins_dt[, id := .I]  # optional: keep track of bins
 
@@ -1110,7 +1131,7 @@ ins_freq
 
 
 # Calculating INV frequency
-bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
+# bins <- snps %>% dplyr::select(chrom, bin)%>% dplyr::group_by(chrom) %>% dplyr::mutate(binEnd = lead(bin)) %>% dplyr::slice(-dplyr::n()) %>% dplyr::ungroup() %>% dplyr::rename(start = bin, end = binEnd)
 bins_dt <- as.data.table(bins)
 bins_dt[, id := .I]  # optional: keep track of bins
 
@@ -1171,166 +1192,81 @@ all_three
 ## Chromosome IDs and sizes (start is always equal to zero)
 chr_order <- c("I","II","III","IV","V","X")
 chrom_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/N2.WS283.cleaned.fa.fai", col_names = c("chrom","start","end")) %>%
-  dplyr::mutate(chrom = factor(chrom, levels = chr_order)) 
-  
+  dplyr::mutate(chrom = factor(chrom, levels = chr_order)) %>%
+  dplyr::mutate(chrom = as.character(chrom))
 
 ## N2 gene modesl in BED format
-n2_genes_bed <- n2_genes_plt %>% dplyr::filter(chrom != "MtDNA")
-
+n2_genes_bed <- n2_genes_plt %>% dplyr::filter(chrom != "MtDNA") %>%
+  transmute(chrom = as.character(chrom), start = as.numeric(start), end = as.numeric(end))
 
 # Next ring in will have HDRs (represented with gray40 rectangles)
 ## HDRs in BED format
-hdrs_collapsed_bed <- all_collapsed
-
+hdrs_collapsed_bed <- all_collapsed %>%
+  transmute(chrom = as.character(chrom), start = as.numeric(start), end = as.numeric(end))
 
 # Next ring in will have SNV count per kb (plot fitted LOESS line?) 
 ## SNV count in table: "chrom", "bin", "variant_count"
-snps_per_bin <- snps
+bin_size <- 1000L
 
+bins <- chrom_sizes %>%
+  dplyr::group_by(chrom) %>%
+  dplyr::do({
+    chr_len <- .$end[1]
+    starts <- seq(0, chr_len - 1, by = bin_size)
+    tibble(
+      chrom = .$chrom[1],
+      start = starts,
+      end   = pmin(starts + bin_size, chr_len)
+    )
+  }) %>%
+  dplyr::ungroup()
+
+bins_dt <- as.data.table(bins)
+setkey(bins_dt, chrom, start, end)
+bins_dt[, id := .I]
+
+snps_counts <- snps %>%
+  dplyr::select(-ref,-alt) %>%
+  dplyr::filter(chrom %in% chr_order) %>%
+  dplyr::mutate(
+    chrom = as.character(chrom),
+    start = (pos %/% bin_size) * bin_size,
+    end   = start + bin_size) %>%
+  dplyr::count(chrom, start, end, name = "variant_count")
+
+snps_dt <- as.data.table(snps_counts)
+setkey(snps_dt, chrom, start, end)
+
+bins_snp <- merge(bins_dt, snps_dt, by = c("chrom","start","end"), all.x = TRUE)
+bins_snp[is.na(variant_count), variant_count := 0]
+snps_per_bin <- as.data.frame(bins_snp) %>%
+  dplyr::mutate(middle = (start + end)/2)
 
 # Next ring in will plot DEL frequncy (plotted as LOESS line) - make sure CGC1 is filtered out
 ## DEL calls with "chrom", "middle" (of the 1 kb bin), and "freq"
 del_bin_freq <- del_bin_plt %>% dplyr::select(chrom, middle, freq)
 
-
 # Next ring in will plot INS frequency (plotted as LOESS line) - make sure CGC1 is filtered out
 ## INS calls with "chrom", "middle" (of the 1 kb bin), and "freq"
 ins_bin_freq <- ins_bin_plt %>% dplyr::select(chrom, middle, freq)
-
 
 # Then the final, more inner ring will have INV frequency (plotted as LOESS line) - make sure CGC1 is filtered out
 ## INV calls with "chrom", "middle" (of the 1 kb bin), and "freq"
 inv_bin_freq <- inv_bin_plt %>% dplyr::select(chrom, middle, freq)
 
+
 ## =========================
 ##  Plotting!
-## =========================
-add_point_track <- function(df, col, ylim, track_height = 0.10, label = NULL) {
-  circos.trackPlotRegion(
-    ylim = ylim,
-    track.height = track_height,
-    bg.border = NA,
-    panel.fun = function(x, y) {
-      chr <- CELL_META$sector.index
-      d <- df[df$chrom == chr, , drop = FALSE]
-      if (nrow(d) == 0) return()
-      circos.points(d$pos, d$value, pch = 16, cex = 0.25, col = col)
-    }
-  )
-  if (!is.null(label)) {
-    # Put track label near the first chromosome sector
-    circos.text(
-      x = 0, y = mean(ylim), labels = label,
-      sector.index = chr_order[1],
-      track.index  = get.current.track.index(),
-      facing = "inside", adj = c(1, 0.5), cex = 0.7
-    )
-  }
-}
-
-circos.clear()
-circos.par(
-  start.degree = 90,
-  gap.after = c(rep(2, length(chr_order)-1), 8),
-  track.margin = c(0.002, 0.002),
-  cell.padding = c(0, 0, 0, 0)
-)
-
-circos.initialize(
-  factors = chrom_sizes$chrom,
-  xlim = cbind(rep(0, nrow(chrom_sizes)), chrom_sizes$end)
-)
-
-## Outer chromosome ring (ideogram-like) - I NEED TO ADD GENE MODELS
-circos.trackPlotRegion(
-  ylim = c(0, 1),
-  track.height = 0.065,
-  bg.border = NA,
-  panel.fun = function(x, y) {
-    chr <- CELL_META$sector.index
-    xlim <- CELL_META$xlim
-    
-    circos.rect(xlim[1], 0, xlim[2], 1, col = "grey90", border = "white")
-    circos.text(CELL_META$xcenter, 0.55, chr, facing = "bending.inside", cex = 0.9, font = 2)
-    
-    ## Axis ticks (Mb)
-    circos.axis(
-      h = "top",
-      major.at = seq(0, xlim[2], by = 5e6),
-      labels = seq(0, xlim[2], by = 5e6) / 1e6,
-      labels.cex = 0.5,
-      major.tick.length = 0.02,
-      minor.ticks = 4
-    )
-  }
-)
-
-## Tracks
-snp_ylim <- c(0, max(snps_per_bin$variant_count, na.rm = TRUE))
-add_point_track(snps_per_bin, col = "#DB6333", ylim = snp_ylim, track_height = 0.12, label = "SNPs/kb")
-add_point_track(hdrs_collapsed_bed,  col = "grey40",  ylim = c(0,1),   track_height = 0.10, label = "HDR freq")
-add_point_track(del_bin_freq,  col = "red",     ylim = c(0,1),   track_height = 0.08, label = "DEL freq")
-add_point_track(ins_bin_freq,  col = "blue",    ylim = c(0,1),   track_height = 0.08, label = "INS freq")
-add_point_track(inv_bin_freq,  col = "gold",    ylim = c(0,1),   track_height = 0.08, label = "INV freq")
-
-## Legend (place top-right)
-lgd <- Legend(
-  labels = c("SNP density", "HDR freq", "DEL freq", "INS freq", "INV freq"),
-  type = "points",
-  pch = 16,
-  legend_gp = gpar(col = c("#DB6333", "grey40", "red", "blue", "gold"))
-)
-draw(lgd, x = unit(0.88, "npc"), y = unit(0.88, "npc"))
-
-circos.clear()
-
-
-
-
-
-library(dplyr)
-library(circlize)
-library(ComplexHeatmap)
-library(grid)
-
-chr_order <- c("I","II","III","IV","V","X")
-
-chrom_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/N2.WS283.cleaned.fa.fai",col_names = c("chrom","start","end")) %>%
-  dplyr::mutate(chrom = factor(chrom, levels = chr_order)) %>%
-  dplyr::arrange(chrom)
-
-# Genes BED must have: chrom, start, end
-# (Assuming n2_genes_plt has start/end already)
-n2_genes_bed <- n2_genes_plt %>%
-  dplyr::filter(chrom %in% chr_order) %>%
-  transmute(chrom = as.character(chrom), start = as.numeric(start), end = as.numeric(end))
-
-# HDRs BED must have: chrom, start, end
-hdrs_collapsed_bed <- all_collapsed %>%
-  dplyr::filter(chrom %in% chr_order) %>%
-  transmute(chrom = as.character(chrom), start = as.numeric(start), end = as.numeric(end))
-
-# SNP bins must have: chrom, pos, value (pos = bin mid)
-snps_per_bin2 <- snps_per_bin %>%
-  dplyr::filter(chrom %in% chr_order) %>%
-  dplyr::mutate(bin = bin + 500) %>%
-  transmute(chrom = as.character(chrom),
-            pos   = as.numeric(bin),                 # if `bin` is start, change to `bin + 500`
-            value = as.numeric(variant_count))
-
+## ========================= 
 # SV frequency tracks must have: chrom, pos, value
-del_bin_freq2 <- del_bin_freq %>%
-  dplyr::filter(chrom %in% chr_order) %>%
+del_bin_freq <- del_bin_freq %>%
   transmute(chrom = as.character(chrom), pos = as.numeric(middle), value = as.numeric(freq))
 
-ins_bin_freq2 <- ins_bin_freq %>%
-  dplyr::filter(chrom %in% chr_order) %>%
+ins_bin_freq <- ins_bin_freq %>%
   transmute(chrom = as.character(chrom), pos = as.numeric(middle), value = as.numeric(freq))
 
-inv_bin_freq2 <- inv_bin_freq %>%
-  dplyr::filter(chrom %in% chr_order) %>%
+inv_bin_freq <- inv_bin_freq %>%
   transmute(chrom = as.character(chrom), pos = as.numeric(middle), value = as.numeric(freq))
-
 
 add_rect_track <- function(bed, col, track_height = 0.08, label = NULL) {
   circos.trackPlotRegion(
@@ -1354,7 +1290,6 @@ add_rect_track <- function(bed, col, track_height = 0.08, label = NULL) {
     )
   }
 }
-
 
 add_value_track <- function(df, col, ylim, track_height = 0.10, label = NULL,
                             type = c("line","points"), add_loess = FALSE, span = 0.2) {
@@ -1397,7 +1332,6 @@ add_value_track <- function(df, col, ylim, track_height = 0.10, label = NULL,
   }
 }
 
-
 circos.clear()
 circos.par(start.degree = 90, gap.after = c(rep(2, length(chr_order)-1), 8), track.margin = c(0.002, 0.002), cell.padding = c(0, 0, 0, 0))
 circos.initialize(factors = as.character(chrom_sizes$chrom), xlim = cbind(rep(0, nrow(chrom_sizes)), chrom_sizes$end))
@@ -1412,24 +1346,20 @@ circos.trackPlotRegion(
     xlim <- CELL_META$xlim
     
     # background chromosome band
-    circos.rect(xlim[1], 0, xlim[2], 1, col = "grey90", border = "white")
-    
+    circos.rect(xlim[1], 0, xlim[2], 1, col = "grey90", border = "black")
     # gene models as black rectangles (thin band)
     g <- n2_genes_bed[n2_genes_bed$chrom == chr, , drop = FALSE]
     if (nrow(g) > 0) {
-      circos.rect(g$start, 0.05, g$end, 0.25, col = "black", border = NA)
-    }
-    
+      circos.rect(g$start, 0.05, g$end, 0.25, col = "black", border = NA)}
     # chromosome label
-    circos.text(CELL_META$xcenter, 0.70, chr, facing = "bending.inside", cex = 0.9, font = 2)
-    
+    circos.text(CELL_META$xcenter, 0.70, chr, facing = "bending.inside", cex = 0.9, font = 4)
     # axis ticks
     circos.axis(
       h = "top",
-      major.at = seq(0, xlim[2], by = 5e6),
+      major.at = seq(0, xlim[2], by = 2e6),
       labels = seq(0, xlim[2], by = 5e6) / 1e6,
       labels.cex = 0.5,
-      major.tick.length = 0.02,
+      major.tick.length = 0.04,
       minor.ticks = 4
     )
   }
@@ -1438,16 +1368,12 @@ circos.trackPlotRegion(
 # HDR intervals (rectangles)
 add_rect_track(hdrs_collapsed_bed, col = "grey40", track_height = 0.08, label = "HDRs")
 # SNP density (line or points)
-snp_ylim <- c(0, max(snps_per_bin2$value, na.rm = TRUE))
-add_value_track(snps_per_bin2, col = "#DB6333", ylim = snp_ylim, track_height = 0.12, label = "SNPs/kb", type = "line", add_loess = TRUE, span = 0.15)
+snp_ylim <- c(0, max(snps_per_bin$value, na.rm = TRUE))
+add_value_track(snps_per_bin, col = "#DB6333", ylim = snp_ylim, track_height = 0.12, label = "SNPs/kb", type = "line", add_loess = TRUE, span = 0.15)
 # SV frequencies (lines)
-add_value_track(del_bin_freq2, col = "red",  ylim = c(0, 1), track_height = 0.08, label = "DEL freq", type = "line", add_loess = TRUE, span = 0.2)
-add_value_track(ins_bin_freq2, col = "blue", ylim = c(0, 1), track_height = 0.08, label = "INS freq", type = "line", add_loess = TRUE, span = 0.2)
-add_value_track(inv_bin_freq2, col = "gold", ylim = c(0, 1), track_height = 0.08, label = "INV freq", type = "line", add_loess = TRUE, span = 0.2)
-
-# Legend
-lgd <- Legend(labels = c("SNP density", "HDRs", "DEL freq", "INS freq", "INV freq"), type = "lines", legend_gp = gpar(col = c("#DB6333", "grey40", "red", "blue", "gold")),lwd = c(2, 8, 2, 2, 2))
-draw(lgd, x = unit(0.88, "npc"), y = unit(0.88, "npc"))
+add_value_track(del_bin_freq, col = "red",  ylim = c(0, 1), track_height = 0.08, label = "DEL freq", type = "line", add_loess = TRUE, span = 0.2)
+add_value_track(ins_bin_freq, col = "blue", ylim = c(0, 1), track_height = 0.08, label = "INS freq", type = "line", add_loess = TRUE, span = 0.2)
+add_value_track(inv_bin_freq, col = "gold3", ylim = c(0, 1), track_height = 0.08, label = "INV freq", type = "line", add_loess = TRUE, span = 0.2)
 
 circos.clear()
 
@@ -1486,8 +1412,6 @@ circos.clear()
 # =============================================================== #
 # Enrichment of SVs in HDRs #
 # =============================================================== #
-chrom_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/N2.WS283.cleaned.fa.fai", col_names = c("chrom","start","end"))
-
 # DEL enrichment in HDRs
 hdr_bins <- all_collapsed
 del_calls <- filt_calls %>% dplyr::filter(sv_type == "DEL", strain != "CGC1") %>% dplyr::mutate(end = pos + sv_length) %>% dplyr::rename(start = pos) %>% dplyr::select(chrom,start,end,strain)
