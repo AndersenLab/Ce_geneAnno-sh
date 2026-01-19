@@ -10,6 +10,7 @@ library(ComplexHeatmap)
 library(grid)      
 library(GenomicRanges)
 library(IRanges)
+library(ggrepel)
 
 # for file in *.vcf; do bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%FILTER\t%INFO/SVTYPE\t%INFO/SVLEN' $file | awk -v strain=${file%%.*} -v OFS='\t' '$7 >= 50 || $7 <= -50 {print $1,$2,$3,$4,$5,$6,$7,strain}'; done | grep -w "PASS" | grep -v -w "SNV"
 
@@ -712,12 +713,13 @@ jasmine_plt_hist <- ggplot(data = merged_SV) +
 jasmine_plt_hist
 
 # ensuring merging of SV calls is correct
-# merged_all <- merged_SV %>% dplyr::filter(number_svs_merged == "141") %>%
-#   dplyr::mutate(sv_length = abs(sv_length)) %>%
-#   dplyr::group_by(sv_type) %>%
-#   dplyr::arrange(desc(sv_length)) %>%
-#   dplyr::slice_head(n = 3) %>%
-#   dplyr::ungroup()
+merged_all <- merged_SV %>% dplyr::filter(number_svs_merged == "141") %>%
+  dplyr::mutate(sv_length = abs(sv_length)) %>%
+  dplyr::group_by(sv_type) %>%
+  dplyr::arrange(desc(sv_length)) %>%
+  dplyr::ungroup() 
+  # dplyr::slice_head(n = 3) %>%
+  # dplyr::ungroup()
 # 
 # 
 nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
@@ -1350,16 +1352,16 @@ circos.trackPlotRegion(
     # gene models as black rectangles (thin band)
     g <- n2_genes_bed[n2_genes_bed$chrom == chr, , drop = FALSE]
     if (nrow(g) > 0) {
-      circos.rect(g$start, 0.05, g$end, 0.25, col = "black", border = NA)}
+      circos.rect(g$start, 0.01, g$end, 0.4, col = "black", border = NA)}
     # chromosome label
-    circos.text(CELL_META$xcenter, 0.70, chr, facing = "bending.inside", cex = 0.9, font = 4)
+    circos.text(CELL_META$xcenter, 0.70, chr, facing = "bending.inside", cex = 0.9, font = 2)
     # axis ticks
     circos.axis(
       h = "top",
-      major.at = seq(0, xlim[2], by = 2e6),
+      major.at = seq(0, xlim[2], by = 5e6),
       labels = seq(0, xlim[2], by = 5e6) / 1e6,
       labels.cex = 0.5,
-      major.tick.length = 0.04,
+      major.tick.length = 0.2,
       minor.ticks = 4
     )
   }
@@ -2323,7 +2325,11 @@ pca_df <- pca_df %>%
 geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
                 "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
 
+pca_df <- pca_df %>%
+  mutate(label = ifelse(PC2 > 50, strain, NA))
+
 ggplot(pca_df, aes(PC1, PC2, color = geo)) +
+  geom_text_repel(aes(label = label), size = 4, max.overlaps = Inf, show.legend = FALSE) +
   geom_point(size = 3, alpha = 0.8) +
   scale_color_manual(values = geo.colors) +
   theme_bw() +
@@ -2400,7 +2406,11 @@ pca_df <- pca_df %>%
 geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
                 "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
 
+pca_df <- pca_df %>%
+  mutate(label = ifelse(PC2 > 50, strain, NA))
+
 ggplot(pca_df, aes(PC1, PC2, color = geo)) +
+  geom_text_repel(aes(label = label), size = 4, max.overlaps = Inf, show.legend = FALSE) +
   geom_point(size = 3, alpha = 0.8) +
   scale_color_manual(values = geo.colors) +
   theme_bw() +
@@ -2476,7 +2486,11 @@ pca_df <- pca_df %>%
 geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
                 "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
 
+pca_df <- pca_df %>%
+  mutate(label = ifelse(PC2 > 50, strain, NA))
+
 ggplot(pca_df, aes(PC1, PC2, color = geo)) +
+  geom_text_repel(aes(label = label), size = 4, max.overlaps = Inf, show.legend = FALSE) +
   geom_point(size = 3, alpha = 0.8) +
   scale_color_manual(values = geo.colors) +
   theme_bw() +
@@ -2550,7 +2564,11 @@ pca_df <- pca_df %>%
 geo.colors <- c("Big Island"="#66C2A5", "Molokai" = "black", "Maui" = "yellow", "Oahu" = "brown", "Kauai" = "pink", "Africa"="green", "North America" = "purple", "Europe" = "#E41A1C", "Atlantic" = "blue", 
                 "Oceania" ="cyan", "unknown" = 'gray', "CGC1" = "#DB6333")
 
+pca_df <- pca_df %>%
+  mutate(label = ifelse(PC2 > 5, strain, NA))
+
 ggplot(pca_df, aes(PC1, PC2, color = geo)) +
+  geom_text_repel(aes(label = label), size = 4, max.overlaps = Inf, show.legend = FALSE) +
   geom_point(size = 3, alpha = 0.8) +
   scale_color_manual(values = geo.colors) +
   theme_bw() +
