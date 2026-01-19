@@ -886,30 +886,6 @@ genes_plt <- ggplot(n2_genes_plt %>% dplyr::filter(chrom != "MtDNA")) +
 genes_plt
 
 
-# Calculating snp count per kb
-# snps <- snps %>%
-#   dplyr::mutate(bin = (pos %/% 1000) * 1000) %>%  # floor to nearest 1000
-#   dplyr::count(chrom, bin, name = "variant_count") %>%
-#   dplyr::arrange(chrom, bin)
-# 
-# # SNP density plot
-# snps_plt <- ggplot(snps) + 
-#   geom_point(aes(x = bin, y = variant_count), color = '#DB6333', alpha = 0.7) +
-#   facet_wrap( ~chrom, nrow = 1, scales = "free_x") + 
-#   # geom_smooth(aes(x = bin, y = variant_count), method = "loess", se = TRUE, color = "lightblue") +
-#   # ylab("Variants per kb") + 
-#   theme(
-#     axis.text.x = element_blank(),
-#     axis.ticks = element_blank(),
-#     axis.title = element_blank(),
-#     axis.text.y = element_text(size = 12, color = 'black'),
-#     panel.grid = element_blank(),
-#     panel.background = element_blank(),
-#     strip.text = element_text(size = 16, color = "black")) 
-# snps_plt 
-
-
-
 # Calculating HDR frequency
 chr_order <- c("I","II","III","IV","V","X")
 chrom_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/N2.WS283.cleaned.fa.fai", col_names = c("chrom","start","end")) %>%
@@ -1175,12 +1151,12 @@ inv_freq <- ggplot(inv_bin_plt) +
 inv_freq
 
 
-all_three <- cowplot::plot_grid(
-  del_freq, ins_freq, inv_freq,
-  nrow = 3,
-  align = "v",
-  rel_heights = c(1,1,1))
-all_three
+# all_three <- cowplot::plot_grid(
+#   del_freq, ins_freq, inv_freq,
+#   nrow = 3,
+#   align = "v",
+#   rel_heights = c(1,1,1))
+# all_three
 
 
 
@@ -1200,6 +1176,55 @@ chrom_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/N
 ## N2 gene modesl in BED format
 n2_genes_bed <- n2_genes_plt %>% dplyr::filter(chrom != "MtDNA") %>%
   transmute(chrom = as.character(chrom), start = as.numeric(start), end = as.numeric(end))
+
+gene_bin_size <- 50000L
+
+# one row per chr with lengths
+chr_len_df <- chrom_sizes %>%
+  dplyr::filter(chrom %in% chr_order) %>%
+  dplyr::transmute(chrom = as.character(chrom), chr_len = as.numeric(end)) %>%
+  dplyr::distinct()
+
+# bins that cover the entire chromosome, including the last partial bin
+gene_bins <- chr_len_df %>%
+  dplyr::group_by(chrom) %>%
+  dplyr::do({
+    L <- .$chr_len[1]
+    starts <- seq(0, L, by = gene_bin_size)  # include L so last bin is created
+    tibble(
+      chrom = .$chrom[1],
+      start = starts[-length(starts)],
+      end   = pmin(starts[-1], L)
+    )
+  }) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(mid = (start + end)/2)
+
+# overlap-count genes per bin
+bins_dt  <- as.data.table(gene_bins)
+genes_dt <- as.data.table(n2_genes_bed)  # chrom/start/end already numeric in your code
+
+setkey(bins_dt,  chrom, start, end)
+setkey(genes_dt, chrom, start, end)
+
+ov <- foverlaps(genes_dt, bins_dt, nomatch = 0)
+
+gene_counts <- ov[, .(gene_count = .N), by = .(chrom, start, end, mid)]
+
+bins_gene <- merge(bins_dt, gene_counts, by = c("chrom","start","end","mid"), all.x = TRUE)
+bins_gene[is.na(gene_count), gene_count := 0]
+
+gene_bins_50kb <- as.data.frame(bins_gene) %>%
+  dplyr::rename(pos = mid, value = gene_count)
+
+gene_ylim <- c(0, max(gene_bins_50kb$value, na.rm = TRUE))
+
+
+
+
+
+
+
 
 # Next ring in will have HDRs (represented with gray40 rectangles)
 ## HDRs in BED format
@@ -1242,7 +1267,8 @@ setkey(snps_dt, chrom, start, end)
 bins_snp <- merge(bins_dt, snps_dt, by = c("chrom","start","end"), all.x = TRUE)
 bins_snp[is.na(variant_count), variant_count := 0]
 snps_per_bin <- as.data.frame(bins_snp) %>%
-  dplyr::mutate(middle = (start + end)/2)
+  dplyr::mutate(pos = (start + end)/2) %>%
+  dplyr::select(chrom,pos,variant_count) %>% dplyr::rename(value = variant_count)
 
 # Next ring in will plot DEL frequncy (plotted as LOESS line) - make sure CGC1 is filtered out
 ## DEL calls with "chrom", "middle" (of the 1 kb bin), and "freq"
@@ -1334,14 +1360,45 @@ add_value_track <- function(df, col, ylim, track_height = 0.10, label = NULL,
   }
 }
 
+add_filled_area_track <- function(df, col_fill = "#00BFC480", col_line = "#00BFC4",
+                                  ylim, track_height = 0.10, label = NULL) {
+  circos.trackPlotRegion(
+    ylim = ylim,
+    track.height = track_height,
+    bg.border = NA,
+    panel.fun = function(x, y) {
+      chr <- CELL_META$sector.index
+      d <- df[df$chrom == chr, , drop = FALSE]
+      if (nrow(d) < 2) return()
+      d <- d[order(d$pos), , drop = FALSE]
+      
+      # build polygon (baseline at ylim[1])
+      x_poly <- c(d$pos, rev(d$pos))
+      y_poly <- c(d$value, rep(ylim[1], nrow(d)))
+      
+      circos.polygon(x_poly, y_poly, col = col_fill, border = NA)
+      circos.lines(d$pos, d$value, col = col_line, lwd = 1.2)
+    }
+  )
+  
+  if (!is.null(label)) {
+    circos.text(
+      x = 0, y = mean(ylim), labels = label,
+      sector.index = chr_order[1],
+      track.index  = get.current.track.index(),
+      facing = "inside", adj = c(1, 0.5), cex = 0.7
+    )
+  }
+}
+
 circos.clear()
-circos.par(start.degree = 90, gap.after = c(rep(2, length(chr_order)-1), 8), track.margin = c(0.002, 0.002), cell.padding = c(0, 0, 0, 0))
+circos.par(track.margin = c(0.002, 0.002), cell.padding = c(0, 0, 0, 0)) # start.degree = 86, gap.after = c(rep(2, length(chr_order)-1), 8)
 circos.initialize(factors = as.character(chrom_sizes$chrom), xlim = cbind(rep(0, nrow(chrom_sizes)), chrom_sizes$end))
 
 # Outer ideogram-like ring + gene models inside it
 circos.trackPlotRegion(
   ylim = c(0, 1),
-  track.height = 0.10,
+  track.height = 0.02,
   bg.border = NA,
   panel.fun = function(x, y) {
     chr <- CELL_META$sector.index
@@ -1350,39 +1407,49 @@ circos.trackPlotRegion(
     # background chromosome band
     circos.rect(xlim[1], 0, xlim[2], 1, col = "grey90", border = "black")
     # gene models as black rectangles (thin band)
-    g <- n2_genes_bed[n2_genes_bed$chrom == chr, , drop = FALSE]
-    if (nrow(g) > 0) {
-      circos.rect(g$start, 0.01, g$end, 0.4, col = "black", border = NA)}
+    # g <- n2_genes_bed[n2_genes_bed$chrom == chr, , drop = FALSE]
+    # if (nrow(g) > 0) {
+    #   circos.rect(g$start, 0, g$end, 1, col = "black", border = NA)}
+    
+    # gene density (50 kb bins) as cyan-blue line
+    # gd <- gene_density_50kb[gene_density_50kb$chrom == chr, , drop = FALSE]
+    # if (nrow(gd) > 1) {
+    #   gd <- gd[order(gd$pos), , drop = FALSE]
+    #   
+    #   # rescale density to fit nicely within the outer track band
+    #   y <- (gd$value - gene_ylim[1]) / (gene_ylim[2] - gene_ylim[1] + 1e-9)
+    #   y <- 0.10 + y * 0.80   # occupy 10%..90% of the track height
+    #   
+    #   circos.lines(gd$pos, y, col = "#00BFC4", lwd = 2)
+    # }
+    
+    
+    
     # chromosome label
-    circos.text(CELL_META$xcenter, 0.70, chr, facing = "bending.inside", cex = 0.9, font = 2)
+    circos.text(CELL_META$xcenter, 3.3, chr, facing = "bending.outside", niceFacing = T, cex = 1.5, font = 2)
     # axis ticks
-    circos.axis(
-      h = "top",
-      major.at = seq(0, xlim[2], by = 5e6),
-      labels = seq(0, xlim[2], by = 5e6) / 1e6,
-      labels.cex = 0.5,
-      major.tick.length = 0.2,
-      minor.ticks = 4
-    )
+    circos.axis(h = "top", major.at = seq(0, xlim[2], by = 5e6),labels = seq(0, xlim[2], by = 5e6) / 1e6, labels.cex = 1, major.tick.length = 0.001)
   }
 )
 
-# HDR intervals (rectangles)
-add_rect_track(hdrs_collapsed_bed, col = "grey40", track_height = 0.08, label = "HDRs")
-# SNP density (line or points)
+
+add_filled_area_track(gene_bins_50kb,col_fill = "#00BFC480",col_line = "#00BFC4",ylim = gene_ylim,track_height = 0.10)
+add_rect_track(hdrs_collapsed_bed, col = "grey40", track_height = 0.08)
 snp_ylim <- c(0, max(snps_per_bin$value, na.rm = TRUE))
-add_value_track(snps_per_bin, col = "#DB6333", ylim = snp_ylim, track_height = 0.12, label = "SNPs/kb", type = "line", add_loess = TRUE, span = 0.15)
-# SV frequencies (lines)
-add_value_track(del_bin_freq, col = "red",  ylim = c(0, 1), track_height = 0.08, label = "DEL freq", type = "line", add_loess = TRUE, span = 0.2)
-add_value_track(ins_bin_freq, col = "blue", ylim = c(0, 1), track_height = 0.08, label = "INS freq", type = "line", add_loess = TRUE, span = 0.2)
-add_value_track(inv_bin_freq, col = "gold3", ylim = c(0, 1), track_height = 0.08, label = "INV freq", type = "line", add_loess = TRUE, span = 0.2)
+add_value_track(snps_per_bin, col = "#DB6333", ylim = snp_ylim, track_height = 0.12, type = "line", add_loess = FALSE, span = 0.15)
+add_value_track(del_bin_freq, col = "red",  ylim = c(0, 1), track_height = 0.08, type = "line", add_loess = FALSE, span = 0.2)
+add_value_track(ins_bin_freq, col = "blue", ylim = c(0, 1), track_height = 0.08, type = "line", add_loess = FALSE, span = 0.2)
+add_value_track(inv_bin_freq, col = "gold3", ylim = c(0, 1), track_height = 0.08, type = "line", add_loess = FALSE, span = 0.2)
+
+lgd <- Legend(title = "Tracks",labels = c("Gene density (50 kb)","HDRs","SNPs per kb","DEL frequency","INS frequency","INV frequency"),
+              type = "lines",legend_gp = gpar(col = c("#00BFC4","grey40","#DB6333","red","blue","gold3"),
+              lwd = c(3, 3, 3, 3, 3, 3)),
+              labels_gp = gpar(fontsize = 14),
+              title_gp  = gpar(fontsize = 16, fontface = "bold"))
+
+draw(lgd, x = unit(0.92, "npc"), y = unit(0.92, "npc"), just = c("right", "top"))
 
 circos.clear()
-
-
-
-
-
 
 
 
