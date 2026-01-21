@@ -630,7 +630,15 @@ N2_ad <- boundGenes %>%
   dplyr::ungroup()
 
 reassess_distal <- N2_ad %>% dplyr::filter(has_any_ortho==T & has_bound_ortho==F) 
-distal_ortho <- inreg_orthos %>% 
+
+orthos_tran <- orthos %>%
+  dplyr::mutate(N2 = strsplit(as.character(N2), ",")) %>%
+  tidyr::unnest(N2) %>%
+  dplyr::mutate(N2=trimws(N2)) %>%
+  dplyr::left_join(N2_tran_reg %>% dplyr::select(tranname,seqid,seqname,start,end) %>% dplyr::mutate(og_loc="in_region"),by=c("N2"="tranname"))
+
+
+distal_ortho <- orthos_tran %>%  # inreg_orthos
   dplyr::filter(N2 %in% reassess_distal$tranname) %>%
   dplyr::select(any_of(strainCol_iter), N2)%>%
   # dplyr::mutate(comma_count = stringr::str_count(CB4856, ",")+1) %>%
@@ -642,7 +650,7 @@ distal_ortho <- inreg_orthos %>%
   dplyr::distinct(N2)
 
 N2_ad_corr <- N2_ad %>%
-  dplyr::mutate(has_any_ortho=ifelse(tranname %in% distal_ortho$N2,F,has_any_ortho))
+  dplyr::mutate(has_any_ortho=ifelse(tranname %in% distal_ortho$N2,F,has_any_ortho)) 
 
 g_count <- length(unique(N2_ad_corr$Parent))
 
@@ -697,94 +705,9 @@ WI_ad <- boundGenes %>%
   dplyr::mutate(y_pos=rleid(STRAIN)) %>%
   dplyr::select(-g_diff,-start_sort,-inv,-first_gene,-n_gene) 
 
-
-# sri14_CNVs <- boundGenes %>%
-#   dplyr::filter(!STRAIN=="N2") %>%
-#   dplyr::left_join(all_ortho_pairs_raw,by=c("STRAIN","tranname")) %>%
-#   dplyr::mutate(tr_has_any_ortho=ifelse(is.na(has_any_ortho),F,has_any_ortho)) %>%
-#   dplyr::left_join(all_ortho_pairs_bound %>% dplyr::select(tranname,STRAIN,N2,status) %>% dplyr::filter(N2 %in% N2_ad$tranname),by=c("STRAIN","tranname")) %>%
-#   dplyr::mutate(tr_has_bound_ortho=ifelse(!is.na(status),T,F)) %>%
-#   dplyr::select(-status,-has_any_ortho) %>%
-#   dplyr::rename(N2_name=N2) %>%
-#   dplyr::left_join(aliases %>% dplyr::select(-seqname),by=c("N2_name"="tranname")) %>%
-#   dplyr::mutate(alias.x=alias.y) %>%
-#   dplyr::select(-alias.y,-N2_name) %>%
-#   dplyr::rename(alias=alias.x) %>%
-#   dplyr::group_by(STRAIN,Parent) %>%
-#   dplyr::mutate(has_any_ortho = any(tr_has_any_ortho)) %>%
-#   dplyr::mutate(has_bound_ortho = any(tr_has_bound_ortho)) %>%
-#   dplyr::select(-tr_has_any_ortho,-tr_has_bound_ortho) %>%
-#   dplyr::ungroup() %>%
-#   dplyr::left_join(HV_boundary %>% dplyr::select(STRAIN,inv),by="STRAIN") %>%
-#   dplyr::group_by(STRAIN) %>%
-#   dplyr::mutate(n_gene=n_distinct(Parent)) %>%
-#   dplyr::mutate(start_sort = if_else(rep(dplyr::first(inv), dplyr::n()), -start, start)) %>%
-#   dplyr::arrange(start_sort, .by_group = TRUE) %>%
-#   dplyr::mutate(first_gene=dplyr::first(alias)) %>%
-#   dplyr::ungroup() %>%
-#   # dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
-#   dplyr::group_by(STRAIN) %>%
-#   dplyr::arrange(first_gene, n_gene, .by_group = TRUE) %>%
-#   dplyr::mutate(order_gene = dplyr::first(first_gene), order_num = dplyr::first(n_gene)) %>%
-#   dplyr::ungroup() %>%
-#   # code specific for ordering in relation to sri-14
-#   dplyr::group_by(STRAIN,alias) %>%
-#   dplyr::mutate(n_sri14 = ifelse(alias == "sri-14", n(), 1)) %>%
-#   dplyr::ungroup() %>%
-#   dplyr::arrange(desc(n_sri14)) %>%
-#   dplyr::filter(n_sri14 > 1) %>%
-#   dplyr::select(STRAIN, start,end, n_sri14) %>%
-#   dplyr::distinct()
-# 
-# 
-# sri13_orthos <- boundGenes %>%
-#   dplyr::filter(!STRAIN=="N2") %>%
-#   dplyr::left_join(all_ortho_pairs_raw,by=c("STRAIN","tranname")) %>%
-#   dplyr::mutate(tr_has_any_ortho=ifelse(is.na(has_any_ortho),F,has_any_ortho)) %>%
-#   dplyr::left_join(all_ortho_pairs_bound %>% dplyr::select(tranname,STRAIN,N2,status) %>% dplyr::filter(N2 %in% N2_ad$tranname),by=c("STRAIN","tranname")) %>%
-#   dplyr::mutate(tr_has_bound_ortho=ifelse(!is.na(status),T,F)) %>%
-#   dplyr::select(-status,-has_any_ortho) %>%
-#   dplyr::rename(N2_name=N2) %>%
-#   dplyr::left_join(aliases %>% dplyr::select(-seqname),by=c("N2_name"="tranname")) %>%
-#   dplyr::mutate(alias.x=alias.y) %>%
-#   dplyr::select(-alias.y,-N2_name) %>%
-#   dplyr::rename(alias=alias.x) %>%
-#   dplyr::group_by(STRAIN,Parent) %>%
-#   dplyr::mutate(has_any_ortho = any(tr_has_any_ortho)) %>%
-#   dplyr::mutate(has_bound_ortho = any(tr_has_bound_ortho)) %>%
-#   dplyr::select(-tr_has_any_ortho,-tr_has_bound_ortho) %>%
-#   dplyr::ungroup() %>%
-#   dplyr::left_join(HV_boundary %>% dplyr::select(STRAIN,inv),by="STRAIN") %>%
-#   dplyr::group_by(STRAIN) %>%
-#   dplyr::mutate(n_gene=n_distinct(Parent)) %>%
-#   dplyr::mutate(start_sort = if_else(rep(dplyr::first(inv), dplyr::n()), -start, start)) %>%
-#   dplyr::arrange(start_sort, .by_group = TRUE) %>%
-#   dplyr::mutate(first_gene=dplyr::first(alias)) %>%
-#   dplyr::ungroup() %>%
-#   # dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
-#   dplyr::group_by(STRAIN) %>%
-#   dplyr::arrange(first_gene, n_gene, .by_group = TRUE) %>%
-#   dplyr::mutate(order_gene = dplyr::first(first_gene), order_num = dplyr::first(n_gene)) %>%
-#   dplyr::ungroup() %>%
-#   # code specific for ordering in relation to sri-14
-#   dplyr::group_by(STRAIN,alias) %>%
-#   dplyr::mutate(n_sri13 = ifelse(alias == "sri-13", n(), 1)) %>%
-#   dplyr::ungroup() %>%
-#   dplyr::arrange(desc(n_sri13)) %>%
-#   dplyr::filter(n_sri13 > 1) %>%
-#   dplyr::select(STRAIN, start, end, n_sri13) %>%
-#   dplyr::distinct()
-# 
-# print(nrow(sri13_orthos))
-# print(nrow(sri14_CNVs))
-
-
-
-
-
 N2_ad_corr <- N2_ad_corr %>%
   dplyr::mutate(y_pos=max(WI_ad$y_pos)+1)
-
+  
 
 all_ad <- rbind(N2_ad_corr,WI_ad) %>% 
   dplyr::arrange(STRAIN,start) %>%
@@ -984,6 +907,11 @@ all_hap_bg
 
 
 
+
+
+
+
+
 ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups.tsv") %>%
   dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
 
@@ -997,16 +925,10 @@ ugh6 <- gsub(".20251012.inbred.withONT.blobFiltered.softMasked.braker.longestIso
 strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", ugh6)
 colnames(ortho_genes_dd) <- strainCol_c2
 
-fbxc_strains <- ortho_genes_dd %>% dplyr::select(Orthogroup, N2, dplyr::any_of(want)) %>% dplyr::filter(Orthogroup == "OG0022008")
+# fbxc_strains <- ortho_genes_dd %>% dplyr::select(Orthogroup, N2, dplyr::any_of(want)) %>% dplyr::filter(Orthogroup == "OG0022008")
 
 
-
-
-
-
-
-
-
+test <- ortho_genes_dd %>% dplyr::select(Orthogroup, N2, dplyr::any_of(want)) %>% dplyr::filter(grepl("transcript_ZK1025.6", N2))
 
 
 
