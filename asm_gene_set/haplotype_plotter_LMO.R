@@ -8,7 +8,6 @@ library(ape)
 library(data.table)
 library(stringr)
 
-
 # want <- c("N2","JU346","ECA2581","ECA36","ECA1825","ECA1409","ECA1761","ECA1769")
 # want <- c("N2","JU346","ECA36","ECA1825","ECA1409","ECA1761")
 # want <- c("N2", "ECA1769", "ECA36")
@@ -17,16 +16,32 @@ library(stringr)
 # want <- c("N2","ECA1187","ECA1195","ECA703")
 # want <- c("N2","ECA3012","XZ1516","MY2212","ECA723","NIC1790")
 # want <- c("N2", "RC301", "NIC199","QX1791","QX1794","XZ1513")
-want <- c("N2", "CB4852", "AB1","MY23")
+# want <- c("N2", "CB4852", "AB1","MY23")
+# want <- c("ED3049", "MY23", "MY2693", "JU311", "N2", "CB4852", "DL238", "JU310") # removed ED3073 because N2 is a REF
+# want <- c("MY2693", "JU311", "N2", "CB4852", "DL238", "JU310") 
 
+# # ordering diacetyl strains by least severe to most severe phenotype
+# dia_pheno <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/nemascan_runs/diacetyl_78WSs_normalized.tsv")
+# ref_asms <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/nemascan_runs/REF_strains_asm.tsv", col_names = "strain") %>% dplyr::mutate(pheno = "REF")
+# alt_asms <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/nemascan_runs/ALT_strains_asm.tsv", col_names = "strain") %>% dplyr::mutate(pheno = "ALT")
+# 
+# merged <- dia_pheno %>% dplyr::left_join(ref_asms, by = "strain") %>% dplyr::left_join(alt_asms, by = "strain") %>% 
+#   dplyr::mutate(pheno = ifelse(is.na(pheno.x), pheno.y, pheno.x)) %>%
+#   dplyr::filter(!is.na(pheno)) %>% dplyr::select(-pheno.x, -pheno.y) %>%
+#   dplyr::arrange(desc(pheno), desc(trait_diacetyl))
+# 
+# want <- merged %>% dplyr::pull(strain)
 
+want <- c("N2","MY16","CB4856")
+  
+  
 #read all pairwise genome coordinate comparisons
 # transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/nucmer_runs/115_WI_transformed_coords_FIXED.tsv",col_names = F) # REPLACE
 
 ## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
-transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/all_140_nucmer.tsv",col_names = F) 
+transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv",col_names = F) 
 colnames(transformed_coords) <- c("S1","E1","S2","E2","L1","L2","IDY","LENR","LENQ","REF","HIFI","STRAIN") 
-transformed_coords <- transformed_coords %>%
+transformed_coords <- transformed_coords %>% dplyr::filter(STRAIN != "ECA396") %>%
   dplyr::filter(STRAIN %in% want)
 
 #read concatentated gene models of every genome
@@ -34,24 +49,88 @@ transformed_coords <- transformed_coords %>%
 # gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/ALL_GFFs_longestIso.tsv", col_names = F) # need to replace iwth Updated Octover results
 
 ## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
-gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/140strain_genemRNAfeatures.tsv", col_names = F)
+gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142strain_genemRNAfeatures.tsv", col_names = F)
 colnames(gffCat1) <- c("seqid","source","type","start","end","score","strand","phase","attributes","STRAIN")
 gffCat2 <- ape::read.gff("/vast/eande106/projects/Nicolas/c.elegans/N2/wormbase/WS283/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
-gffCat <- rbind(gffCat1,gffCat2) %>% 
+gffCat <- rbind(gffCat1 %>% dplyr::filter(STRAIN != "ECA396"),gffCat2) %>% 
   dplyr::filter(STRAIN %in% want)
 
 #read ortholog relationships among gene models
 # orthos <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_78/OrthoFinder/Results_Mar20/Orthogroups/Orthogroups.tsv")
 
 ## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
-orthos <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Oct16/Orthogroups/Orthogroups.tsv")
+orthos <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups.tsv")
 strainCol <- colnames(orthos)
-# strainCol_c1 <- gsub(".braker.protein","", strainCol)
-# strainCol_c2 <- gsub("_WS283.protein","", strainCol_c1)
-strainCol_c1 <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
-strainCol_c1.1 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol_c1)
-strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", strainCol_c1.1)
+ugh <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
+ugh2 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh)
+ugh3 <- gsub(".20251124.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh2)
+ugh4 <- gsub(".20251012.inbred.onlyONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh3)
+ugh5 <- gsub(".Nov2025.softMasked.braker.longest.protein","", ugh4)
+ugh6 <- gsub(".20251012.inbred.withONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh5)
+strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", ugh6)
 colnames(orthos) <- strainCol_c2
+
+
+# Francoi interval
+# hdr_chrom = "I"
+# hdr_start_pos = 11430000 # 5 kb upstream
+# hdr_start_pos = 11434000 # 1 kb upstream
+# hdr_end_pos = 11455000 # 1 kb downstream
+
+hdr_chrom = "I"
+hdr_start_pos = 11469000 # 1 kb upstream
+hdr_end_pos = 11484000 # 1 kb downstream
+# hdr_end_pos = 11489000 # 5 kb downstream
+
+
+
+# Denise's invervals
+# egl-4
+# hdr_chrom = "IV"
+# hdr_start_pos = 1783904
+# hdr_end_pos = 1948614
+# rgs-4
+# hdr_chrom = "II"
+# hdr_start_pos = 12626142
+# hdr_end_pos = 12726237
+
+
+
+
+# sri-14 locus
+# hdr_chrom = "I"
+# hdr_start_pos = 12126086
+# hdr_end_pos = 12147412
+### JUST sri-14 locus
+# hdr_chrom = "I"
+# hdr_start_pos = 12133766
+# hdr_end_pos = 12136958
+
+
+# diacetly QTL in HDR - containing fbxc-55 and srh-297
+# hdr_chrom = "II"
+# hdr_start_pos = 3165985 # 1 kb upstream 
+# hdr_end_pos = 3234931 # 1 kb downstream
+
+# fbxc-55
+# hdr_chrom = "II"
+# hdr_start_pos = 3156978
+# hdr_end_pos = 3183657
+# hdr_start_pos = 3156411
+# hdr_end_pos = 3187062
+# larger region including 40 kb downstream marker SNV
+# hdr_start_pos = 3161399
+# hdr_end_pos = 3206214
+
+
+
+# # srh-297
+# hdr_chrom = "II"
+# # hdr_start_pos = 3204445
+# # hdr_end_pos = 3267110
+# hdr_start_pos = 3221436
+# hdr_end_pos = 3243534
+
 
 # Katies association mapping (TOF) QTL
 # peak_marker = 16276775
@@ -62,11 +141,17 @@ colnames(orthos) <- strainCol_c2
 # hdr_end_pos = 16599066
 
 # # Foraging QTL
-hdr_chrom = "V"
-hdr_start_pos = 15861000
-hdr_end_pos = 16006000
+# hdr_chrom = "V"
+# hdr_start_pos = 15861000
+# hdr_end_pos = 16006000
 
-
+# Dauer QTL 
+# peak_marker = 1114673
+# hdr_chrom = "III"
+# hdr_start_pos = peak_marker - 100000
+# hdr_end_pos = peak_marker + 100000
+# hdr_start_pos = 309423
+# hdr_end_pos = 1774229
 
 
 # hdr_chrom = "V"
@@ -141,6 +226,8 @@ ggplot(hap_coords) +
   ylab("WILD contig position (Mb)") +
   theme(panel.background = element_blank(),
         panel.border = element_rect(fill=NA),
+        # axis.text = element_blank(),
+        # axis.ticks = element_blank(),
         legend.position = 'none') 
 
 #keep only the contig with the largest extent of alignment with the REF HDR
@@ -193,6 +280,8 @@ tigFilt2 <- tigFilt %>%
   dplyr::ungroup()
 
 ggplot(tigFilt2) +
+    # geom_rect(xmin=11434000/1e6,xmax=11455000/1e6,ymin=-Inf,ymax=Inf,fill="lightgrey")+
+    # geom_rect(xmin=11469000/1e6,xmax=11484000/1e6,ymin=-Inf,ymax=Inf,fill="lightgrey")+
   geom_rect(xmin=hap_start/1e6,xmax=hap_end/1e6,ymin=-Inf,ymax=Inf,fill="lightgrey")+
   geom_segment(aes(x=S1/1e6,xend=E1/1e6,y=S2/1e6,yend=E2/1e6,color=HIFI)) +
   facet_wrap(~STRAIN,scales = 'free') +
@@ -201,6 +290,23 @@ ggplot(tigFilt2) +
   theme(panel.background = element_blank(),
         panel.border = element_rect(fill=NA),
         legend.position = 'none') 
+
+
+
+
+# ggplot(transformed_coords %>% dplyr::filter(HIFI == ifelse(STRAIN == "CB4856","ptg000001l",HIFI), HIFI == ifelse(STRAIN == "MY16","ptg000007l",HIFI))) +
+#   geom_rect(xmin=11434000/1e6,xmax=11455000/1e6,ymin=-Inf,ymax=Inf,fill="lightgrey")+
+#   geom_rect(xmin=11469000/1e6,xmax=11484000/1e6,ymin=-Inf,ymax=Inf,fill="lightgrey")+
+#   geom_segment(aes(x=S1/1e6,xend=E1/1e6,y=S2/1e6,yend=E2/1e6,color=HIFI)) +
+#   facet_wrap(~STRAIN,scales = 'free') +
+#   coord_cartesian(xlim = c(11.3,11.5)) +
+#   xlab("N2 genome position (Mb)") +
+#   ylab("WILD contig position (Mb)") +
+#   theme(panel.background = element_blank(),
+#         panel.border = element_rect(fill=NA),
+#         legend.position = 'none') 
+
+
 
 trim_spacer = 2e4
 #trims long alignments to the focal region (i.e. hap_start to hap_end, but transformed to the other genome)
@@ -225,6 +331,8 @@ ggplot(tigTrim) +
   ylab("WILD contig position (Mb)") +
   theme(panel.background = element_blank(),
         panel.border = element_rect(fill=NA),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
         legend.position = 'none') 
 
 #get the minimum and maximum boundary of the WILD genome alignments that contain the HDR
@@ -344,6 +452,7 @@ orthoList <- list()
 orthoList_bound <- list()
 orthoList_raw <- list()
 strainCol_iter <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup","N2")]
+strainCol_iter <- strainCol_iter[strainCol_iter %in% want]
 
 for (i in 1:length(strainCol_iter)) {
   
@@ -522,11 +631,15 @@ N2_ad <- boundGenes %>%
 
 reassess_distal <- N2_ad %>% dplyr::filter(has_any_ortho==T & has_bound_ortho==F) 
 distal_ortho <- inreg_orthos %>% 
-  dplyr::filter(N2 %in% reassess_distal$tranname) %>% 
-  dplyr::mutate(comma_count = stringr::str_count(CB4856, ",")+1) %>%
-  dplyr::group_by(CB4856) %>%
-  dplyr::mutate(comma_count=sum(comma_count)) %>%
-  dplyr::filter(comma_count > 1)
+  dplyr::filter(N2 %in% reassess_distal$tranname) %>%
+  dplyr::select(any_of(strainCol_iter), N2)%>%
+  # dplyr::mutate(comma_count = stringr::str_count(CB4856, ",")+1) %>%
+  # dplyr::group_by(CB4856) %>%
+  # dplyr::mutate(comma_count=sum(comma_count)) %>%
+  # dplyr::filter(comma_count > 1)
+  dplyr::mutate(has_any_in_want = dplyr::if_any(dplyr::all_of(strainCol_iter), ~ !is.na(.) & . != "")) %>%
+  dplyr::filter(!has_any_in_want) %>%     # keep rows where NONE of the strains has an ortholog
+  dplyr::distinct(N2)
 
 N2_ad_corr <- N2_ad %>%
   dplyr::mutate(has_any_ortho=ifelse(tranname %in% distal_ortho$N2,F,has_any_ortho))
@@ -541,7 +654,11 @@ g_count <- length(unique(N2_ad_corr$Parent))
 # desired_order <- c("N2","ECA1187","ECA1195","ECA703")
 # desired_order <- c("N2","ECA3012","XZ1516","MY2212","ECA723","NIC1790")
 # desired_order <- c("QX1791","QX1794","XZ1513","RC301", "NIC199")
-desired_order <- c("MY23", "CB4852", "AB1")
+# desired_order <- c("MY23", "CB4852", "AB1")
+# desired_order <- c("ED3049", "MY23", "MY2693", "JU311", "CB4852", "JU310", "DL238") # DL238 has the highest fraction of Dauer
+# desired_order <- c("DL238", "JU310", "CB4852", "JU311", "MY2693", "MY23", "ED3049") # DL238 has the highest fraction of Dauer
+# desired_order <- c("DL238", "JU310", "CB4852", "JU311", "MY2693") # DL238 has the highest fraction of Dauer
+# desired_order <- want %>% rev() # for diacetyl
 
 WI_ad <- boundGenes %>% 
   dplyr::filter(!STRAIN=="N2") %>%
@@ -567,18 +684,102 @@ WI_ad <- boundGenes %>%
   dplyr::arrange(start_sort, .by_group = TRUE) %>%
   dplyr::mutate(first_gene=dplyr::first(alias)) %>%
   dplyr::ungroup() %>%
-  dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
+  # dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
   dplyr::group_by(STRAIN) %>%
-  dplyr::arrange(first_gene, n_gene, .by_group = TRUE) %>% 
-  dplyr::mutate(order_gene = dplyr::first(first_gene), order_num = dplyr::first(n_gene)) %>% 
+  dplyr::arrange(first_gene, n_gene, .by_group = TRUE) %>%
+  dplyr::mutate(order_gene = dplyr::first(first_gene), order_num = dplyr::first(n_gene)) %>%
   dplyr::ungroup() %>%
   # dplyr::arrange(desc(order_gene), desc(order_num)) %>%
-  dplyr::arrange(STRAIN, desc(order_gene), order_num) %>%
+  # dplyr::arrange(STRAIN, desc(order_gene), order_num) %>%
   # dplyr::arrange(desc(STRAIN)) %>%
   dplyr::select(-order_gene, -order_num) %>%
   dplyr::mutate(g_diff = abs(n_gene-g_count)) %>%
   dplyr::mutate(y_pos=rleid(STRAIN)) %>%
   dplyr::select(-g_diff,-start_sort,-inv,-first_gene,-n_gene) 
+
+
+# sri14_CNVs <- boundGenes %>%
+#   dplyr::filter(!STRAIN=="N2") %>%
+#   dplyr::left_join(all_ortho_pairs_raw,by=c("STRAIN","tranname")) %>%
+#   dplyr::mutate(tr_has_any_ortho=ifelse(is.na(has_any_ortho),F,has_any_ortho)) %>%
+#   dplyr::left_join(all_ortho_pairs_bound %>% dplyr::select(tranname,STRAIN,N2,status) %>% dplyr::filter(N2 %in% N2_ad$tranname),by=c("STRAIN","tranname")) %>%
+#   dplyr::mutate(tr_has_bound_ortho=ifelse(!is.na(status),T,F)) %>%
+#   dplyr::select(-status,-has_any_ortho) %>%
+#   dplyr::rename(N2_name=N2) %>%
+#   dplyr::left_join(aliases %>% dplyr::select(-seqname),by=c("N2_name"="tranname")) %>%
+#   dplyr::mutate(alias.x=alias.y) %>%
+#   dplyr::select(-alias.y,-N2_name) %>%
+#   dplyr::rename(alias=alias.x) %>%
+#   dplyr::group_by(STRAIN,Parent) %>%
+#   dplyr::mutate(has_any_ortho = any(tr_has_any_ortho)) %>%
+#   dplyr::mutate(has_bound_ortho = any(tr_has_bound_ortho)) %>%
+#   dplyr::select(-tr_has_any_ortho,-tr_has_bound_ortho) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::left_join(HV_boundary %>% dplyr::select(STRAIN,inv),by="STRAIN") %>%
+#   dplyr::group_by(STRAIN) %>%
+#   dplyr::mutate(n_gene=n_distinct(Parent)) %>%
+#   dplyr::mutate(start_sort = if_else(rep(dplyr::first(inv), dplyr::n()), -start, start)) %>%
+#   dplyr::arrange(start_sort, .by_group = TRUE) %>%
+#   dplyr::mutate(first_gene=dplyr::first(alias)) %>%
+#   dplyr::ungroup() %>%
+#   # dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
+#   dplyr::group_by(STRAIN) %>%
+#   dplyr::arrange(first_gene, n_gene, .by_group = TRUE) %>%
+#   dplyr::mutate(order_gene = dplyr::first(first_gene), order_num = dplyr::first(n_gene)) %>%
+#   dplyr::ungroup() %>%
+#   # code specific for ordering in relation to sri-14
+#   dplyr::group_by(STRAIN,alias) %>%
+#   dplyr::mutate(n_sri14 = ifelse(alias == "sri-14", n(), 1)) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::arrange(desc(n_sri14)) %>%
+#   dplyr::filter(n_sri14 > 1) %>%
+#   dplyr::select(STRAIN, start,end, n_sri14) %>%
+#   dplyr::distinct()
+# 
+# 
+# sri13_orthos <- boundGenes %>%
+#   dplyr::filter(!STRAIN=="N2") %>%
+#   dplyr::left_join(all_ortho_pairs_raw,by=c("STRAIN","tranname")) %>%
+#   dplyr::mutate(tr_has_any_ortho=ifelse(is.na(has_any_ortho),F,has_any_ortho)) %>%
+#   dplyr::left_join(all_ortho_pairs_bound %>% dplyr::select(tranname,STRAIN,N2,status) %>% dplyr::filter(N2 %in% N2_ad$tranname),by=c("STRAIN","tranname")) %>%
+#   dplyr::mutate(tr_has_bound_ortho=ifelse(!is.na(status),T,F)) %>%
+#   dplyr::select(-status,-has_any_ortho) %>%
+#   dplyr::rename(N2_name=N2) %>%
+#   dplyr::left_join(aliases %>% dplyr::select(-seqname),by=c("N2_name"="tranname")) %>%
+#   dplyr::mutate(alias.x=alias.y) %>%
+#   dplyr::select(-alias.y,-N2_name) %>%
+#   dplyr::rename(alias=alias.x) %>%
+#   dplyr::group_by(STRAIN,Parent) %>%
+#   dplyr::mutate(has_any_ortho = any(tr_has_any_ortho)) %>%
+#   dplyr::mutate(has_bound_ortho = any(tr_has_bound_ortho)) %>%
+#   dplyr::select(-tr_has_any_ortho,-tr_has_bound_ortho) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::left_join(HV_boundary %>% dplyr::select(STRAIN,inv),by="STRAIN") %>%
+#   dplyr::group_by(STRAIN) %>%
+#   dplyr::mutate(n_gene=n_distinct(Parent)) %>%
+#   dplyr::mutate(start_sort = if_else(rep(dplyr::first(inv), dplyr::n()), -start, start)) %>%
+#   dplyr::arrange(start_sort, .by_group = TRUE) %>%
+#   dplyr::mutate(first_gene=dplyr::first(alias)) %>%
+#   dplyr::ungroup() %>%
+#   # dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
+#   dplyr::group_by(STRAIN) %>%
+#   dplyr::arrange(first_gene, n_gene, .by_group = TRUE) %>%
+#   dplyr::mutate(order_gene = dplyr::first(first_gene), order_num = dplyr::first(n_gene)) %>%
+#   dplyr::ungroup() %>%
+#   # code specific for ordering in relation to sri-14
+#   dplyr::group_by(STRAIN,alias) %>%
+#   dplyr::mutate(n_sri13 = ifelse(alias == "sri-13", n(), 1)) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::arrange(desc(n_sri13)) %>%
+#   dplyr::filter(n_sri13 > 1) %>%
+#   dplyr::select(STRAIN, start, end, n_sri13) %>%
+#   dplyr::distinct()
+# 
+# print(nrow(sri13_orthos))
+# print(nrow(sri14_CNVs))
+
+
+
 
 
 N2_ad_corr <- N2_ad_corr %>%
@@ -644,10 +845,11 @@ all_hap <- ggplot() +
   theme(legend.title = element_blank(),
         panel.background = element_blank(),
         axis.title = element_blank(),
-        axis.text = element_blank(),
+        axis.text = element_text(size = 12, color = 'black'),
         axis.ticks = element_blank()) +
   scale_fill_manual(values=c("has_local_ortho"="grey","has_distal_ortho"="black","no_known_ortho"="red","no_known_allelic_CB"="blue")) +
-  scale_x_continuous(expand = c(0.01,0))
+  scale_x_continuous(expand = c(0.01,0)) +
+  scale_y_continuous(expand = c(0.01, 0), breaks = hlines$y_pos, labels = hlines$STRAIN)
 all_hap
 
 
@@ -767,7 +969,7 @@ all_hap_bg <- ggplot() +
     axis.line.x = element_line(),
     axis.title.x = element_text(color = 'black', size  = 14),
     # legend.position = 'none'
-    legend.position = "bottom",
+    legend.position = "right",
     legend.direction = "horizontal",
     legend.key.size = unit(0.4, "lines"),
     legend.text = element_text(size = 16),
@@ -777,6 +979,43 @@ all_hap_bg <- ggplot() +
 
 all_hap_bg
 # ======================================================================================================================= #
+
+
+
+
+
+ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups.tsv") %>%
+  dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
+
+strainCol <- colnames(ortho_genes_dd)
+ugh <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
+ugh2 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh)
+ugh3 <- gsub(".20251124.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh2)
+ugh4 <- gsub(".20251012.inbred.onlyONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh3)
+ugh5 <- gsub(".Nov2025.softMasked.braker.longest.protein","", ugh4)
+ugh6 <- gsub(".20251012.inbred.withONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh5)
+strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", ugh6)
+colnames(ortho_genes_dd) <- strainCol_c2
+
+fbxc_strains <- ortho_genes_dd %>% dplyr::select(Orthogroup, N2, dplyr::any_of(want)) %>% dplyr::filter(Orthogroup == "OG0022008")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
