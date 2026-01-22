@@ -53,4 +53,64 @@ for (strain in strains) {
 plots
 
 
+### N2 chrom III region that splits....
+
+aln <- nucmer %>%
+  dplyr::filter(strain == "MY1" & contig == "ptg000006l") %>%
+  dplyr::filter(N2_chr == "III") %>%
+  dplyr::filter(L1 > 100000)
+
+xmin = min(aln$N2S) / 1e6
+xmax = max(aln$N2E)/1e6
+
+plot_chim <- ggplot(aln) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  geom_vline(xintercept = min(aln$N2S) / 1e6) +
+  geom_vline(xintercept = max(aln$N2E)/1e6) +
+  annotate("text", x = xmin + 0.12, y = 9, label = paste0("min = ", round(xmin, 3), " Mb"), vjust = -0.5, size = 6) +
+  annotate("text", x = xmax - 0.12, y = 9, label = paste0("max = ", round(xmax, 3), " Mb"), vjust = -0.5, size = 6) +
+  facet_wrap(~N2_chr, scales = "free") +
+  theme(
+    # legend.position = 'none',
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
+  # coord_cartesian(xlim = c(8.36, 8.38)) +
+  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)", title = "MY1 chimeric alignment")
+plot_chim
+
+
+aln2 <- nucmer %>%
+  dplyr::filter(strain == "JU346" & contig == "ptg000001l") %>%
+  dplyr::filter(N2_chr == "III") %>%
+  dplyr::filter(L1 > 100000)
+
+xmin = min(aln2$N2S) / 1e6
+xmax = max(aln2$N2E)/1e6
+
+plot_chim2 <- ggplot(aln2) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  geom_vline(xintercept = min(aln2$N2S) / 1e6) +
+  geom_vline(xintercept = max(aln2$N2E)/1e6) +
+  annotate("text", x = xmin + 0.12, y = 10, label = paste0("min = ", round(xmin, 3), " Mb"), vjust = -0.5, size = 6) +
+  annotate("text", x = xmax - 0.12, y = 10, label = paste0("max = ", round(xmax, 3), " Mb"), vjust = -0.5, size = 6) +
+  facet_wrap(~N2_chr, scales = "free") +
+  theme(
+    # legend.position = 'none',
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
+  # coord_cartesian(xlim = c(8.36, 8.38)) +
+  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)", title = "JU346 chimeric alignment")
+plot_chim2
+
+
 
