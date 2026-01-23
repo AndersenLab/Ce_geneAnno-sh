@@ -490,7 +490,7 @@ hmm2
 
 
 
-# Looking at an INV that is found among 
+# Looking at an INV that is found among 88 strains
 threeINV <- filt_calls %>% 
   dplyr::filter(chrom == "IV", sv_type == "INV") %>%
   dplyr::group_by(pos) %>%
@@ -652,6 +652,31 @@ conservedINV
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ======================================================================================================================================================================================== #
 # Circos variation plot
 # ======================================================================================================================================================================================== #
@@ -724,6 +749,72 @@ merged_all <- merged_SV %>% dplyr::filter(number_svs_merged == "141") %>%
 # 
 nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
   dplyr::select(-IDY) %>% dplyr::filter(strain != "ECA396")
+
+
+
+
+
+
+# Look at SNVs inside and outside of INV for three Kaua'i strains!!
+inv_rect <- filt_calls %>%
+  dplyr::select(chrom,pos,sv_type, sv_length, strain) %>%
+  dplyr::group_by(sv_type) %>%
+  dplyr::arrange(desc(sv_length)) %>%
+  dplyr::slice_head(n = 4) %>%
+  dplyr::filter(sv_type == "INV") %>% dplyr::filter(strain != "JU3226")
+
+
+inv <- nucmer %>% dplyr::filter(strain == "ECA1413" | strain == "ECA2968" | strain == "XZ1515") %>% dplyr::filter(N2_chr == "IV") #%>% dplyr::filter(contig == "ptg000006l")
+
+inv1 <- ggplot(inv) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  geom_rect(data = inv_rect, aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
+  theme_bw() +
+  facet_wrap(~strain) +
+  theme(
+    legend.position = 'none',
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
+  coord_cartesian(xlim = c(6, 8)) +
+  ggtitle("Largest inversion on CHROM IV") +
+  labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
+inv1
+
+snvEC14 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/misc/PAV_INV_SNV_density/ECA1413_SNV_chromIV_INV.tsv", col_names = c("chrom",'pos','ref','alt')) %>%
+  dplyr::mutate(strain = "ECA1413")
+snvEC29 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/misc/PAV_INV_SNV_density/ECA2968_SNV_chromIV_INV.tsv", col_names = c('chrom','pos','ref','alt')) %>%
+  dplyr::mutate(strain = "ECA2968")
+snvXZ <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/misc/PAV_INV_SNV_density/XZ1515_SNV_chromIV_INV.tsv", col_names = c("chrom",'pos','ref','alt')) %>%
+  dplyr::mutate(strain = "XZ1515")
+snvs_inINV <- snvEC14 %>% dplyr::bind_rows(snvEC29, snvXZ) %>% dplyr::mutate(pos = as.numeric(pos))
+
+ggplot() + 
+  geom_point(data = snvs_inINV, aes(x = pos/1e6, y = 0.5), size = 2, color = 'black') +
+  geom_density(data = snvs_inINV, aes(x = pos/1e6, fill = "black",alpha = 0.6,adjust = 0.01)) +
+  geom_rect(data = inv_rect, aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
+  facet_wrap(~strain, ncol = 1)+
+  theme(
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title.y = element_blank(),
+    axis.title.x = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
+  coord_cartesian(xlim = c(6, 8)) +
+  ggtitle("Largest inversion on CHROM IV") +
+  labs(x = "N2 genome position (Mb)")
+
+
+
+
+
 # 
 # # INS found among all WSs
 # ins_all <- ggplot(nucmer %>% dplyr::filter(N2_chr == "V")) +
@@ -1433,7 +1524,7 @@ circos.trackPlotRegion(
 )
 
 
-add_filled_area_track(gene_bins_50kb,col_fill = "#00BFC480",col_line = "#00BFC4",ylim = gene_ylim,track_height = 0.10)
+add_filled_area_track(gene_bins_50kb,col_fill = "#00BFC480",col_line = "#00BFC4", ylim = gene_ylim,track_height = 0.10)
 add_rect_track(hdrs_collapsed_bed, col = "grey40", track_height = 0.08)
 snp_ylim <- c(0, max(snps_per_bin$value, na.rm = TRUE))
 add_value_track(snps_per_bin, col = "#DB6333", ylim = snp_ylim, track_height = 0.12, type = "line", add_loess = FALSE, span = 0.15)
@@ -1441,7 +1532,7 @@ add_value_track(del_bin_freq, col = "red",  ylim = c(0, 1), track_height = 0.08,
 add_value_track(ins_bin_freq, col = "blue", ylim = c(0, 1), track_height = 0.08, type = "line", add_loess = FALSE, span = 0.2)
 add_value_track(inv_bin_freq, col = "gold3", ylim = c(0, 1), track_height = 0.08, type = "line", add_loess = FALSE, span = 0.2)
 
-lgd <- Legend(title = "Tracks",labels = c("Gene density (50 kb)","HDRs","SNPs per kb","DEL frequency","INS frequency","INV frequency"),
+lgd <- Legend(title = "Tracks",labels = c("Genes per 50 kb","HDRs","SNPs per kb","DEL frequency","INS frequency","INV frequency"),
               type = "lines",legend_gp = gpar(col = c("#00BFC4","grey40","#DB6333","red","blue","gold3"),
               lwd = c(3, 3, 3, 3, 3, 3)),
               labels_gp = gpar(fontsize = 14),
