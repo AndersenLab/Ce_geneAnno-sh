@@ -54,10 +54,9 @@ plots
 
 
 ### N2 chrom III region that splits....
-
 aln <- nucmer %>%
   dplyr::filter(strain == "MY1" & contig == "ptg000006l") %>%
-  dplyr::filter(N2_chr == "III") %>%
+  dplyr::filter(N2_chr == "X") %>%
   dplyr::filter(L1 > 100000)
 
 xmin = min(aln$N2S) / 1e6
@@ -86,7 +85,7 @@ plot_chim
 
 aln2 <- nucmer %>%
   dplyr::filter(strain == "JU346" & contig == "ptg000001l") %>%
-  dplyr::filter(N2_chr == "III") %>%
+  dplyr::filter(N2_chr == "II") %>%
   dplyr::filter(L1 > 100000)
 
 xmin = min(aln2$N2S) / 1e6
