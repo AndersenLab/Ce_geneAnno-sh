@@ -780,36 +780,150 @@ inv1 <- ggplot(inv) +
     panel.grid = element_blank(),
     panel.border = element_rect(fill = NA),
     plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
-  coord_cartesian(xlim = c(6, 8)) +
+  coord_cartesian(xlim = c(6.281940, 8)) +
   ggtitle("Largest inversion on CHROM IV") +
   labs(x = "N2 genome position (Mb)", y = "Wild strain contig position (Mb)")
 inv1
 
+
+genome_wide_haplotypeSharing <- nucmer %>% dplyr::filter(strain == "ECA1413" | strain == "ECA2968" | strain == "XZ1515")
+
+ECA1413 <- ggplot(genome_wide_haplotypeSharing %>% dplyr::filter(strain == "ECA1413" & N2_chr != "MtDNA")) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+    facet_wrap(~N2_chr, nrow = 1, scales = "free") +
+    theme(
+      legend.position = 'none',
+      axis.text = element_text(size = 14, color = 'black'),
+      axis.ticks = element_blank(),
+      axis.title.y = element_text(size = 16, color = 'black', face = 'bold'),
+      axis.title.x = element_blank(),
+      panel.background = element_blank(),
+      panel.grid = element_blank(),
+      panel.border = element_rect(fill = NA)) +
+    labs(x = "N2 genome position (Mb)", y = "ECA1413")
+ECA1413
+
+ECA2968 <- ggplot(genome_wide_haplotypeSharing %>% dplyr::filter(strain == "ECA2968" & N2_chr != "MtDNA")) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  facet_wrap(~N2_chr, nrow = 1, scales = "free") +
+  theme(
+    legend.position = 'none',
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA)) +
+  labs(x = "N2 genome position (Mb)", y = "ECA2968")
+ECA2968
+
+XZ1515 <- ggplot(genome_wide_haplotypeSharing %>% dplyr::filter(strain == "XZ1515" & N2_chr != "MtDNA")) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  facet_wrap(~N2_chr, nrow = 1, scales = "free") +
+  theme(
+    legend.position = 'none',
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title.y = element_text(size = 16, color = 'black', face = 'bold'),
+    axis.title.x = element_blank(),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA)) +
+  labs(x = "N2 genome position (Mb)", y = "XZ1515")
+XZ1515
+
+kauai <- cowplot::plot_grid(
+  ECA1413,XZ1515,ECA2968,
+  nrow = 3,
+  align = "v"
+)
+kauai
+
+
+
 snvEC14 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/misc/PAV_INV_SNV_density/ECA1413_SNV_chromIV_INV.tsv", col_names = c("chrom",'pos','ref','alt')) %>%
-  dplyr::mutate(strain = "ECA1413")
+  dplyr::mutate(strain = "ECA1413") %>%
+  dplyr::filter(pos >= 6281940)
 snvEC29 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/misc/PAV_INV_SNV_density/ECA2968_SNV_chromIV_INV.tsv", col_names = c('chrom','pos','ref','alt')) %>%
-  dplyr::mutate(strain = "ECA2968")
+  dplyr::mutate(strain = "ECA2968") %>%
+  dplyr::filter(pos >= 6281940)
 snvXZ <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/misc/PAV_INV_SNV_density/XZ1515_SNV_chromIV_INV.tsv", col_names = c("chrom",'pos','ref','alt')) %>%
-  dplyr::mutate(strain = "XZ1515")
+  dplyr::mutate(strain = "XZ1515") %>%
+  dplyr::filter(pos >= 6281940)
 snvs_inINV <- snvEC14 %>% dplyr::bind_rows(snvEC29, snvXZ) %>% dplyr::mutate(pos = as.numeric(pos))
 
 ggplot() + 
-  geom_point(data = snvs_inINV, aes(x = pos/1e6, y = 0.5), size = 2, color = 'black') +
-  geom_density(data = snvs_inINV, aes(x = pos/1e6, fill = "black",alpha = 0.6,adjust = 0.01)) +
+  # geom_point(data = snvs_inINV, aes(x = pos/1e6, y = 0.5), size = 2, color = 'black') +
+  geom_density(data = snvs_inINV, aes(x = pos/1e6, alpha = 0.6), adjust = 0.5, fill = "firebrick") +
   geom_rect(data = inv_rect, aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
   facet_wrap(~strain, ncol = 1)+
   theme(
     axis.text = element_text(size = 14, color = 'black'),
     axis.ticks = element_blank(),
+    legend.position = 'none',
     axis.title.y = element_blank(),
     axis.title.x = element_text(size = 16, color = 'black', face = 'bold'),
     panel.background = element_blank(),
     panel.grid = element_blank(),
     panel.border = element_rect(fill = NA),
     plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
-  coord_cartesian(xlim = c(6, 8)) +
+  coord_cartesian(xlim = c(6.281940, 8)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0.01)) +
   ggtitle("Largest inversion on CHROM IV") +
   labs(x = "N2 genome position (Mb)")
+
+
+
+# SNVs inside and outside of massive INV in ECA3088
+eca_all <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
+  dplyr::select(-IDY) %>% dplyr::filter(strain == "ECA3088" & N2_chr == "IV" & contig == "ptg000002l")
+
+
+ecaFour <- ggplot(eca_all) +
+  geom_rect(aes(xmin = 13.46, xmax = 17492403 / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.01) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  facet_wrap(~N2_chr, scales = 'free') +
+  theme_bw() +
+  theme(
+    legend.position = 'none',
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    axis.title = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA)) +
+  coord_cartesian(xlim = c(12, 18), ylim = c(8,22)) +
+  labs(x = "N2 genome position (Mb)", y = "ECA3088 contig position (Mb)")
+ecaFour
+
+eca3088_snvs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/misc/PAV_INV_SNV_density/ECA3088_snvs_inINV.tsv",  col_names = c('chrom','pos','ref','alt', 'gt'))
+
+ggplot() + 
+  geom_rect(aes(xmin = 13.46, xmax = 17492403 / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.1) +
+  geom_point(data = eca3088_snvs, aes(x = pos/1e6, y = 0.2), size = 2, color = 'black') +
+  geom_density(data = eca3088_snvs, aes(x = pos/1e6, alpha = 0.6), adjust = 0.5, fill = "firebrick") +
+  geom_rect(aes(xmin = 13.5, xmax = 17492403 / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
+  theme(
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.ticks = element_blank(),
+    legend.position = 'none',
+    axis.title.y = element_blank(),
+    axis.title.x = element_text(size = 16, color = 'black', face = 'bold'),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_rect(fill = NA),
+    plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
+  coord_cartesian(xlim = c(11, 18)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+  ggtitle("ECA3088 inversion on CHROM IV") +
+  labs(x = "N2 genome position (Mb)")
+
+
+
+
+
 
 
 
