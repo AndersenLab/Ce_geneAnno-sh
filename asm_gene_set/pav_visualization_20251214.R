@@ -398,10 +398,18 @@ ecaFour
 
 
 eca <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
-  dplyr::select(-IDY) %>% dplyr::filter(N2_chr == "IV") %>% dplyr::filter(strain != "ECA396")
+  dplyr::select(-IDY) %>% dplyr::filter(N2_chr == "IV") %>% dplyr::filter(strain != "ECA396") %>% 
+  dplyr::filter(N2E >= 11000000) %>%
+  dplyr::group_by(strain, contig) %>%
+  dplyr::mutate(aln_span = sum(L2)) %>%
+  dplyr::ungroup() %>% 
+  dplyr::group_by(strain) %>%
+  dplyr::filter(aln_span == max(aln_span)) %>%
+  dplyr::ungroup() 
 
 ecaAll <- ggplot(eca) +
   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = contig), linewidth = 1) +
+  geom_vline(xintercept = 13.46, color = 'black', linewidth = 2) +
   facet_wrap(~strain, scales = 'free') +
   theme(
     legend.position = 'none',
@@ -840,7 +848,6 @@ kauai <- cowplot::plot_grid(
 kauai
 
 
-
 snvEC14 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/misc/PAV_INV_SNV_density/ECA1413_SNV_chromIV_INV.tsv", col_names = c("chrom",'pos','ref','alt')) %>%
   dplyr::mutate(strain = "ECA1413") %>%
   dplyr::filter(pos >= 6281940)
@@ -901,7 +908,7 @@ eca3088_snvs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assem
 
 ggplot() + 
   geom_rect(aes(xmin = 13.46, xmax = 17492403 / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.1) +
-  geom_point(data = eca3088_snvs, aes(x = pos/1e6, y = 0.2), size = 2, color = 'black') +
+  # geom_point(data = eca3088_snvs, aes(x = pos/1e6, y = 0.2), size = 2, color = 'black') +
   geom_density(data = eca3088_snvs, aes(x = pos/1e6, alpha = 0.6), adjust = 0.5, fill = "firebrick") +
   geom_rect(aes(xmin = 13.5, xmax = 17492403 / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
   theme(
