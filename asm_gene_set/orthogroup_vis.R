@@ -716,31 +716,135 @@ bw_by_class <- plt_data %>%
 bw_by_class
 
 class_count <- rects %>% dplyr::group_by(`Gene set`) %>% dplyr::mutate(number = n()) %>% dplyr::distinct(`Gene set`,number)
-
-
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/plots/N2_geneSetLoci_density.png",finalfinal, height = 12, width = 14, dpi = 500)
 
-# 
-# 
-#   
-# ortho_private_coords <- ortho_count_wCoord %>% dplyr::filter(class == "private")
-# 
-# summ <- ortho_private_coords %>%
-#   dplyr::group_by(seqid) %>%
-#   dplyr::summarise(n_perChrom = n())
-# 
-# ggplot(data = ortho_private_coords) +
-#   geom_rect(data = N2_coords, aes(xmin = start / 1e6, xmax = end / 1e6), ymin = -Inf, ymax = Inf, fill = 'gray30', alpha = 0.5) + 
-#   geom_rect(aes(xmin = start / 1e6, xmax = end / 1e6), ymin = -Inf, ymax = Inf, fill = 'magenta3', alpha = 0.5) + 
-#   # scale_fill_manual(values = c("accessory" = "#DB6333", "private" = "magenta3", "core" = "green4")) +
-#   facet_wrap(~seqid, scales = "free") +
-#   theme(axis.title.x = element_text(size = 16, color = 'black', face = 'bold'),
-#         axis.text.x = element_text(size = 13, color = 'black'),
-#         panel.background = element_blank(),
-#         panel.border = element_rect(fill = NA, color = 'black')) +
-#   scale_x_continuous(expand = c(0,0)) +
-#   xlab("N2 genome position (Mb)")
-# 
+
+
+
+# Adding HDRs of 140 WSs to plot:
+hdrs <- readr::read_tsv("/vast/eande106/data/c_elegans/WI/divergent_regions/20250625/20250625_c_elegans_divergent_regions_strain.bed", col_names = c("chrom", "start", "end", "strain"))
+WSs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/140_correct.tsv", col_names = "strain") %>% dplyr::pull()
+hdrs <- hdrs %>% dplyr::filter(strain %in% WSs)
+
+# COLLAPSING HDRS AMONG 140 WSs
+all_regions <- hdrs %>%
+  dplyr::rename(START = start, CHROM = chrom, END = end) %>%
+  dplyr::arrange(CHROM,START) %>%
+  dplyr::group_split(CHROM) 
+
+strain_count <- hdrs %>% dplyr::distinct(strain, .keep_all = T)
+print(nrow(strain_count)) # SHOULD BE 140
+
+# Collapsing all HDRs
+getRegFreq <- function(all_regions) {
+  all_collapsed <- list()
+  for (i in 1:length(all_regions)) {
+    temp <- all_regions[[i]]
+    k=1
+    j=1
+    while (k==1) {
+      print(paste0("chrom:",i,"/iteration:",j))
+      checkIntersect <- temp %>%
+        dplyr::arrange(CHROM,START) %>%
+        dplyr::mutate(check=ifelse(lead(START) <= END,T,F)) %>%
+        dplyr::mutate(check=ifelse(is.na(check),F,check))
+      
+      #print(nrow(checkIntersect %>% dplyr::filter(check==T)))
+      
+      if(nrow(checkIntersect %>% dplyr::filter(check==T)) == 0) {
+        print("NO MORE INTERSECTS")
+        k=0
+      } else {
+        
+        temp <- checkIntersect %>%
+          dplyr::mutate(gid=data.table::rleid(check)) %>%
+          dplyr::mutate(gid=ifelse((check==F| is.na(check)) & lag(check)==T,lag(gid),gid))
+        
+        collapse <- temp %>%
+          dplyr::filter(check==T | (check==F & lag(check)==T)) %>%
+          dplyr::group_by(gid) %>%
+          dplyr::mutate(newStart=min(START)) %>%
+          dplyr::mutate(newEnd=max(END)) %>%
+          dplyr::ungroup() %>%
+          dplyr::distinct(gid,.keep_all = T)  %>%
+          dplyr::mutate(START=newStart,END=newEnd) %>%
+          dplyr::select(-newEnd,-newStart)
+        
+        retain <- temp %>%
+          dplyr::filter(check==F & lag(check)==F)
+        
+        temp <- rbind(collapse,retain) %>%
+          dplyr::select(-gid,-check)
+        
+        j=j+1
+      }
+    }
+    print(head(temp))
+    all_collapsed[[i]] <- temp
+  }
+  return(all_collapsed)
+}
+
+HDR_collapse_master <- getRegFreq(all_regions)
+
+all_collapsed <- plyr::ldply(HDR_collapse_master, data.frame) %>%
+  dplyr::select(-strain)
+
+colnames(all_collapsed) <- c("seqid","start","end")
+
+
+finalfinal <- ggplot() +
+  # draw rect "tracks" first so they sit under the density
+  geom_rect(data = all_collapsed, aes(xmin = start / 1e6, xmax = end / 1e6, ymin = -Inf, ymax = Inf), fill = 'gray', alpha = 0.7) +
+  geom_rect(data = rects, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = `Gene set`), color = NA) +
+  scale_fill_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
+  # density scaled by counts (absolute abundance)
+  geom_density(data = plt_data, aes(x = mid_mb, y = after_stat(count), color = Class), adjust = 0.5, linewidth = 0.9, position = "identity", show.legend = FALSE) +
+  geom_text(data = class_labels_final, aes(x = x, y = y, label = Class), hjust = 1.1, fontface = "bold", size = 4, inherit.aes = FALSE) +
+  geom_text(data = density_label_final, aes(x = x, y = y, label = label), vjust = -3, fontface = "bold", size = 5, inherit.aes = FALSE, angle = 90) +
+  scale_color_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
+  facet_wrap(~ seqid, scales = "free_x", ncol = 3) +
+  # reserve room below zero for the lanes
+  coord_cartesian(ylim = c(y_priv - 5, NA), clip = "off") +
+  scale_x_continuous(expand = c(0.01,0)) +
+  # hide negative tick labels; show only non-negative y ticks
+  scale_y_continuous(name = "Kernel Density × Count", labels = function(b) ifelse(b < 0, "", b)) + # normalized kernel density * count
+  labs(x = "N2 genome position (Mb)") +
+  theme(
+    panel.background = element_blank(),
+    panel.border = element_rect(fill = NA, color = "black"),
+    # strip.background = element_blank(),
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size =10, color = 'black'),
+    axis.text.x  = element_text(size = 12),
+    panel.spacing=unit(2, "lines"),
+    # axis.title.y = element_text(size = 14, face = "bold"),
+    axis.title.y = element_blank(),
+    legend.position = 'none',
+    axis.text.y  = element_text(size = 12),
+    plot.margin  = margin(l = 70, r = 5, t = 5, b = 5))
+finalfinal
+
+
+# Adding resolution if genes are found in a HDR or not
+ortho_count_wCoord_HDR <- ortho_count_wCoord %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(in_HDR = any(
+    seqid == all_collapsed$seqid &
+      start >= all_collapsed$start &
+      end <= all_collapsed$end))
+
+summarize <- ortho_count_wCoord_HDR %>%
+  dplyr::group_by(class) %>%
+  dplyr::mutate(class_count = n()) %>%
+  dplyr::ungroup() %>% 
+  dplyr::group_by(class,in_HDR) %>%
+  dplyr::mutate(count_HDR = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(prop_in_HDR = count_HDR / class_count * 100) %>%
+  dplyr::select(class,in_HDR,class_count,count_HDR,prop_in_HDR) %>%
+  dplyr::distinct()
+
 
 
 
@@ -1150,17 +1254,17 @@ cowplot::plot_grid(
 #       freq == private_freq ~ "private",
 #       TRUE ~ "undefined"
 #     )
-#   ) 
+#   )
 # 
 # 
 # n2_gene <- all_genes_strain %>%
 #   dplyr::filter(strain == "N2") %>%
 #   dplyr::rename(ID = attributes)
 # 
-# n2_table <- ortho_genes_dd %>% 
+# n2_table <- ortho_genes_dd %>%
 #   dplyr::select(-OG,-'Gene Tree Parent Clade') %>%
 #   dplyr::bind_rows((private_OGs %>% dplyr::rename(HOG = Orthogroup))) %>%
-#   dplyr::select(HOG,N2) 
+#   dplyr::select(HOG,N2)
 # 
 # ortho_count_wCoord <- count %>%
 #   dplyr::left_join(n2_table, by = "HOG") %>%
@@ -1168,7 +1272,7 @@ cowplot::plot_grid(
 #   dplyr::filter(!is.na(N2)) %>%
 #   tidyr::separate_rows(N2, sep = ",\\s*") %>% # splitting rows so each gene is on a row and it retains is gene set classification
 #   dplyr::left_join(n2_gene, by = c("N2" = "ID")) %>%
-#   dplyr::select(freq,class,N2,contig,start,end) 
+#   dplyr::select(freq,class,N2,contig,start,end)
 # 
 # HDRs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/114HDRs.tsv", col_names = c("CHROM","START","END","strain"))
 # 
@@ -1188,22 +1292,22 @@ cowplot::plot_grid(
 #     j=1
 #     while (k==1) {
 #       print(paste0("chrom:",i,"/iteration:",j))
-#       checkIntersect <- temp %>% 
+#       checkIntersect <- temp %>%
 #         dplyr::arrange(CHROM,START) %>%
 #         dplyr::mutate(check=ifelse(lead(START) <= END,T,F)) %>%
 #         dplyr::mutate(check=ifelse(is.na(check),F,check))
-#       
+# 
 #       #print(nrow(checkIntersect %>% dplyr::filter(check==T)))
-#       
+# 
 #       if(nrow(checkIntersect %>% dplyr::filter(check==T)) == 0) {
 #         print("NO MORE INTERSECTS")
 #         k=0
 #       } else {
-#         
+# 
 #         temp <- checkIntersect %>%
 #           dplyr::mutate(gid=data.table::rleid(check)) %>%
 #           dplyr::mutate(gid=ifelse((check==F| is.na(check)) & lag(check)==T,lag(gid),gid))
-#         
+# 
 #         collapse <- temp %>%
 #           dplyr::filter(check==T | (check==F & lag(check)==T)) %>%
 #           dplyr::group_by(gid) %>%
@@ -1213,13 +1317,13 @@ cowplot::plot_grid(
 #           dplyr::distinct(gid,.keep_all = T)  %>%
 #           dplyr::mutate(START=newStart,END=newEnd) %>%
 #           dplyr::select(-newEnd,-newStart)
-#         
+# 
 #         retain <- temp %>%
 #           dplyr::filter(check==F & lag(check)==F)
-#         
+# 
 #         temp <- rbind(collapse,retain) %>%
 #           dplyr::select(-gid,-check)
-#         
+# 
 #         j=j+1
 #       }
 #     }
@@ -1232,17 +1336,17 @@ cowplot::plot_grid(
 # HDR_collapse_master <- getRegFreq(all_regions)
 # 
 # all_collapsed <- ldply(HDR_collapse_master, data.frame) %>%
-#   dplyr::select(-strain) 
+#   dplyr::select(-strain)
 # 
 # 
 # # Adding resolution if genes are found in a HDR or not
-# ortho_count_wCoord_HDR <- ortho_count_wCoord %>% 
+# ortho_count_wCoord_HDR <- ortho_count_wCoord %>%
 #   dplyr::rowwise() %>%
 #   dplyr::mutate(in_HDR = any(
 #     contig == all_collapsed$CHROM &
 #       start >= all_collapsed$START &
 #       end <= all_collapsed$END
-#   )) 
+#   ))
 # 
 # 
 # stats <- ortho_count_wCoord_HDR %>%
@@ -1303,9 +1407,9 @@ cowplot::plot_grid(
 #   geom_jitter(aes(x = HDR, y = freq * 100), width = 0.3, alpha = 0.5, size = 1) +
 #   geom_boxplot(aes(x = HDR, y = freq * 100, fill = HDR), outlier.alpha = 0, alpha = 0.5) +
 #   scale_fill_manual(
-#     name = "Hyper-divergent region?",  
-#     labels = c("non-HDR", "HDR"),  
-#     values = c("#6495ED","#FF6347")  
+#     name = "Hyper-divergent region?",
+#     labels = c("non-HDR", "HDR"),
+#     values = c("#6495ED","#FF6347")
 #   ) +
 #   labs(x="", y = "Frequency of all N2 genes in a HOG") +
 #   scale_y_continuous(labels = scales::percent_format(scale = 1)) +
@@ -1317,7 +1421,7 @@ cowplot::plot_grid(
 #         legend.text = element_text(size = 8),
 #         panel.background = element_blank(),
 #         panel.border = element_rect(fill = NA))
-#         # legend.key.height = unit(0.3, "cm"),  
+#         # legend.key.height = unit(0.3, "cm"),
 #         # legend.key.width = unit(0.3, "cm"))
 
 
