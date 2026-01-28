@@ -97,121 +97,157 @@ all_genes_strain <- genes_strain %>%
   dplyr::mutate(attributes = gsub("ID=gene:","",attributes)) %>%
   dplyr::mutate(attributes = gsub("ID=","",attributes)) %>%
   dplyr::mutate(attributes = sub(";.*", "", attributes)) %>%
-  dplyr::filter(type == "gene")
+  dplyr::filter(type == "gene") %>%
+  dplyr::rename(gene = attributes)
+
+genes_class <- all_genes_strain %>%
+  dplyr::left_join(long_class, by = "gene","strain")
 
 
 # HDRs
 hdrs <- readr::read_tsv("/vast/eande106/data/c_elegans/WI/divergent_regions/20250625/20250625_c_elegans_divergent_regions_strain.bed", col_names = c("chrom", "start", "end", "strain"))
 WSs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/140_correct.tsv", col_names = "strain") %>% dplyr::pull()
-hdrs <- hdrs %>% dplyr::filter(strain %in% WSs)
 
 # COLLAPSING HDRS AMONG 140 WSs
 all_regions <- hdrs %>%
-  dplyr::rename(START = start, CHROM = chrom, END = end) %>%
-  dplyr::arrange(CHROM,START) %>%
-  dplyr::group_split(CHROM) 
-
-strain_count <- hdrs %>% dplyr::distinct(strain, .keep_all = T)
-print(nrow(strain_count)) # SHOULD BE 140
-
-# Collapsing all HDRs
-getRegFreq <- function(all_regions) {
-  all_collapsed <- list()
-  for (i in 1:length(all_regions)) {
-    temp <- all_regions[[i]]
-    k=1
-    j=1
-    while (k==1) {
-      print(paste0("chrom:",i,"/iteration:",j))
-      checkIntersect <- temp %>%
-        dplyr::arrange(CHROM,START) %>%
-        dplyr::mutate(check=ifelse(lead(START) <= END,T,F)) %>%
-        dplyr::mutate(check=ifelse(is.na(check),F,check))
-      
-      #print(nrow(checkIntersect %>% dplyr::filter(check==T)))
-      
-      if(nrow(checkIntersect %>% dplyr::filter(check==T)) == 0) {
-        print("NO MORE INTERSECTS")
-        k=0
-      } else {
-        
-        temp <- checkIntersect %>%
-          dplyr::mutate(gid=data.table::rleid(check)) %>%
-          dplyr::mutate(gid=ifelse((check==F| is.na(check)) & lag(check)==T,lag(gid),gid))
-        
-        collapse <- temp %>%
-          dplyr::filter(check==T | (check==F & lag(check)==T)) %>%
-          dplyr::group_by(gid) %>%
-          dplyr::mutate(newStart=min(START)) %>%
-          dplyr::mutate(newEnd=max(END)) %>%
-          dplyr::ungroup() %>%
-          dplyr::distinct(gid,.keep_all = T)  %>%
-          dplyr::mutate(START=newStart,END=newEnd) %>%
-          dplyr::select(-newEnd,-newStart)
-        
-        retain <- temp %>%
-          dplyr::filter(check==F & lag(check)==F)
-        
-        temp <- rbind(collapse,retain) %>%
-          dplyr::select(-gid,-check)
-        
-        j=j+1
-      }
-    }
-    print(head(temp))
-    all_collapsed[[i]] <- temp
-  }
-  return(all_collapsed)
-}
-
-HDR_collapse_master <- getRegFreq(all_regions)
-
-all_collapsed <- plyr::ldply(HDR_collapse_master, data.frame) %>%
-  dplyr::select(-strain) %>%
+  dplyr::filter(strain %in% WSs) %>%
+  dplyr::arrange(chrom,start) %>%
   data.table::as.data.table()
-
-colnames(all_collapsed) <- c("chrom","start","end")
 
 
 # ======================================================================================================================================================================================== #
 # Extracting the longest WS contig alignment for every HDR #
 # ======================================================================================================================================================================================== #
 nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>% 
-  dplyr::filter(strain != "ECA396")
+  dplyr::filter(strain != "ECA396") %>%
+  dplyr::mutate(inv = ifelse((WSS > WSE), T, F)) %>%
+  dplyr::mutate(St2 = ifelse(inv == T, WSE, WSS), Et2 = ifelse(inv == T, WSS, WSE)) # add resolution for inverted alignments - need to pull genes differently
 
 nucmer_ranges <- nucmer %>%
   dplyr::rename(start = N2S, end = N2E, chrom = N2_chr) %>%
-  dplyr::select(chrom, start, end, L1, contig, WSS, WSE, L2, LENQ, strain) %>%
+  dplyr::select(chrom, start, end, L1, WSS, WSE, contig, L2, LENQ, inv, strain) %>%
   data.table::as.data.table()
 
-data.table::setkey(nucmer_ranges, chrom, start, end)
-data.table::setkey(all_collapsed, chrom, start, end)
+# Finding overlap of WS alignments with HDRs - for an INDIVIDUAL strain:
+### Once finalalized, create a function with the analysis workflow and iterate over wild strains: for (i in WSs)
+SOI <- "ECA3088"
 
-n2_genes_align <- data.table::foverlaps(
-  x = all_collapsed,
+nucmer_ranges <- nucmer_ranges %>% dplyr::filter(strain == SOI)
+strain_hdr <- all_regions %>% dplyr::filter(strain == SOI) %>% 
+  dplyr::rename(og_hdr_start = start, og_hdr_end = end) %>% 
+  dplyr::mutate(start = ifelse(og_hdr_start >= 5000, og_hdr_start - 5000, og_hdr_start), end = og_hdr_end + 5000) ##################  EXTENDING HDR BOUNDARIES BY 5 KB ON BOTH SIDES TO TRY AND PULL EXTREMELY DIVERGENT REGIONS
+  
+data.table::setkey(nucmer_ranges, chrom, start, end)
+data.table::setkey(strain_hdr, chrom, start, end)
+
+hdr_aln <- data.table::foverlaps(
+  x = strain_hdr,
   y = nucmer_ranges,
   type = "any" # if the start/end of any alignment is within an HDR
-) %>%
-  dplyr::rename(N2 = i.strain, n2_gene = attributes, start_aln = start, end_aln = end, start_gene = i.start, end_gene = i.end) %>%
-  dplyr::select(-type, -strand) # 10,333 genes!
+  ) %>%
+  dplyr::rename(hdr_start_extended = i.start, hdr_end_extended = i.end, N2S = start, N2E = end) %>%
+  dplyr::select(-i.strain) # 10,333 genes!
+
+num_hdrs <- nrow(strain_hdr)
+num_hdr_aln <- nrow(hdr_aln %>% dplyr::distinct(hdr_start_extended))
+strain_id <- hdr_aln %>% dplyr::distinct(strain) %>% dplyr::pull()
+print(paste0(num_hdr_aln, " / ", num_hdrs, " HDRs have overlapping ", strain_id, " alignments"))
+
+# Test plot
+ggplot(data = hdr_aln) +
+  geom_rect(aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.1) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = contig), size = 1) +
+  facet_wrap(~chrom) +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank()
+  ) +
+  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
+
+ggplot(data = hdr_aln %>% dplyr::filter(chrom == "IV" & og_hdr_start > 12000000 & og_hdr_end < 14000000)) +
+  geom_rect(aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.1) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = contig), size = 1) +
+  facet_wrap(~chrom) +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank()
+  ) +
+  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
 
 
-
-nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlotter.R
-  dplyr::group_by(strain, n2_gene) %>%
+nucmer_longest <- hdr_aln %>% # equivalent of tigFilt from haplotypePlotter.R
+  dplyr::group_by(og_hdr_start) %>%
   dplyr::mutate(nalign = n()) %>%
   dplyr::ungroup() %>%
-  dplyr::group_by(n2_gene, contig, strain) %>%
-  dplyr::mutate(ntig= n()) %>%
-  dplyr::mutate(tigsize=sum(L2)) %>% # summing the number of alignments that overlap with an N2 gene... some contigs align to a single gene many times
+  dplyr::group_by(og_hdr_start, contig) %>%
+  dplyr::mutate(ntig = n()) %>%
+  dplyr::mutate(tigsize = sum(L2)) %>% # summing the number of alignments that overlap with an N2 gene... some contigs align to a single gene many times
   dplyr::ungroup() %>% 
-  dplyr::group_by(strain, n2_gene) %>%
+  dplyr::group_by(og_hdr_start) %>%
   dplyr::filter(tigsize == max(tigsize)) %>%
   dplyr::ungroup() %>%
   dplyr::rename(longest_contig = contig) %>%
-  dplyr::group_by(strain, n2_gene) %>%
+  dplyr::group_by(og_hdr_start) %>%
   dplyr::filter(LENQ == max(LENQ)) %>% # to filter out alignments that are the same size, but from different contigs
   dplyr::ungroup()
+
+ggplot(data = nucmer_longest) +
+  geom_rect(aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.1) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = longest_contig), size = 1) +
+  facet_wrap(~chrom) +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank()
+  ) +
+  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
+
+
+# Calculating the WS coordinates that directly overlap with the N2 HDR boundaries
+nucmer_slope <- nucmer_longest %>%
+  # dplyr::group_by(og_hdr_start) %>%
+  # dplyr::mutate(longest_L2 = max(L2)) %>% # filtering for the longest alignment for each HDR to calculate the slope
+  # dplyr::ungroup() %>%
+  dplyr::mutate(slope = ((WSE - WSS) / (N2E - N2S))) %>%
+  dplyr::mutate(intercept = WSS - (slope * N2S)) %>% # to find the y-intercept using point-slope form (b = y1 - mx1)
+  dplyr::mutate(WS_hdr_start = ((slope * og_hdr_start) + intercept)) %>%
+  dplyr::mutate(WS_hdr_end = ((slope * og_hdr_end) + intercept)) %>%
+  dplyr::group_by(og_hdr_start) %>%
+  dplyr::mutate(WS_hdr_start_min = min(WS_hdr_start)) %>% # conditional based on if alignment is INV and min WSS! - what if there is only an alignment for one HDR boundary???
+  dplyr::mutate(WS_hdr_end_max = max(WS_hdr_end)) %>% # conditional based on if alignment is INV and max WSE! - what if there is only an alignment for one HDR boundary???
+  dplyr::ungroup() 
+
+test <- nucmer_slope %>% dplyr::filter(chrom == "IV" & og_hdr_start > 12600000 & og_hdr_end < 13000000)
+ggplot(test) + 
+  geom_rect(data = test %>% dplyr::distinct(og_hdr_start, .keep_all = T), aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.3) +
+  geom_rect(data = test %>% dplyr::distinct(WS_hdr_start_min, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min / 1e6, ymax = WS_hdr_end_max / 1e6), fill = 'blue', alpha = 0.3) +
+  geom_segment(aes(x = og_hdr_start / 1e6, xend = og_hdr_start / 1e6, y = -Inf, yend = Inf), color = 'black') +
+  geom_segment(aes(x = og_hdr_end / 1e6, xend = og_hdr_end / 1e6, y = -Inf, yend = Inf), color = 'black') +
+  geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_start_min / 1e6, yend = WS_hdr_start_min / 1e6), color = 'black') +
+  geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_end_max / 1e6, yend = WS_hdr_end_max / 1e6), color = 'black') +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = longest_contig), size = 1) +
+  facet_wrap(~chrom) +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank()
+  ) +
+  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
+
+
+ws_n2_hdr_region <- nucmer_slope %>% 
+  dplyr::group_by(og_hdr_start) %>%
+  dplyr::mutate(hdr_size = og_hdr_end - og_hdr_start, ws_hdr_size = WS_hdr_end_max - WS_hdr_start_min) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(og_hdr_start, .keep_all = T)
+
+# Shows that HDRs are very structurally different than N2 and not just high SNV density
+ggplot(data = ws_n2_hdr_region) +
+  geom_point(aes(x = hdr_size / 1e6, y = abs(ws_hdr_size / 1e6)), color = 'firebrick') +
+  geom_line(data = data.frame(x = c(0, 1.5)), aes(x = x, y = x), linetype = "dashed") +  
+  scale_x_log10(limits = c(0.009, 20)) +
+  scale_y_log10(limits = c(0.009, 20)) +
+  theme_bw() +
+  labs(x = "N2 HDR size (Mb) log scale", y = paste0(strain_id, " HDR size (Mb) log scale"))
+
 
 
 
@@ -219,13 +255,11 @@ nucmer_longest <- n2_genes_align %>% # equivalent of tigFilt from haplotypePlott
 # Removing contigs that are far away in WI coordinate system - large jumps in alignment #
 # ======================================================================================================================================================================================== #
 nucmer_longest_jump <- nucmer_longest %>%
-  dplyr::mutate(inv = ifelse((WSS > WSE), T, F)) %>%
   dplyr::mutate(St2 = ifelse(inv == T, WSE, WSS), Et2 = ifelse(inv == T, WSS, WSE)) %>% # addresses inverted alignments for tigTrim
   dplyr::arrange(St2) %>%
-  dplyr::group_by(n2_gene, strain) %>%
+  dplyr::group_by(hdr_start) %>%
   dplyr::mutate(leadDiff = lead(St2)-Et2) %>%
   dplyr::ungroup()
-
 
 
 #### Testing how my two-variable heuristics look when I do not remove the initial jump filter
@@ -239,185 +273,6 @@ nucmer_longest_jumpRemoved <- nucmer_longest_jump
 nucmer_longest_jumpRemoved <- nucmer_longest_jumpRemoved %>%
   dplyr::mutate(row_id = dplyr::row_number())
 
-diff <- nucmer_longest_jumpRemoved %>%
-  dplyr::group_by(n2_gene, strain) %>%
-  dplyr::filter(dplyr::n() == 2) %>%
-  dplyr::arrange(L2, .by_group = TRUE) %>%
-  dplyr::mutate(diff = abs(diff(L2)[1])) %>% 
-  dplyr::mutate(diff_fraction = 1 - (min(L2) / max(L2))) %>%
-  dplyr::arrange(St2, .by_group = TRUE) %>%
-  dplyr::mutate(jumptwo = abs(lead(St2) - Et2)) %>%
-  dplyr::ungroup() ### ~55,000 rows, so 27,500 different gene-strain entries, and then 237 genes per strain, so ~1 % of n2 genes for each strain
-
-diff_dist_plot <- ggplot(data = diff) +
-  geom_histogram(aes(x = diff / 1e3), bins = 500) + 
-  theme_bw() +
-  xlab("Pairwise difference in alignment (kb)")
-diff_dist_plot       
-
-diff_dist_plotjumps <- ggplot(data = diff) +
-  geom_histogram(aes(x = jumptwo / 1e6), bins = 200, fill = 'black') +
-  geom_vline(xintercept = max(diff$jumptwo, na.rm = TRUE) / 1e6, color = 'red', size = 2) +
-  geom_vline(xintercept = 4.5, color = 'blue', size = 2) +
-  # geom_vline(xintercept = 0.5, color = 'blue', size = 2) +
-  scale_y_log10(
-    breaks = scales::trans_breaks("log10", function(x) 10^x),
-    labels = scales::trans_format("log10", scales::math_format(10^.x))
-  ) +
-  theme_bw() +
-  xlab("Difference in alignment jumps (absolute value) (Mb)")
-diff_dist_plotjumps
-
-
-# Removing alignments that are VERY small and distant from "main" alignment
-# Need to find the WS coordinates that overlap with the N2 gene for each alignment, then calculate the mean (middle) WS coordinate, 
-# and then if the difference is >trim_spacer (need to account for scale_distortion between WS and N2) and the smaller alignment (L1) is not at least the length of the N2 gene + 2xtrim_spacer, then drop it
-# Remove rowIDs of diff dataframe from nucmer_longest_jumpRemoved, and then rbind(rows) of filtered diff column that only contains longest, most syntenic alignment
-diff_info <- diff %>%
-  dplyr::mutate(n2_gene_len = (end_gene - start_gene)) %>%
-  dplyr::mutate(n2_gene_middle = start_gene + (n2_gene_len / 2)) %>%
-  # Now taking into account Inverted alignments
-  dplyr::mutate(slope = ((WSE - WSS) / (end_aln - start_aln))) %>%
-  dplyr::mutate(intercept = WSS - (slope * start_aln)) %>% # to find the y-intercept using point-slope form (b = y1 - mx1)
-  dplyr::mutate(WS_n2_middleGene = ((slope * n2_gene_middle) + intercept)) %>%
-  dplyr::group_by(n2_gene, strain) %>% 
-  # dplyr::mutate(local_dup = ifelse((min(WSE) < max(WSS)) & (min(WSE) < max(WSE)) & (min(WSS) < max(WSS)) & (min(WSS) < max(WSE)) & ((L1 == min(L1) & start_aln < (start_gene - 0) & end_aln > (end_gene + 0))), TRUE, FALSE)) %>% # Inversion-friendly version!
-  dplyr::mutate(local_dup = ifelse(((L1 == min(L1) & start_aln < (start_gene - 0) & end_aln > (end_gene + 0))), TRUE, FALSE)) %>% # Inversion-friendly version!
-  dplyr::mutate(WS_n2_middleGene_diff = max(WS_n2_middleGene) - min(WS_n2_middleGene)) %>% # want to include this data, because we probably don't want to keep massive jumps in duplication coordinates
-  dplyr::ungroup() 
-
-diff_info_noINV <- diff %>%
-  dplyr::mutate(n2_gene_len = (end_gene - start_gene)) %>%
-  dplyr::mutate(n2_gene_middle = start_gene + (n2_gene_len / 2)) %>%
-  dplyr::mutate(slope = ((Et2 - St2) / (end_aln - start_aln))) %>%
-  dplyr::mutate(intercept = St2 - (slope * start_aln)) %>% # to find the y-intercept using point-slope form (b = y1 - mx1)
-  dplyr::mutate(WS_n2_middleGene = ((slope * n2_gene_middle) + intercept)) %>%
-  dplyr::group_by(n2_gene, strain) %>% 
-  dplyr::mutate(local_dup = ifelse((min(Et2) < max(St2)) & (max(St2) > min(Et2)) & ( (L1 == min(L1) & start_aln < (start_gene - 0) & end_aln > (end_gene + 0)) ), TRUE, FALSE)) %>% 
-  dplyr::mutate(WS_n2_middleGene_diff = max(WS_n2_middleGene) - min(WS_n2_middleGene)) %>% # want to include this data, because we probably don't want to keep massive jumps in duplication coordinates
-  dplyr::ungroup() 
-
-
-dist <- ggplot(diff_info) +
-  scale_y_continuous(expand = c(0.005, 0)) +
-  scale_x_continuous(expand = c(0.005,0)) +
-  geom_point(data = diff_info %>% dplyr::filter(local_dup == FALSE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
-  geom_point(data = diff_info %>% dplyr::filter(local_dup == TRUE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
-  geom_vline(xintercept = 100, color = "gray30", size = 2, linetype="dashed") +
-  geom_rect(xmin = -Inf, xmax = 100, ymin = -Inf, ymax = Inf, fill = 'gray', alpha = 0.008) +
-  geom_hline(yintercept = 0.05, color = "gray30", size = 2, linetype="dashed") +
-  geom_rect(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0.05, fill = 'gray', alpha = 0.008) +
-  scale_color_manual(values = c("TRUE" = "red", "FALSE" = "blue")) +
-  theme(
-    legend.position = 'none',
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    # axis.title = element_blank(),
-    axis.text = element_text(size = 14, color = 'black'),
-    axis.title = element_text(size = 14, color = 'black', face = 'bold'),
-    panel.border = element_rect(fill = NA)) +
-  labs(x = "WS alignment coordinate difference at N2 gene locus (kb)", y = "Proportional difference in size of WS alignments (1 - (min(L2) / max(L2)))")
-dist
-
-# How many are local (contained in longer WS contig alignment) duplications?
-local_dup_counts <- diff_info %>%
-  dplyr::count(local_dup) 
-# 19,459 are local and syntenic when I lower the threshold of synteny to only having to span the N2 gene, and not 6kb up- and downstream
-
-gene_jump_dist <- ggplot(data = diff_info) +
-  geom_histogram(aes(x = WS_n2_middleGene_diff / 1e3), bins = 200, fill = 'gray30') +
-  scale_y_continuous(expand = c(0.001, 0), labels = scales::label_number(scale = 1e-3)) +
-  scale_x_continuous(expand = c(0.001,0)) +
-  theme(
-    legend.position = 'none',
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    axis.ticks.x = element_blank(),
-    axis.text.y = element_text(size = 14, color = 'black'),
-    axis.text.x = element_blank(),
-    axis.title.x = element_blank(),
-    axis.title.y = element_text(size = 16, color ='black'),
-    # plot.margin = margin(r = 10, t = 10, l = 10),
-    axis.line = element_line(color = "black"),
-    axis.line.y.right = element_blank(),
-    axis.line.x.top = element_blank()) +
-  ylab("Count (thousands)")
-gene_jump_dist
-
-L2_diff_dist <- ggplot(data = diff_info) +
-  geom_histogram(aes( y= diff_fraction), bins = 200, fill = 'gray30') +
-  scale_y_continuous(expand = c(0.001, 0), position = "right") +
-  scale_x_continuous(labels = scales::label_number(scale = 1e-3)) +
-  theme(
-    legend.position = 'none',
-    panel.background = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.text.x = element_text(size = 14, color = 'black'),
-    panel.grid = element_blank(),
-    axis.text.y = element_blank(),
-    axis.title.y = element_blank(),
-    axis.title.x = element_text(size = 16, color = 'black'),
-    # plot.margin = margin(l = 20, t = 10, r = 10, b = 23),
-    axis.line = element_line(color = "black"),
-    axis.line.y.right = element_blank(),
-    axis.line.x.bottom = element_blank()) +
-  xlab("Count (thousands)")
-L2_diff_dist
-
-
-gene_jump_dist_clean <- gene_jump_dist + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
-
-L2_diff_dist_clean <- L2_diff_dist + theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
-
-top_row <- plot_grid(gene_jump_dist_clean, NULL, ncol = 2, rel_widths = c(0.8, 0.20))
-middle_row <- plot_grid(dist, L2_diff_dist_clean, ncol = 2, rel_widths = c(0.8, 0.20)) #+ theme(plot.margin = margin(t = 20))
-
-final_plot <- plot_grid(top_row, middle_row, nrow = 2, rel_heights = c(0.2, 0.8))
-
-final_plot
-
-
-
-
-diff_filtered <- diff_info %>%
-  dplyr::group_by(n2_gene, strain) %>%
-  dplyr::mutate(
-    drop_smaller = if (
-      any(WS_n2_middleGene_diff > 100000 & diff_fraction > 0.05 & local_dup == FALSE)
-    ) {
-      (L1 != max(L1, na.rm = TRUE)) & (local_dup == FALSE)
-    } else {
-      FALSE  # keep both
-    }
-  ) %>%
-  dplyr::filter(!drop_smaller) %>%
-  dplyr::ungroup()
-
-diff_filtered_twos <- diff_filtered %>%
-  dplyr::group_by(n2_gene, strain) %>%
-  dplyr::filter(dplyr::n() == 2) %>%
-  dplyr::ungroup()
-
-dist_filt <- ggplot(diff_filtered_twos) +
-  scale_y_continuous(expand = c(0.005, 0)) +
-  scale_x_continuous(expand = c(0.005,0)) +
-  geom_point(data = diff_filtered_twos %>% dplyr::filter(local_dup == FALSE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
-  geom_point(data = diff_filtered_twos %>% dplyr::filter(local_dup == TRUE), aes(x = WS_n2_middleGene_diff / 1e3, y = diff_fraction, color = local_dup)) +
-  geom_vline(xintercept = 100, color = "gray30", size = 2, linetype="dashed") +
-  geom_rect(xmin = -Inf, xmax = 100, ymin = -Inf, ymax = Inf, fill = 'gray', alpha = 0.008) +
-  geom_hline(yintercept = 0.05, color = "gray30", size = 2, linetype="dashed") +
-  geom_rect(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0.05, fill = 'gray', alpha = 0.008) +
-  scale_color_manual(values = c("TRUE" = "red", "FALSE" = "blue")) +
-  theme(
-    legend.position = 'none',
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    # axis.title = element_blank(),
-    axis.text = element_text(size = 14, color = 'black'),
-    axis.title = element_text(size = 14, color = 'black', face = 'bold'),
-    panel.border = element_rect(fill = NA)) +
-  labs(x = "WS alignment coordinate difference at N2 gene locus (kb)", y = "Proportional difference in size of WS alignments (1 - (min(L2) / max(L2)))")
-dist_filt
 
 # Remove n2gene-strain pairs with two alignments from nucmer_longest_jumpRemoved, and then append filtered alignments
 rows_to_remove <- diff$row_id
