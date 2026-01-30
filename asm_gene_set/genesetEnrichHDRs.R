@@ -85,15 +85,12 @@ long_class <- all_class %>%
   dplyr::select(strain, gene, class) %>%
   dplyr::mutate(gene = sub("\\.[^.]*$", "", gene))
 
-# pivot the table longer where each row is a gene for every strain and it's classification
-
 # test <- all_class %>% dplyr::group_by(class) %>% dplyr::mutate(count = n()) %>% dplyr::distinct(class,count)
 
 # Loading all genes in pangenome
 genes_strain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142_140WSs_andCGC1_longestIsoGenes.tsv", col_names = c("seqid","source", "type", "start", "end", "score", "strand", "phase", "attributes", "strain")) %>% dplyr::filter(strain != "ECA396")
 N2_gff <- ape::read.gff("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.gff3") %>% dplyr::mutate(strain="N2")
-genes_strain <- rbind(genes_strain,N2_gff)
-all_genes_strain <- genes_strain %>%
+all_genes_strain <- rbind(genes_strain,N2_gff) %>%
   dplyr::mutate(attributes = gsub("ID=gene:","",attributes)) %>%
   dplyr::mutate(attributes = gsub("ID=","",attributes)) %>%
   dplyr::mutate(attributes = sub(";.*", "", attributes)) %>%
@@ -101,7 +98,7 @@ all_genes_strain <- genes_strain %>%
   dplyr::rename(gene = attributes)
 
 genes_class <- all_genes_strain %>%
-  dplyr::left_join(long_class, by = "gene","strain")
+  dplyr::left_join(long_class, by = c("gene","strain"))
 
 
 # HDRs
@@ -137,6 +134,12 @@ strain_hdr <- all_regions %>% dplyr::filter(strain == SOI) %>%
   dplyr::rename(og_hdr_start = start, og_hdr_end = end) %>% 
   dplyr::mutate(start = ifelse(og_hdr_start >= 5000, og_hdr_start - 5000, og_hdr_start), end = og_hdr_end + 5000) ##################  EXTENDING HDR BOUNDARIES BY 5 KB ON BOTH SIDES TO TRY AND PULL EXTREMELY DIVERGENT REGIONS
   
+strain_gene_class <- genes_class %>% dplyr::filter(strain == SOI) %>%
+  dplyr::group_by(strain, class) %>%
+  dplyr::mutate(strain_class_count = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(seqid,start,end,gene,strain,class,strain_class_count)
+
 data.table::setkey(nucmer_ranges, chrom, start, end)
 data.table::setkey(strain_hdr, chrom, start, end)
 
@@ -211,9 +214,19 @@ nucmer_slope <- nucmer_longest %>%
   dplyr::mutate(intercept = WSS - (slope * N2S)) %>% # to find the y-intercept using point-slope form (b = y1 - mx1)
   dplyr::mutate(WS_hdr_start = ((slope * og_hdr_start) + intercept)) %>%
   dplyr::mutate(WS_hdr_end = ((slope * og_hdr_end) + intercept)) %>%
+  dplyr::mutate(spans_hdr = (N2S <= og_hdr_start & N2E >= og_hdr_start) | (N2S <= og_hdr_end & N2E >= og_hdr_end)) %>%
+  dplyr::group_by(og_hdr_start, spans_hdr) %>%
+  # Add resolution on if there is only an alignment for one edge of the HDR
+  dplyr::mutate(
+    WS_hdr_start_min = ifelse(WSS == min(WSS) & inv == F & spans_hdr == T, WS_hdr_start, 
+                              ifelse(WSE == min(WSE) & inv == T & spans_hdr == T, WS_hdr_end, NA))) %>% # conditional based on if alignment is INV and min WSS! - what if there is only an alignment for one HDR boundary???  # (N2S < og_hdr_start & N2E > og_hdr_start | N2S < og_hdr_end & N2E > og_hdr_end)
+  dplyr::mutate(
+    WS_hdr_end_max = ifelse(WSE == max(WSE) & inv == F & spans_hdr == T, WS_hdr_end, 
+                            ifelse(WSS == max(WSS) & inv == T & spans_hdr == T, WS_hdr_start, NA))) %>% # conditional based on if alignment is INV and max WSE! - what if there is only an alignment for one HDR boundary???
+  dplyr::ungroup() %>%
   dplyr::group_by(og_hdr_start) %>%
-  dplyr::mutate(WS_hdr_start_min = min(WS_hdr_start)) %>% # conditional based on if alignment is INV and min WSS! - what if there is only an alignment for one HDR boundary???
-  dplyr::mutate(WS_hdr_end_max = max(WS_hdr_end)) %>% # conditional based on if alignment is INV and max WSE! - what if there is only an alignment for one HDR boundary???
+  tidyr::fill(WS_hdr_start_min, .direction = "updown") %>%
+  tidyr::fill(WS_hdr_end_max, .direction = "updown") %>%
   dplyr::ungroup() 
 
 test <- nucmer_slope %>% dplyr::filter(chrom == "IV" & og_hdr_start > 12600000 & og_hdr_end < 13000000)
@@ -224,7 +237,8 @@ ggplot(test) +
   geom_segment(aes(x = og_hdr_end / 1e6, xend = og_hdr_end / 1e6, y = -Inf, yend = Inf), color = 'black') +
   geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_start_min / 1e6, yend = WS_hdr_start_min / 1e6), color = 'black') +
   geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_end_max / 1e6, yend = WS_hdr_end_max / 1e6), color = 'black') +
-  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = longest_contig), size = 1) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = spans_hdr), size = 1) +
+  scale_color_manual(values = c("TRUE" = "green", "FALSE" = "blue")) +
   facet_wrap(~chrom) +
   theme(
     panel.border = element_rect(color = 'black', fill = NA),
@@ -233,7 +247,60 @@ ggplot(test) +
   labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
 
 
-ws_n2_hdr_region <- nucmer_slope %>% 
+
+test_inv <- nucmer_slope %>% dplyr::filter(chrom == "V" & og_hdr_start > 6200000 & og_hdr_end < 6700000)
+ggplot(test_inv) + 
+  geom_rect(data = test_inv %>% dplyr::distinct(og_hdr_start, .keep_all = T), aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.3) +
+  geom_rect(data = test_inv %>% dplyr::distinct(WS_hdr_start_min, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min / 1e6, ymax = WS_hdr_end_max / 1e6), fill = 'blue', alpha = 0.3) +
+  geom_segment(aes(x = og_hdr_start / 1e6, xend = og_hdr_start / 1e6, y = -Inf, yend = Inf), color = 'black') +
+  geom_segment(aes(x = og_hdr_end / 1e6, xend = og_hdr_end / 1e6, y = -Inf, yend = Inf), color = 'black') +
+  geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_start_min / 1e6, yend = WS_hdr_start_min / 1e6), color = 'black') +
+  geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_end_max / 1e6, yend = WS_hdr_end_max / 1e6), color = 'black') +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = spans_hdr), size = 1) +
+  scale_color_manual(values = c("TRUE" = "green", "FALSE" = "blue")) +
+  facet_wrap(~chrom) +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank()
+  ) +
+  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
+
+
+
+what <- test_inv %>% dplyr::filter(og_hdr_start == "6379000")
+
+ggplot(what) + 
+  geom_rect(data = what %>% dplyr::distinct(og_hdr_start, .keep_all = T), aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.3) +
+  # geom_rect(data = what %>% dplyr::distinct(WS_hdr_start_min, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min / 1e6, ymax = WS_hdr_end_max / 1e6), fill = 'blue', alpha = 0.3) +
+  # geom_segment(aes(x = og_hdr_start / 1e6, xend = og_hdr_start / 1e6, y = -Inf, yend = Inf), color = 'black') +
+  # geom_segment(aes(x = og_hdr_end / 1e6, xend = og_hdr_end / 1e6, y = -Inf, yend = Inf), color = 'black') +
+  geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_start / 1e6, yend = WS_hdr_start / 1e6), color = 'black') +
+  geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_end / 1e6, yend = WS_hdr_end / 1e6), color = 'black') +
+  # geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_start_min / 1e6, yend = WS_hdr_start_min / 1e6), color = 'black') +
+  # geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_end_max / 1e6, yend = WS_hdr_end_max / 1e6), color = 'black') +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = spans_hdr), size = 1) +
+  scale_color_manual(values = c("TRUE" = "green", "FALSE" = "blue")) +
+  facet_wrap(~chrom) +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank()
+  ) +
+  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
+
+
+
+nucmer_slope_spanning_HDR_both_sides <- nucmer_slope %>%
+  dplyr::filter(spans_hdr == T) %>%
+  dplyr::mutate(spans_hdr_start = (N2S <= og_hdr_start & N2E >= og_hdr_start),
+                spans_hdr_end = (N2S <= og_hdr_end & N2E >= og_hdr_end)) %>%
+  dplyr::mutate(only_one_edge_hdr = ifelse(is.na(spans_hdr_start) | is.na(spans_hdr_start),T,F)) %>%
+  dplyr::group_by(og_hdr_start) %>%
+  dplyr::mutate(count = n())
+  
+
+
+ws_n2_hdr_region <- nucmer_slope %>%
+  dplyr::filter(spans_hdr == T) %>%
   dplyr::group_by(og_hdr_start) %>%
   dplyr::mutate(hdr_size = og_hdr_end - og_hdr_start, ws_hdr_size = WS_hdr_end_max - WS_hdr_start_min) %>%
   dplyr::ungroup() %>%
@@ -242,9 +309,9 @@ ws_n2_hdr_region <- nucmer_slope %>%
 # Shows that HDRs are very structurally different than N2 and not just high SNV density
 ggplot(data = ws_n2_hdr_region) +
   geom_point(aes(x = hdr_size / 1e6, y = abs(ws_hdr_size / 1e6)), color = 'firebrick') +
-  geom_line(data = data.frame(x = c(0, 1.5)), aes(x = x, y = x), linetype = "dashed") +  
-  scale_x_log10(limits = c(0.009, 20)) +
-  scale_y_log10(limits = c(0.009, 20)) +
+  geom_line(data = data.frame(x = c(0, 1.5)), aes(x = x, y = x), linetype = "dashed") +
+  # scale_x_log10(limits = c(0.009, 20)) +
+  # scale_y_log10(limits = c(0.009, 20)) +
   theme_bw() +
   labs(x = "N2 HDR size (Mb) log scale", y = paste0(strain_id, " HDR size (Mb) log scale"))
 
