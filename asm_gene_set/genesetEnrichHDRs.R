@@ -536,16 +536,16 @@ num <- nrow(number_hdrs_correct)
 print(paste0("Total number of HDRs lifted over to wild strains: ", num, " / ", num_hdrs))
 
 two_starts_after <- number_hdrs_correct %>% dplyr::filter(chrom == "II" & og_hdr_start == "1040000") %>%
-  dplyr::left_join(two_starts, by = c("chrom","og_hdr_start","og_hdr_end", "WS_hdr_start_min"))
+  dplyr::left_join(two_starts, by = c("chrom","og_hdr_start","og_hdr_end", "WS_hdr_start_min", "WS_hdr_end_max"))
   # dplyr::filter(!is.na(L2.y))
 
 ggplot(data = two_starts_after) +
   geom_rect(data = two_starts_after %>% dplyr::distinct(og_hdr_start, .keep_all = T), aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.3) +
-  geom_rect(data = two_starts_after %>% dplyr::distinct(WS_hdr_start_min, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min / 1e6, ymax = WS_hdr_end_max.x / 1e6), fill = 'blue', alpha = 0.3) +
+  geom_rect(data = two_starts_after %>% dplyr::distinct(WS_hdr_start_min, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min / 1e6, ymax = WS_hdr_end_max / 1e6), fill = 'blue', alpha = 0.3) +
   geom_segment(aes(x = og_hdr_start / 1e6, xend = og_hdr_start / 1e6, y = -Inf, yend = Inf), color = 'black') +
   geom_segment(aes(x = og_hdr_end / 1e6, xend = og_hdr_end / 1e6, y = -Inf, yend = Inf), color = 'black') +
   geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_start_min / 1e6, yend = WS_hdr_start_min / 1e6), color = 'black') +
-  geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_end_max.x / 1e6, yend = WS_hdr_end_max.x / 1e6), color = 'black') +
+  geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_end_max / 1e6, yend = WS_hdr_end_max / 1e6), color = 'black') +
   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = spans_hdr), size = 1) +
   scale_color_manual(values = c("TRUE" = "green", "FALSE" = "blue")) +
   # coord_cartesian(ylim = c(0,5)) +
@@ -555,6 +555,38 @@ ggplot(data = two_starts_after) +
     panel.background = element_blank()
   ) +
   labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
+
+
+FINAL_hdrs <- number_hdrs_correct %>%
+  dplyr::left_join(nucmer_slope, by = c("chrom","og_hdr_start","og_hdr_end", "WS_hdr_start_min", "WS_hdr_end_max"))
+
+# final_count <- FINAL_hdrs %>% dplyr::distinct(chrom,og_hdr_start)
+
+ggplot(nucmer_slope) + 
+  geom_rect(data = nucmer_slope %>% dplyr::distinct(og_hdr_start, .keep_all = T), aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.3) +
+  geom_rect(data = nucmer_slope %>% dplyr::distinct(WS_hdr_start_min, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min / 1e6, ymax = WS_hdr_end_max / 1e6), fill = 'blue', alpha = 0.3) +
+  # geom_segment(aes(x = og_hdr_start / 1e6, xend = og_hdr_start / 1e6, y = -Inf, yend = Inf), color = 'black') +
+  # geom_segment(aes(x = og_hdr_end / 1e6, xend = og_hdr_end / 1e6, y = -Inf, yend = Inf), color = 'black') +
+  # geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_start_min / 1e6, yend = WS_hdr_start_min / 1e6), color = 'black') +
+  # geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_end_max / 1e6, yend = WS_hdr_end_max / 1e6), color = 'black') +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = spans_hdr), size = 1) +
+  scale_color_manual(values = c("TRUE" = "green", "FALSE" = "blue")) +
+  facet_wrap(~chrom, scales = "free") +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank()
+  ) +
+  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
+
+
+
+
+
+
+
+
+
+
 
 
 
