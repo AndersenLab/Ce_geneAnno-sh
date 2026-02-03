@@ -33,6 +33,7 @@ library(stringr)
 # want <- merged %>% dplyr::pull(strain)
 
 want <- c("N2","MY16","CB4856")
+want <- c("N2","CB4856","AB1","CB4852","ECA248","ECA251","JU311","JU346","JU394","MY16","ECA259","PX179","RC301","MY1")
   
   
 #read all pairwise genome coordinate comparisons
@@ -51,7 +52,7 @@ transformed_coords <- transformed_coords %>% dplyr::filter(STRAIN != "ECA396") %
 ## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
 gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142strain_genemRNAfeatures.tsv", col_names = F)
 colnames(gffCat1) <- c("seqid","source","type","start","end","score","strand","phase","attributes","STRAIN")
-gffCat2 <- ape::read.gff("/vast/eande106/projects/Nicolas/c.elegans/N2/wormbase/WS283/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
+gffCat2 <- ape::read.gff("/vast/eande106/projects/Nicolas/gene_models/c.elegans/N2/wormbase/WS283/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
 gffCat <- rbind(gffCat1 %>% dplyr::filter(STRAIN != "ECA396"),gffCat2) %>% 
   dplyr::filter(STRAIN %in% want)
 
@@ -74,11 +75,11 @@ colnames(orthos) <- strainCol_c2
 # Francoi interval
 # hdr_chrom = "I"
 # hdr_start_pos = 11430000 # 5 kb upstream
-# hdr_start_pos = 11434000 # 1 kb upstream
+hdr_start_pos = 11434000 # 1 kb upstram
 # hdr_end_pos = 11455000 # 1 kb downstream
 
 hdr_chrom = "I"
-hdr_start_pos = 11469000 # 1 kb upstream
+# hdr_start_pos = 11469000 # 1 kb upstream
 hdr_end_pos = 11484000 # 1 kb downstream
 # hdr_end_pos = 11489000 # 5 kb downstream
 
@@ -896,12 +897,14 @@ all_hap_bg <- ggplot() +
     legend.direction = "horizontal",
     legend.key.size = unit(0.4, "lines"),
     legend.text = element_text(size = 16),
-    legend.title = element_text(size = 16)
-  ) +
+    legend.title = element_text(size = 16)) +
   guides(fill = guide_legend(nrow = 6, byrow = TRUE))
-
 all_hap_bg
+
 # ======================================================================================================================= #
+
+
+
 
 
 
@@ -928,15 +931,23 @@ colnames(ortho_genes_dd) <- strainCol_c2
 # fbxc_strains <- ortho_genes_dd %>% dplyr::select(Orthogroup, N2, dplyr::any_of(want)) %>% dplyr::filter(Orthogroup == "OG0022008")
 
 
-test <- ortho_genes_dd %>% dplyr::select(Orthogroup, N2, dplyr::any_of(want)) %>% dplyr::filter(grepl("transcript_ZK1025.6", N2))
+# test <- ortho_genes_dd %>% dplyr::select(Orthogroup, N2, dplyr::any_of(want)) %>% dplyr::filter(grepl("transcript_ZK1025.6", N2))
 
+n2_genes_inInterval <- N2_tran_reg %>% dplyr::mutate(tranname = gsub("ID=transcript:","",tranname)) %>% dplyr::pull(tranname)
+n2_orthos <- ortho_genes_dd %>% dplyr::select(Orthogroup, N2, dplyr::any_of(want)) %>%
+  tidyr::separate_rows(N2, sep = ", ") %>%
+  dplyr::filter(N2 %in% n2_genes_inInterval)
+gene_alias <- N2_tran_reg %>% dplyr::mutate(tranname = gsub("ID=transcript:","",tranname)) %>% dplyr::select(tranname,alias)
+n2_orthos_final <- n2_orthos %>% dplyr::left_join(gene_alias, by = c("N2" = "tranname")) %>%
+  dplyr::select(-N2) %>%
+  dplyr::rename(N2 = alias) %>%
+  dplyr::select(Orthogroup,N2,2:15)
 
+n2_orthos_collapsed <- n2_orthos_final %>%
+  dplyr::group_by(Orthogroup) %>%
+  dplyr::summarise(dplyr::across(dplyr::everything(), ~ paste(unique(.x), collapse = ", ")), .groups = "drop")
 
-
-
-
-
-
+write.table(n2_orthos_collapsed,"/vast/eande106/projects/Lance/THESIS_WORK/misc/henrique_lab/N2_orthos_ROI.tsv", sep = '\t', row.names = F, col.names = T, quote = F)
 
 
 
