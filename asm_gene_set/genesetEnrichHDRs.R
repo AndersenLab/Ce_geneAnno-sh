@@ -965,27 +965,73 @@ ggplot(data = no_hdr_liftover) +
   labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
 
 
-ggplot(data = nucmer_longest %>% dplyr::filter(og_hdr_start == "1269000")) +
-  geom_rect(aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.1) +
-  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = longest_contig), size = 1) +
-  facet_wrap(~chrom) +
+# ggplot(data = nucmer_longest %>% dplyr::filter(og_hdr_start == "1269000")) +
+#   geom_rect(aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.1) +
+#   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = longest_contig), size = 1) +
+#   facet_wrap(~chrom) +
+#   theme(
+#     panel.border = element_rect(color = 'black', fill = NA),
+#     panel.background = element_blank()) +
+#   # coord_cartesian(xlim = c(19.4,19.8)) +
+#   labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
+# 
+# 
+# ggplot(data = nucmer_longest %>% dplyr::filter(og_hdr_start == "13517000" & chrom == "II")) +
+#   geom_rect(aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.1) +
+#   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = longest_contig), size = 1) +
+#   facet_wrap(~chrom) +
+#   theme(
+#     panel.border = element_rect(color = 'black', fill = NA),
+#     panel.background = element_blank()) +
+#   # coord_cartesian(xlim = c(19.4,19.8)) +
+#   labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
+
+
+test_final <- FINAL_hdrs %>% dplyr::filter(chrom == "V" & og_hdr_start > 17000000 & og_hdr_end < 20000000)
+test_finalPRE <- nucmer_slope_final %>% dplyr::filter(chrom == "V" & og_hdr_start > 17000000 & og_hdr_end < 20000000)
+
+# THESE SHOULD LOOK THE SAME......
+cowplot::plot_grid( ggplot(test_final) + 
+  geom_rect(data = test_final %>% dplyr::distinct(og_hdr_start, .keep_all = T), aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.3) +
+  # geom_rect(data = no_aln_bound_inv %>% dplyr::distinct(WS_hdr_start_min, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min / 1e6, ymax = WS_hdr_end_max / 1e6), fill = 'blue', alpha = 0.3) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = spans_hdr), size = 1) +
+  geom_rect(data = test_final %>% dplyr::distinct(WS_hdr_start_min_updated, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min_updated / 1e6, ymax = WS_hdr_end_max_updated / 1e6), fill = 'blue', alpha = 0.3) +
+  geom_segment(aes(x = og_hdr_start / 1e6, xend = og_hdr_start / 1e6, y = -Inf, yend = Inf), color = 'black') +
+  
+  geom_segment(aes(x = -Inf, xend = Inf, y = outside_hdr_min_left / 1e6, yend = outside_hdr_min_left / 1e6), color = 'magenta3', size = 2) +
+  geom_segment(aes(x = -Inf, xend = Inf, y = outside_hdr_max_left / 1e6, yend = outside_hdr_max_left / 1e6), color = 'magenta3', size = 2) +
+  geom_segment(aes(x = -Inf, xend = Inf, y = outside_hdr_min_right / 1e6, yend = outside_hdr_min_right / 1e6), color = 'purple', size = 2) +
+  geom_segment(aes(x = -Inf, xend = Inf, y = outside_hdr_max_right / 1e6, yend = outside_hdr_max_right / 1e6), color = 'purple', size = 2) +
+  geom_segment(aes(x = -Inf, xend = Inf, y = inside_hdr_max / 1e6, yend = inside_hdr_max / 1e6), color = 'red', size = 1) +
+  geom_segment(aes(x = -Inf, xend = Inf, y = inside_hdr_min / 1e6, yend = inside_hdr_min / 1e6), color = 'red', size = 1) +
+  scale_color_manual(values = c("TRUE" = "green", "FALSE" = "blue")) +
+  facet_wrap(~chrom, scales = "free") +
   theme(
     panel.border = element_rect(color = 'black', fill = NA),
-    panel.background = element_blank()) +
-  # coord_cartesian(xlim = c(19.4,19.8)) +
-  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
+    panel.background = element_blank()
+  ) +
+  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain)),
 
-
-ggplot(data = nucmer_longest %>% dplyr::filter(og_hdr_start == "13517000" & chrom == "II")) +
-  geom_rect(aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.1) +
-  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = longest_contig), size = 1) +
-  facet_wrap(~chrom) +
+ggplot(test_finalPRE) + 
+  geom_rect(data = test_finalPRE %>% dplyr::distinct(og_hdr_start, .keep_all = T), aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.3) +
+  # geom_rect(data = no_aln_bound_inv %>% dplyr::distinct(WS_hdr_start_min, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min / 1e6, ymax = WS_hdr_end_max / 1e6), fill = 'blue', alpha = 0.3) +
+  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6,  color = spans_hdr), size = 1) +
+  geom_rect(data = test_finalPRE %>% dplyr::distinct(WS_hdr_start_min_updated, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min_updated / 1e6, ymax = WS_hdr_end_max_updated / 1e6), fill = 'blue', alpha = 0.3) +
+  geom_segment(aes(x = og_hdr_start / 1e6, xend = og_hdr_start / 1e6, y = -Inf, yend = Inf), color = 'black') +
+  
+  geom_segment(aes(x = -Inf, xend = Inf, y = outside_hdr_min_left / 1e6, yend = outside_hdr_min_left / 1e6), color = 'magenta3', size = 2) +
+  geom_segment(aes(x = -Inf, xend = Inf, y = outside_hdr_max_left / 1e6, yend = outside_hdr_max_left / 1e6), color = 'magenta3', size = 2) +
+  geom_segment(aes(x = -Inf, xend = Inf, y = outside_hdr_min_right / 1e6, yend = outside_hdr_min_right / 1e6), color = 'purple', size = 2) +
+  geom_segment(aes(x = -Inf, xend = Inf, y = outside_hdr_max_right / 1e6, yend = outside_hdr_max_right / 1e6), color = 'purple', size = 2) +
+  geom_segment(aes(x = -Inf, xend = Inf, y = inside_hdr_max / 1e6, yend = inside_hdr_max / 1e6), color = 'red', size = 1) +
+  geom_segment(aes(x = -Inf, xend = Inf, y = inside_hdr_min / 1e6, yend = inside_hdr_min / 1e6), color = 'red', size = 1) +
+  scale_color_manual(values = c("TRUE" = "green", "FALSE" = "blue")) +
+  facet_wrap(~chrom, scales = "free") +
   theme(
     panel.border = element_rect(color = 'black', fill = NA),
-    panel.background = element_blank()) +
-  # coord_cartesian(xlim = c(19.4,19.8)) +
-  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
-
+    panel.background = element_blank()
+  ) +
+  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain)))
 
 
 
