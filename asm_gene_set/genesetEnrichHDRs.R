@@ -127,6 +127,58 @@ nucmer_ranges <- nucmer %>%
 
 # Finding overlap of WS alignments with HDRs - for an INDIVIDUAL strain:
 ### Once finalalized, create a function with the analysis workflow and iterate over wild strains: for (i in WSs)
+
+# Initialize a data frame and then add data to data frame for each strain
+# columns: Strain, num_N2_hdrs, num_WS_aln_HDRs, mean_N2_hdr_size, mean_WS_hdr_size, max_WS_hdr_size, min_WS_hdr_size, num_WS_hdr_liftover
+results_df = as.data.frame(matrix(ncol = 18, nrow = 140))
+names(results_df) = c("Strain", "num_N2_hdrs", "num_WS_aln_HDRs", "mean_N2_hdr_size", "median_N2_hdr_size", 
+                      "mean_WS_hdr_size", "median_WS_hdr_size", 'max_WS_hdr_size', "min_WS_hdr_size", "num_WS_hdr_liftover",
+                      "num_WS_core_genes", "num_WS_acc_genes", "num_WS_priv_genes", "num_WS_core_inHDR", "num_WS_acc_inHDR", "num_WS_priv_inHDR", 
+                      "total_WS_genes", "total_WS_genes_inHDRs")
+for (i in 1:length(WSs)) {
+  # print(i)
+  SOI = WSs[i]
+  # print(SOI)s
+  results_df[i,1] = c(SOI)
+
+  # Perform foverlaps
+  
+  
+  
+  
+  results_df[i,2] = c(num_hdrs) # number of HDRs for strain i 
+  results_df[i,3] = c(num_hdrs) # number HDRs that have WS alignment overlap
+  
+  # Wild strain N2 HDR stats
+  results_df[i,4] = c() # mean N2 HDR size for strain i
+  results_df[i,5] = c() # median N2 HDR size for strain i
+  
+  # Perform HDR liftover
+  results_df[i,6] = c() # mean size of WS HDR liftover
+  results_df[i,7] = c() # median size of WS HDR liftover
+  results_df[i,8] = c() # maximum size of WS HDR liftover
+  results_df[i,9] = c() # minumim size of WS HDR lifover
+  results_df[i,10] = c() # number of WS HDR liftovers
+  
+  
+  # Pull WS genes in lifted over HDRs
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 SOI <- "ECA3088"
 
 nucmer_ranges <- nucmer_ranges %>% dplyr::filter(strain == SOI)
@@ -725,6 +777,24 @@ FINAL_hdrs <- number_hdrs_correct %>%
 
 # final_count <- FINAL_hdrs %>% dplyr::distinct(chrom,og_hdr_start)
 
+# ughh <- ws_hdrs %>% dplyr::filter(chrom == "V" & og_hdr_start == "520000")
+# ggplot(data = ughh) +
+#   geom_rect(data = ughh %>% dplyr::distinct(og_hdr_start, .keep_all = T), aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.3) +
+#   geom_rect(data = ughh %>% dplyr::distinct(WS_hdr_start_min_updated, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min_updated / 1e6, ymax = WS_hdr_end_max_updated / 1e6), fill = 'blue', alpha = 0.3) +
+#   geom_segment(aes(x = og_hdr_start / 1e6, xend = og_hdr_start / 1e6, y = -Inf, yend = Inf), color = 'black') +
+#   geom_segment(aes(x = og_hdr_end / 1e6, xend = og_hdr_end / 1e6, y = -Inf, yend = Inf), color = 'black') +
+#   geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_start_min_updated / 1e6, yend = WS_hdr_start_min_updated / 1e6), color = 'black') +
+#   geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_end_max_updated / 1e6, yend = WS_hdr_end_max_updated / 1e6), color = 'black') +
+#   geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = spans_hdr), size = 1) +
+#   scale_color_manual(values = c("TRUE" = "green", "FALSE" = "blue")) +
+#   # coord_cartesian(ylim = c(0,5)) +
+#   # facet_wrap(~chrom) +
+#   theme(
+#     panel.border = element_rect(color = 'black', fill = NA),
+#     panel.background = element_blank()
+#   ) +
+#   labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
+
 ggplot(FINAL_hdrs) + 
   geom_rect(data = FINAL_hdrs %>% dplyr::distinct(og_hdr_start, .keep_all = T), aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.3) +
   geom_rect(data = FINAL_hdrs %>% dplyr::distinct(WS_hdr_start_min_updated, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min_updated / 1e6, ymax = WS_hdr_end_max_updated / 1e6), fill = 'blue', alpha = 0.3) +
@@ -793,26 +863,7 @@ wsg <- data.table::as.data.table(ws_genes)
 ws_hdrs <- FINAL_hdrs %>% dplyr::select(longest_contig, WS_hdr_start_min_updated, WS_hdr_end_max_updated, spans_hdr, chrom, og_hdr_start, og_hdr_end, N2S, N2E, WSS, WSE) %>%
   data.table::as.data.table()
 
-
-ughh <- ws_hdrs %>% dplyr::filter(chrom == "V" & og_hdr_start == "520000")
-ggplot(data = ughh) +
-  geom_rect(data = ughh %>% dplyr::distinct(og_hdr_start, .keep_all = T), aes(xmin = og_hdr_start / 1e6, xmax = og_hdr_end / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.3) +
-  geom_rect(data = ughh %>% dplyr::distinct(WS_hdr_start_min_updated, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = WS_hdr_start_min_updated / 1e6, ymax = WS_hdr_end_max_updated / 1e6), fill = 'blue', alpha = 0.3) +
-  geom_segment(aes(x = og_hdr_start / 1e6, xend = og_hdr_start / 1e6, y = -Inf, yend = Inf), color = 'black') +
-  geom_segment(aes(x = og_hdr_end / 1e6, xend = og_hdr_end / 1e6, y = -Inf, yend = Inf), color = 'black') +
-  geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_start_min_updated / 1e6, yend = WS_hdr_start_min_updated / 1e6), color = 'black') +
-  geom_segment(aes(x = -Inf, xend = Inf, y = WS_hdr_end_max_updated / 1e6, yend = WS_hdr_end_max_updated / 1e6), color = 'black') +
-  geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = spans_hdr), size = 1) +
-  scale_color_manual(values = c("TRUE" = "green", "FALSE" = "blue")) +
-  # coord_cartesian(ylim = c(0,5)) +
-  # facet_wrap(~chrom) +
-  theme(
-    panel.border = element_rect(color = 'black', fill = NA),
-    panel.background = element_blank()
-  ) +
-  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(hdr_aln$strain))
-
-
+# print() # the max and min WS start and end coordinate among any contig
 
 
 
@@ -846,3 +897,40 @@ syntelog_matrix <- joined %>%
   dplyr::filter(!is.na(n2_gene)) # remove the row that contains all non-syntenic predicted WS genes
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Testing out Nic's code!
