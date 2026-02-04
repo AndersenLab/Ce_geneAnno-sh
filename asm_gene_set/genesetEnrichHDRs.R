@@ -134,7 +134,7 @@ results_df = as.data.frame(matrix(ncol = 18, nrow = 140))
 names(results_df) = c("Strain", "num_N2_hdrs", "num_WS_aln_HDRs", "mean_N2_hdr_size", "median_N2_hdr_size", 
                       "mean_WS_hdr_size", "median_WS_hdr_size", 'max_WS_hdr_size', "min_WS_hdr_size", "num_WS_hdr_liftover",
                       "num_WS_core_genes", "num_WS_acc_genes", "num_WS_priv_genes", "num_WS_core_inHDR", "num_WS_acc_inHDR", "num_WS_priv_inHDR", 
-                      "total_WS_genes", "total_WS_genes_inHDRs")
+                      "total_WS_genes", "total_WS_genes_inHDRs") # also include num HDRS with only one overlapping boundary and then num HDRs with no overlapping HDRs alignments
 for (i in 1:length(WSs)) {
   # print(i)
   SOI = WSs[i]
@@ -410,13 +410,13 @@ nucmer_slope_oneside <- nucmer_slope %>%
   dplyr::mutate(WS_hdr_start_min_updated = ifelse(spans_hdr_end == T & inside_hdr_min < WS_hdr_end_max & inv == T, inside_hdr_min,
                                                   ifelse(spans_hdr_start == T & inside_hdr_min < WS_hdr_start_min & inv == F, inside_hdr_min, WS_hdr_start_min_updated)),
                 WS_hdr_end_max_updated = ifelse(spans_hdr_end == T & inside_hdr_max > WS_hdr_end_max & inv == F, inside_hdr_max,
-                                                ifelse(spans_hdr_start == T & inside_hdr_max > WS_hdr_start_min & inv == T, inside_hdr_max, WS_hdr_end_max_updated))) %>%
+                                                ifelse(spans_hdr_start == T & inside_hdr_max > WS_hdr_end_max & inv == T, inside_hdr_max, WS_hdr_end_max_updated))) %>%
   tidyr::fill(WS_hdr_start_min_updated, WS_hdr_end_max_updated, .direction = "downup") %>%
   dplyr::mutate(WS_hdr_start_min_updated = ifelse(is.na(WS_hdr_start_min_updated),WS_hdr_start_min,WS_hdr_start_min_updated),
                 WS_hdr_end_max_updated = ifelse(is.na(WS_hdr_end_max_updated),WS_hdr_end_max,WS_hdr_end_max_updated)) %>%
   dplyr::ungroup()
 
-# TEST <- nucmer_slope_oneside %>% dplyr::filter(chrom == "V" & og_hdr_start == "6379000")
+TEST <- nucmer_slope_oneside %>% dplyr::filter(chrom == "V" & og_hdr_start == "6379000")
 
 
 # Account for situations where there are more than one alignment outside of a boundary for a single HDR!!
