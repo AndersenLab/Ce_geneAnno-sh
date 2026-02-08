@@ -797,6 +797,23 @@ geneSet_prop_average <- ws_genes_hdrs_stats %>%
 ### 12.6% of accessory genes are in HDRs among wild strains
 ### 14.8% of private genes are in HDRs among wild strains
 
+# In the entire pangenome:
+hdr_genes_pangenome <- ws_genes_hdrs_stats %>%
+  dplyr::select(strain,class,ws_class_count,ws_class_count_inHDR) %>%
+  dplyr::summarise(total_genes = sum(ws_class_count),
+                   total_hdr_genes = sum(ws_class_count_inHDR)) %>%
+  dplyr::mutate(prop = total_hdr_genes / total_genes * 100)
+### 6.50 %
+# In the entire pangenome - by class:
+hdr_genes_pangenome_class <- ws_genes_hdrs_stats %>%
+  dplyr::select(strain,class,ws_class_count,ws_class_count_inHDR) %>%
+  dplyr::group_by(class) %>%
+  dplyr::summarise(total_genes = sum(ws_class_count),
+                   total_hdr_genes = sum(ws_class_count_inHDR)) %>%
+  dplyr::mutate(prop = total_hdr_genes / total_genes * 100)
+### 70,320 / 2,101,058 core
+### 133,445 / 1,055,492 accessory
+### 2,459 / 16,560 private
 
 
 # ======================================================================================================================================================================================== #
@@ -843,6 +860,9 @@ final_ws_genes_hdr_stats <- ws_genes_hdrs_stats %>%
 
 
 final_stats <- stats %>% dplyr::left_join(final_ws_genes_hdr_stats, by = "strain")
+
+# write.table(final_stats, "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/ws_HDR_liftover/WS_HDR_liftover_finalstats.tsv", sep = '\t', quote = F, col.names = T, row.names = F)
+
 
 
 
