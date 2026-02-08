@@ -5,139 +5,6 @@ library(stringr)
 library(data.table)
 library(cowplot)
 
-# ======================================================================================================================================================================================== #
-# Loading in orthogroups and classifying gene sets 
-# ======================================================================================================================================================================================== #
-ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups.tsv") %>%
-  dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
-
-strainCol <- colnames(ortho_genes_dd)
-ugh <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
-ugh2 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh)
-ugh3 <- gsub(".20251124.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh2)
-ugh4 <- gsub(".20251012.inbred.onlyONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh3)
-ugh5 <- gsub(".Nov2025.softMasked.braker.longest.protein","", ugh4)
-ugh6 <- gsub(".20251012.inbred.withONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh5)
-strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", ugh6)
-colnames(ortho_genes_dd) <- strainCol_c2
-
-ortho_count <- ortho_genes_dd
-
-strainCol_c2_u <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
-
-for (i in 1:length(strainCol_c2_u)) {
-  print(paste0(i,"out of", length(strainCol_c2_u)))
-  temp_colname = paste0(strainCol_c2_u[i], "_count")
-  
-  ortho_count <- ortho_count %>%
-    dplyr::mutate(!!sym(temp_colname) := stringr::str_count(!!sym(strainCol_c2_u[i]),", ") + 1)
-}
-
-all_relations_pre <- ortho_count %>%
-  dplyr::select(Orthogroup, dplyr::contains("_count"))
-
-
-private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups_UnassignedGenes.tsv") %>%
-  dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
-
-colnames(private_OGs) <- strainCol_c2
-
-private_cols <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
-
-private_ortho_count <- private_OGs
-for (i in 1:length(private_cols)) {
-  print(paste0(i, " out of ", length(private_cols)))
-  temp_colname <- paste0(private_cols[i], "_count")
-  
-  private_ortho_count <- private_ortho_count %>%
-    dplyr::mutate(!!sym(temp_colname) := ifelse(is.na(!!sym(private_cols[i])), NA, 1))
-}
-
-all_relations_private <- private_ortho_count %>%
-  dplyr::select(Orthogroup, dplyr::contains("_count"))
-
-all_relations <- all_relations_pre %>%
-  dplyr::bind_rows(all_relations_private)
-
-private_freq = (1/(length(strainCol_c2_u)))
-
-class <- all_relations %>%
-  dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
-  dplyr::mutate(sum = rowSums(across(-1, ~ ., .names = NULL), na.rm = TRUE)) %>%
-  dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
-  dplyr::mutate(
-    class = case_when(
-      freq == 1 ~ "core",
-      freq > private_freq & freq < 1 ~ "accessory",
-      freq == private_freq ~ "private",
-      TRUE ~ "undefined")) %>%
-  dplyr::select(Orthogroup,class)
-
-all_class <- ortho_genes_dd %>% dplyr::bind_rows(private_OGs) %>% dplyr::left_join(class, by = "Orthogroup") 
-
-long_class <- all_class %>%
-  tidyr::pivot_longer(
-    cols = -c(Orthogroup, class),
-    names_to = "strain",
-    values_to = "gene",
-    values_drop_na = TRUE) %>%
-  tidyr::separate_rows(gene, sep = ",\\s*") %>%
-  dplyr::select(strain, gene, class) %>%
-  dplyr::mutate(gene = sub("\\.[^.]*$", "", gene))
-
-# Loading in all genes in pangenome
-genes_strain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142_140WSs_andCGC1_longestIsoGenes.tsv", col_names = c("seqid","source", "type", "start", "end", "score", "strand", "phase", "attributes", "strain")) %>% dplyr::filter(strain != "ECA396")
-N2_gff <- ape::read.gff("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.gff3") %>% dplyr::mutate(strain="N2")
-all_genes_strain <- rbind(genes_strain,N2_gff) %>%
-  dplyr::mutate(attributes = gsub("ID=gene:","",attributes)) %>%
-  dplyr::mutate(attributes = gsub("ID=","",attributes)) %>%
-  dplyr::mutate(attributes = sub(";.*", "", attributes)) %>%
-  dplyr::filter(type == "gene") %>%
-  dplyr::rename(gene = attributes)
-
-genes_class <- all_genes_strain %>%
-  dplyr::left_join(long_class, by = c("gene","strain"))
-
-
-# # ======================================================================================================================================================================================== #
-# # Extracting the longest WS contig alignment for every HDR #
-# # ======================================================================================================================================================================================== #
-# # Initialize a data frame and then add data to data frame for each strain
-# # columns: Strain, num_N2_hdrs, num_WS_aln_HDRs, mean_N2_hdr_size, mean_WS_hdr_size, max_WS_hdr_size, min_WS_hdr_size, num_WS_hdr_liftover
-# results_df = as.data.frame(matrix(ncol = 18, nrow = 140))
-# names(results_df) = c("Strain", "num_N2_hdrs", "num_WS_aln_HDRs", "mean_N2_hdr_size", "median_N2_hdr_size", 
-#                       "mean_WS_hdr_size", "median_WS_hdr_size", 'max_WS_hdr_size', "min_WS_hdr_size", "num_WS_hdr_liftover",
-#                       "num_WS_core_genes", "num_WS_acc_genes", "num_WS_priv_genes", "num_WS_core_inHDR", "num_WS_acc_inHDR", "num_WS_priv_inHDR", 
-#                       "total_WS_genes", "total_WS_genes_inHDRs") # also include num HDRS with only one overlapping boundary and then num HDRs with no overlapping HDRs alignments
-# for (i in 1:length(WSs)) {
-#   # print(i)
-#   SOI = WSs[i]
-#   # print(SOI)s
-#   results_df[i,1] = c(SOI)
-# 
-#   # Perform foverlaps
-#   
-#   
-#   results_df[i,2] = c(num_hdrs) # number of HDRs for strain i 
-#   results_df[i,3] = c(num_hdrs) # number HDRs that have WS alignment overlap
-#   
-#   # Wild strain N2 HDR stats
-#   results_df[i,4] = c() # mean N2 HDR size for strain i
-#   results_df[i,5] = c() # median N2 HDR size for strain i
-#   
-#   # Perform HDR liftover
-#   results_df[i,6] = c() # mean size of WS HDR liftover
-#   results_df[i,7] = c() # median size of WS HDR liftover
-#   results_df[i,8] = c() # maximum size of WS HDR liftover
-#   results_df[i,9] = c() # minumim size of WS HDR lifover
-#   results_df[i,10] = c() # number of WS HDR liftovers
-#   
-#   
-#   # Pull WS genes in lifted over HDRs
-#  
-# }
-
-
 
 # ======================================================================================================================================================================================== #
 # Lifting over N2 HDRs to wild strains #
@@ -581,7 +448,7 @@ ggplot(data = WS_HDRs) +
     axis.text = element_text(size = 12, color= 'black'),
     axis.title = element_text(size = 14, color = 'black')
   ) +
-  labs(y = "WS HDR size", x = "N2 HDR size") +
+  labs(y = "WS HDR size (Mb)", x = "N2 HDR size (Mb)") +
   scale_y_continuous(expand = c(0.005,0)) +
   scale_x_continuous(expand = c(0.005,0))
 
@@ -700,6 +567,100 @@ ggplot(data = hdr_count) +
 
 
 
+# ======================================================================================================================================================================================== #
+# Loading in orthogroups and classifying gene sets 
+# ======================================================================================================================================================================================== #
+ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups.tsv") %>%
+  dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
+
+strainCol <- colnames(ortho_genes_dd)
+ugh <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
+ugh2 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh)
+ugh3 <- gsub(".20251124.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh2)
+ugh4 <- gsub(".20251012.inbred.onlyONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh3)
+ugh5 <- gsub(".Nov2025.softMasked.braker.longest.protein","", ugh4)
+ugh6 <- gsub(".20251012.inbred.withONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh5)
+strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", ugh6)
+colnames(ortho_genes_dd) <- strainCol_c2
+
+ortho_count <- ortho_genes_dd
+
+strainCol_c2_u <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
+
+for (i in 1:length(strainCol_c2_u)) {
+  print(paste0(i,"out of", length(strainCol_c2_u)))
+  temp_colname = paste0(strainCol_c2_u[i], "_count")
+  
+  ortho_count <- ortho_count %>%
+    dplyr::mutate(!!sym(temp_colname) := stringr::str_count(!!sym(strainCol_c2_u[i]),", ") + 1)
+}
+
+all_relations_pre <- ortho_count %>%
+  dplyr::select(Orthogroup, dplyr::contains("_count"))
+
+
+private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups_UnassignedGenes.tsv") %>%
+  dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
+
+colnames(private_OGs) <- strainCol_c2
+
+private_cols <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
+
+private_ortho_count <- private_OGs
+for (i in 1:length(private_cols)) {
+  print(paste0(i, " out of ", length(private_cols)))
+  temp_colname <- paste0(private_cols[i], "_count")
+  
+  private_ortho_count <- private_ortho_count %>%
+    dplyr::mutate(!!sym(temp_colname) := ifelse(is.na(!!sym(private_cols[i])), NA, 1))
+}
+
+all_relations_private <- private_ortho_count %>%
+  dplyr::select(Orthogroup, dplyr::contains("_count"))
+
+all_relations <- all_relations_pre %>%
+  dplyr::bind_rows(all_relations_private)
+
+private_freq = (1/(length(strainCol_c2_u)))
+
+class <- all_relations %>%
+  dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
+  dplyr::mutate(sum = rowSums(across(-1, ~ ., .names = NULL), na.rm = TRUE)) %>%
+  dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
+  dplyr::mutate(
+    class = case_when(
+      freq == 1 ~ "core",
+      freq > private_freq & freq < 1 ~ "accessory",
+      freq == private_freq ~ "private",
+      TRUE ~ "undefined")) %>%
+  dplyr::select(Orthogroup,class)
+
+all_class <- ortho_genes_dd %>% dplyr::bind_rows(private_OGs) %>% dplyr::left_join(class, by = "Orthogroup") 
+
+long_class <- all_class %>%
+  tidyr::pivot_longer(
+    cols = -c(Orthogroup, class),
+    names_to = "strain",
+    values_to = "gene",
+    values_drop_na = TRUE) %>%
+  tidyr::separate_rows(gene, sep = ",\\s*") %>%
+  dplyr::select(strain, gene, class) %>%
+  dplyr::mutate(gene = sub("\\.[^.]*$", "", gene))
+
+# Loading in all genes in pangenome
+genes_strain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142_140WSs_andCGC1_longestIsoGenes.tsv", col_names = c("seqid","source", "type", "start", "end", "score", "strand", "phase", "attributes", "strain")) %>% dplyr::filter(strain != "ECA396")
+N2_gff <- ape::read.gff("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.gff3") %>% dplyr::mutate(strain="N2")
+all_genes_strain <- rbind(genes_strain,N2_gff) %>%
+  dplyr::mutate(attributes = gsub("ID=gene:","",attributes)) %>%
+  dplyr::mutate(attributes = gsub("ID=","",attributes)) %>%
+  dplyr::mutate(attributes = sub(";.*", "", attributes)) %>%
+  dplyr::filter(type == "gene") %>%
+  dplyr::rename(gene = attributes)
+
+genes_class <- all_genes_strain %>%
+  dplyr::left_join(long_class, by = c("gene","strain"))
+
+
 
 # ======================================================================================================================================================================================== #
 # Pulling WS genes that are in lifted-over WS HDRs #
@@ -723,7 +684,7 @@ ws_genes_count <- ws_genes %>%
   dplyr::group_by(strain, class) %>%
   dplyr::mutate(ws_class_count = n()) %>%
   dplyr::ungroup() %>%
-  dplyr::distinct(strain,class, gene, ws_class_count)
+  dplyr::distinct(strain,class,ws_class_count) 
 
 # Pulling stats of genes in HDRs and proportion of each gene set
 ws_genes_hdrs_stats <- ws_genes_hdrs %>%
@@ -731,14 +692,23 @@ ws_genes_hdrs_stats <- ws_genes_hdrs %>%
   dplyr::group_by(strain, class) %>% 
   dplyr::mutate(ws_class_count_inHDR = n()) %>%
   dplyr::ungroup() %>%
-  dplyr::left_join(ws_genes_count, by = c("strain", "gene", "class")) %>%
-  dplyr::mutate(prop_genes_inHDRs = ws_class_count_inHDR / ws_class_count) %>%
-  dplyr::distinct(strain,class,ws_class_count, ws_class_count_inHDR, prop_genes_inHDRs) %>%
+  dplyr::distinct(strain, class, ws_class_count_inHDR)
+  
+ws_genes_hdrs_stats <- ws_genes_count %>%
+  dplyr::left_join(ws_genes_hdrs_stats, by = c("strain", "class")) %>%
+  dplyr::mutate(ws_class_count_inHDR = ifelse(is.na(ws_class_count_inHDR),0, ws_class_count_inHDR)) %>%
   dplyr::group_by(strain) %>%
+  dplyr::mutate(prop_genes_inHDRs_class = ws_class_count_inHDR / ws_class_count) %>%
+  dplyr::distinct(strain,class,ws_class_count, ws_class_count_inHDR, prop_genes_inHDRs_class) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(gene_set_prop_inHDR = sum(prop_genes_inHDRs_class)) %>%
+  dplyr::mutate(non_HDR_geneSet = 1 - gene_set_prop_inHDR) %>%
   dplyr::mutate(ws_total_gene_count = sum(ws_class_count),
                 ws_total_inHDR_gene_count = sum(ws_class_count_inHDR),
                 prop_total_ws_genes_inHDRs = ws_total_inHDR_gene_count / ws_total_gene_count) %>%
   dplyr::ungroup() 
+
+# test <- ws_genes_hdrs_stats %>% dplyr::filter(strain == "PX179") # PX179 has zero private genes in HDRs 
 
 prop_genes_in_hdrs <- ws_genes_hdrs_stats %>%
   dplyr::distinct(strain, prop_total_ws_genes_inHDRs) %>%
@@ -762,19 +732,68 @@ ggplot(data = prop_genes_in_hdrs) +
   scale_y_continuous(name = "Proportion of WS genes in HDRs (%)", 
                      sec.axis = sec_axis(~. / 1 ,name = "Total WS HDR span (Mb)"), expand = expansion(mult = c(0, .05))) 
 
+# Pie charts to display the proportion of genes in HDRs contributing to each gene set (scaled)
+geneSet_prop <- ws_genes_hdrs_stats %>%
+  dplyr::select(strain, class, prop_genes_inHDRs_class, prop_total_ws_genes_inHDRs, gene_set_prop_inHDR) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(scaling_factor = 1 / gene_set_prop_inHDR) %>%
+  dplyr::mutate(scaled_geneSet_props = prop_genes_inHDRs_class * scaling_factor) %>%
+  dplyr::ungroup() 
+
+# Order the pies (facets) by lowest to greatest proportion of WS genes in HDRs
+strain_order <- geneSet_prop %>%
+  dplyr::arrange(prop_total_ws_genes_inHDRs) %>%   # ascending: smallest -> largest
+  dplyr::distinct(strain) %>%
+  dplyr::pull(strain)
+
+# Prep data for pies (ensure all 3 classes exist per strain)
+pie_df <- geneSet_prop %>%
+  dplyr::rename(`Gene set` = class) %>%
+  dplyr::mutate(`Gene set` = ifelse(`Gene set` == "core","Core",
+                               ifelse(`Gene set` == "accessory", "Accessory", "Private"))) %>%
+  dplyr::mutate(
+    strain = factor(strain, levels = strain_order),
+    `Gene set`  = factor(`Gene set`, levels = c("Core", "Accessory", "Private"))) %>%
+  tidyr::complete(strain, `Gene set`, fill = list(scaled_geneSet_props = 0)) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(pie_frac  = scaled_geneSet_props) %>%
+  dplyr::ungroup() 
+
+# Plot 140 pies, 14 high x 10 wide
+ggplot(pie_df, aes(x = "", y = pie_frac, fill = `Gene set`), alpha = 0.7) +
+  geom_col(width = 1, color = "white", linewidth = 0.2) +
+  scale_fill_manual(values = c("Core" = "green4", "Accessory" = "#DB6333", "Private" = "magenta3")) +
+  coord_polar(theta = "y") +
+  facet_wrap(~ strain, nrow = 10, ncol = 14, as.table = FALSE) +
+  theme_void() +
+  theme(
+    strip.text = element_text(size = 10, color = 'black'),
+    legend.position = "right",
+    legend.title = element_text(size = 12, color = 'black'),
+    legend.text = element_text(size = 12, color = 'black'),
+    plot.title = element_text(size = 16, color = 'black', hjust = 0.5, face = 'bold', margin = margin(b = 15)),
+    plot.margin = margin(t = 10)) +
+  labs(title = "Contributions of genes in HDRs to each gene set")
+
+
+# Average proportion of WS genes in each gene set among all wild strains
+geneSet_prop_average <- ws_genes_hdrs_stats %>%
+  dplyr::select(strain,class,ws_class_count,ws_class_count_inHDR) %>%
+  dplyr::group_by(class) %>%
+  dplyr::mutate(average_genesetGenes = sum(ws_class_count) / 140,
+                average_genesetHDRgenes = sum(ws_class_count_inHDR / 140)) %>%
+  dplyr::distinct(class, average_genesetGenes, average_genesetHDRgenes) %>%
+  dplyr::mutate(average_prop = (average_genesetHDRgenes / average_genesetGenes) * 100)
+# On average:
+### 3.4% of core genes are in HDRs among wild strains
+### 12.6% of accessory genes are in HDRs among wild strains
+### 14.8% of private genes are in HDRs among wild strains
 
 
 
-
-
-
-
-
-
-
-
-
-
+# ======================================================================================================================================================================================== #
+# Creating a final stats table #
+# ======================================================================================================================================================================================== #
 # Creating a stats table to summarize HDR lift-over
 n2_hdr_stats <- strain_hdr %>%
   dplyr::distinct(strain, chrom, og_hdr_start, og_hdr_end) %>%
@@ -800,9 +819,22 @@ stats <- all_calls_WS_HDRs %>%
   dplyr::left_join(n2_hdr_stats, by = "strain") %>%
   dplyr::rename(span_ws_hdrs = span_hdrs)
 
+# Stats on WS genes in HDRs
+addition <- ws_genes_hdrs_stats %>%
+  dplyr::select(strain, ws_total_gene_count, ws_total_inHDR_gene_count) %>%
+  dplyr::distinct()
 
-# "num_WS_core_genes", "num_WS_acc_genes", "num_WS_priv_genes", "num_WS_core_inHDR", "num_WS_acc_inHDR", "num_WS_priv_inHDR", 
-# "total_WS_genes", "total_WS_genes_inHDRs") 
+final_ws_genes_hdr_stats <- ws_genes_hdrs_stats %>%
+  dplyr::select(strain,class,ws_class_count, ws_class_count_inHDR) %>%
+  tidyr::pivot_wider(
+    id_cols = strain,
+    names_from = class,
+    values_from = c(ws_class_count, ws_class_count_inHDR),
+    names_glue = "{.value}_{class}") %>%
+  dplyr::left_join(addition, by = "strain")
+
+
+final_stats <- stats %>% dplyr::left_join(final_ws_genes_hdr_stats, by = "strain")
 
 
 
