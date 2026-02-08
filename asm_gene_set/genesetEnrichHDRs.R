@@ -6,7 +6,7 @@ library(data.table)
 library(cowplot)
 
 # ======================================================================================================================================================================================== #
-# Loading in orthogroups
+# Loading in orthogroups and classifying gene sets 
 # ======================================================================================================================================================================================== #
 ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups.tsv") %>%
   dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
@@ -85,9 +85,7 @@ long_class <- all_class %>%
   dplyr::select(strain, gene, class) %>%
   dplyr::mutate(gene = sub("\\.[^.]*$", "", gene))
 
-# test <- all_class %>% dplyr::group_by(class) %>% dplyr::mutate(count = n()) %>% dplyr::distinct(class,count)
-
-# Loading all genes in pangenome
+# Loading in all genes in pangenome
 genes_strain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142_140WSs_andCGC1_longestIsoGenes.tsv", col_names = c("seqid","source", "type", "start", "end", "score", "strand", "phase", "attributes", "strain")) %>% dplyr::filter(strain != "ECA396")
 N2_gff <- ape::read.gff("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.gff3") %>% dplyr::mutate(strain="N2")
 all_genes_strain <- rbind(genes_strain,N2_gff) %>%
@@ -101,67 +99,43 @@ genes_class <- all_genes_strain %>%
   dplyr::left_join(long_class, by = c("gene","strain"))
 
 
-# HDRs
-hdrs <- readr::read_tsv("/vast/eande106/data/c_elegans/WI/divergent_regions/20250625/20250625_c_elegans_divergent_regions_strain.bed", col_names = c("chrom", "start", "end", "strain"))
-WSs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/140_correct.tsv", col_names = "strain") %>% dplyr::pull()
-
-# COLLAPSING HDRS AMONG 140 WSs
-all_regions <- hdrs %>%
-  dplyr::filter(strain %in% WSs) %>%
-  dplyr::arrange(chrom,start) %>%
-  data.table::as.data.table()
-
-
-# ======================================================================================================================================================================================== #
-# Extracting the longest WS contig alignment for every HDR #
-# ======================================================================================================================================================================================== #
-nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>% 
-  dplyr::filter(strain != "ECA396") %>%
-  dplyr::mutate(inv = ifelse((WSS > WSE), T, F)) %>%
-  dplyr::mutate(St2 = ifelse(inv == T, WSE, WSS), Et2 = ifelse(inv == T, WSS, WSE)) # add resolution for inverted alignments - need to pull genes differently
-
-nucmer_ranges <- nucmer %>%
-  dplyr::rename(start = N2S, end = N2E, chrom = N2_chr) %>%
-  dplyr::select(chrom, start, end, L1, WSS, WSE, contig, L2, LENQ, inv, strain) %>%
-  data.table::as.data.table()
-
-# Finding overlap of WS alignments with HDRs - for an INDIVIDUAL strain:
-### Once finalalized, create a function with the analysis workflow and iterate over wild strains: for (i in WSs)
-
-# Initialize a data frame and then add data to data frame for each strain
-# columns: Strain, num_N2_hdrs, num_WS_aln_HDRs, mean_N2_hdr_size, mean_WS_hdr_size, max_WS_hdr_size, min_WS_hdr_size, num_WS_hdr_liftover
-results_df = as.data.frame(matrix(ncol = 18, nrow = 140))
-names(results_df) = c("Strain", "num_N2_hdrs", "num_WS_aln_HDRs", "mean_N2_hdr_size", "median_N2_hdr_size", 
-                      "mean_WS_hdr_size", "median_WS_hdr_size", 'max_WS_hdr_size', "min_WS_hdr_size", "num_WS_hdr_liftover",
-                      "num_WS_core_genes", "num_WS_acc_genes", "num_WS_priv_genes", "num_WS_core_inHDR", "num_WS_acc_inHDR", "num_WS_priv_inHDR", 
-                      "total_WS_genes", "total_WS_genes_inHDRs") # also include num HDRS with only one overlapping boundary and then num HDRs with no overlapping HDRs alignments
-for (i in 1:length(WSs)) {
-  # print(i)
-  SOI = WSs[i]
-  # print(SOI)s
-  results_df[i,1] = c(SOI)
-
-  # Perform foverlaps
-  
-  
-  results_df[i,2] = c(num_hdrs) # number of HDRs for strain i 
-  results_df[i,3] = c(num_hdrs) # number HDRs that have WS alignment overlap
-  
-  # Wild strain N2 HDR stats
-  results_df[i,4] = c() # mean N2 HDR size for strain i
-  results_df[i,5] = c() # median N2 HDR size for strain i
-  
-  # Perform HDR liftover
-  results_df[i,6] = c() # mean size of WS HDR liftover
-  results_df[i,7] = c() # median size of WS HDR liftover
-  results_df[i,8] = c() # maximum size of WS HDR liftover
-  results_df[i,9] = c() # minumim size of WS HDR lifover
-  results_df[i,10] = c() # number of WS HDR liftovers
-  
-  
-  # Pull WS genes in lifted over HDRs
- 
-}
+# # ======================================================================================================================================================================================== #
+# # Extracting the longest WS contig alignment for every HDR #
+# # ======================================================================================================================================================================================== #
+# # Initialize a data frame and then add data to data frame for each strain
+# # columns: Strain, num_N2_hdrs, num_WS_aln_HDRs, mean_N2_hdr_size, mean_WS_hdr_size, max_WS_hdr_size, min_WS_hdr_size, num_WS_hdr_liftover
+# results_df = as.data.frame(matrix(ncol = 18, nrow = 140))
+# names(results_df) = c("Strain", "num_N2_hdrs", "num_WS_aln_HDRs", "mean_N2_hdr_size", "median_N2_hdr_size", 
+#                       "mean_WS_hdr_size", "median_WS_hdr_size", 'max_WS_hdr_size', "min_WS_hdr_size", "num_WS_hdr_liftover",
+#                       "num_WS_core_genes", "num_WS_acc_genes", "num_WS_priv_genes", "num_WS_core_inHDR", "num_WS_acc_inHDR", "num_WS_priv_inHDR", 
+#                       "total_WS_genes", "total_WS_genes_inHDRs") # also include num HDRS with only one overlapping boundary and then num HDRs with no overlapping HDRs alignments
+# for (i in 1:length(WSs)) {
+#   # print(i)
+#   SOI = WSs[i]
+#   # print(SOI)s
+#   results_df[i,1] = c(SOI)
+# 
+#   # Perform foverlaps
+#   
+#   
+#   results_df[i,2] = c(num_hdrs) # number of HDRs for strain i 
+#   results_df[i,3] = c(num_hdrs) # number HDRs that have WS alignment overlap
+#   
+#   # Wild strain N2 HDR stats
+#   results_df[i,4] = c() # mean N2 HDR size for strain i
+#   results_df[i,5] = c() # median N2 HDR size for strain i
+#   
+#   # Perform HDR liftover
+#   results_df[i,6] = c() # mean size of WS HDR liftover
+#   results_df[i,7] = c() # median size of WS HDR liftover
+#   results_df[i,8] = c() # maximum size of WS HDR liftover
+#   results_df[i,9] = c() # minumim size of WS HDR lifover
+#   results_df[i,10] = c() # number of WS HDR liftovers
+#   
+#   
+#   # Pull WS genes in lifted over HDRs
+#  
+# }
 
 
 # ======================================================================================================================================================================================== #
@@ -169,6 +143,20 @@ for (i in 1:length(WSs)) {
 # ======================================================================================================================================================================================== #
 # Nic Moya was here
 
+# Loading in HDRs and wild strain list....
+hdrs <- readr::read_tsv("/vast/eande106/data/c_elegans/WI/divergent_regions/20250625/20250625_c_elegans_divergent_regions_strain.bed", col_names = c("chrom", "start", "end", "strain"))
+WSs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/140_correct.tsv", col_names = "strain") %>% dplyr::pull()
+
+# Filtering for HDRs in pangenome strain set
+strain_hdr <- hdrs %>%
+  dplyr::filter(strain %in% WSs) %>%
+  dplyr::arrange(chrom,start) %>%
+  dplyr::rename(og_hdr_start = start, og_hdr_end = end) %>% 
+  dplyr::mutate(start = ifelse(og_hdr_start >= 5000, og_hdr_start - 0, og_hdr_start), end = og_hdr_end + 0) %>%
+  data.table::as.data.table()
+# I use the extended coords here after, but you can probably set the extension to 0 and it would work anyways (do not get rid of the variables tho!)
+# An extension can be used to pull extremely divergent regions that might not have any alignments overlapping with N2 HDR regions (not likely)
+  
 # Load alignments
 nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>% 
   dplyr::filter(strain != "ECA396") %>%
@@ -184,13 +172,7 @@ nucmer_ranges <- nucmer %>%
   dplyr::ungroup() %>%
   data.table::as.data.table()
 
-# Get HDRs
-strain_hdr <- all_regions %>% 
-  dplyr::rename(og_hdr_start = start, og_hdr_end = end) %>% 
-  dplyr::mutate(start = ifelse(og_hdr_start >= 5000, og_hdr_start - 0, og_hdr_start), end = og_hdr_end + 0) 
-# I use the extended coords here after, but you can probably set the extension to 0 and it would work anyways (do not get rid of the variables tho!)
-# An extension can be used to pull extremely divergent regions that might not have any alignments overlapping with N2 HDR regions (not likely)
-
+# Setting keys for finding overlaps of HDRs with WS contig alignments
 data.table::setkey(nucmer_ranges, strain, chrom, start, end)
 data.table::setkey(strain_hdr, strain, chrom, start, end)
 
@@ -202,7 +184,6 @@ hdr_aln <- data.table::foverlaps(
   nomatch = NA) %>%
   dplyr::rename(hdr_start_extended = i.start, hdr_end_extended = i.end, N2S = start, N2E = end)  %>%
   dplyr::mutate(HDRid=paste0(strain, chrom, og_hdr_start,og_hdr_end))
-
 
 # Select longest contig among alignments
 nucmer_longest <- hdr_aln %>% # equivalent of tigFilt from haplotypePlotter.R
@@ -219,56 +200,58 @@ nucmer_longest <- hdr_aln %>% # equivalent of tigFilt from haplotypePlotter.R
   dplyr::filter(LENQ == max(LENQ)) %>% # to filter out alignments that are the same size, but from different contigs
   dplyr::ungroup()
 
-clipped <- nucmer_longest %>%
-  dplyr::mutate(cov_start = pmax(N2S, hdr_start_extended),
-                cov_end   = pmin(N2E, hdr_end_extended)) %>%
-  dplyr::filter(cov_start < cov_end)
-
-interval_coverage <- function(starts, ends) {
-  ok <- !is.na(starts) & !is.na(ends) & is.finite(starts) & is.finite(ends) & (starts < ends)
-  starts <- starts[ok]
-  ends   <- ends[ok]
-  
-  n <- length(starts)
-  if (n == 0) return(0)
-  
-  ord <- order(starts)
-  starts <- starts[ord]
-  ends   <- ends[ord]
-  
-  cur_start <- starts[1]
-  cur_end   <- ends[1]
-  if (n == 1) return(cur_end - cur_start)
-  
-  total <- 0
-  for (i in 2:n) {
-    if (starts[i] <= cur_end) {
-      cur_end <- max(cur_end, ends[i])
-    } else {
-      total <- total + (cur_end - cur_start)
-      cur_start <- starts[i]
-      cur_end   <- ends[i]
-    }
-  }
-  total + (cur_end - cur_start)
-}
-
-hdr_coverage <- clipped %>%
-  group_by(HDRid) %>%
-  summarise(
-    hdr_start = first(hdr_start_extended),
-    hdr_end   = first(hdr_end_extended),
-    hdr_len   = hdr_end - hdr_start,
-    covered_bp = interval_coverage(cov_start, cov_end),
-    covered_frac = covered_bp / hdr_len,
-    .groups = "drop"
-  )
- 
-# ggplot(hdr_coverage, aes(x = covered_frac)) + #doesn't appear to have a clear coverage split
+# # Assessing if there is a coverage split of N2 HDRs from those that have alignments spanning most the N2 HDR from those that have low coverage and are mostly called 
+# # from repetitive elements
+# clipped <- nucmer_longest %>%
+#   dplyr::mutate(cov_start = pmax(N2S, hdr_start_extended), # this clips all alignments to only be contained in HDR boundaries
+#                 cov_end   = pmin(N2E, hdr_end_extended)) %>%
+#   dplyr::filter(cov_start < cov_end)
+# 
+# interval_coverage <- function(starts, ends) {
+#   ok <- !is.na(starts) & !is.na(ends) & is.finite(starts) & is.finite(ends) & (starts < ends)
+#   starts <- starts[ok]
+#   ends   <- ends[ok]
+#   
+#   n <- length(starts)
+#   if (n == 0) return(0)
+#   
+#   ord <- order(starts)
+#   starts <- starts[ord]
+#   ends   <- ends[ord]
+#   
+#   cur_start <- starts[1]
+#   cur_end   <- ends[1]
+#   if (n == 1) return(cur_end - cur_start)
+#   
+#   total <- 0
+#   for (i in 2:n) {
+#     if (starts[i] <= cur_end) {
+#       cur_end <- max(cur_end, ends[i])
+#     } else {
+#       total <- total + (cur_end - cur_start)
+#       cur_start <- starts[i]
+#       cur_end   <- ends[i]
+#     }
+#   }
+#   total + (cur_end - cur_start)
+# }
+# 
+# hdr_coverage <- clipped %>%
+#   dplyr::group_by(HDRid) %>%
+#   dplyr::summarise(
+#     hdr_start = first(hdr_start_extended),
+#     hdr_end   = first(hdr_end_extended),
+#     hdr_len   = hdr_end - hdr_start,
+#     covered_bp = interval_coverage(cov_start, cov_end),
+#     covered_frac = covered_bp / hdr_len,
+#     .groups = "drop"
+#   )
+#  
+# ggplot(hdr_coverage, aes(x = covered_frac)) + # doesn't appear to have a clear coverage split
 #   geom_histogram(binwidth = 0.01) +
 #   labs(x = "Fraction of HDR covered", y = "Count")
-
-nucmer_longest <- nucmer_longest %>% dplyr::left_join(hdr_coverage %>% dplyr::select(HDRid,covered_frac),by="HDRid")    
+# 
+# nucmer_longest <- nucmer_longest %>% dplyr::left_join(hdr_coverage %>% dplyr::select(HDRid,covered_frac), by="HDRid")    
 
 # Remove jumps by HDR alignment group
 nucmer_longest_jumpRemoved <- nucmer_longest %>%
@@ -289,7 +272,7 @@ nucmer_longest_jumpRemoved <- nucmer_longest %>%
   dplyr::filter(sumlen == max(sumlen)) %>%
   dplyr::mutate(mark_spurious = ifelse(length(unique(run_id)) > 1, TRUE, FALSE)) %>%
   dplyr::filter(!mark_spurious | dplyr::row_number() == 1) %>%
-  # dplyr::select(-gsize) %>%
+  dplyr::select(-gsize) %>%
   dplyr::ungroup() 
 
 # ggplot(data = nucmer_longest_jumpRemoved %>% dplyr::filter(covered_frac <0.20)) +  #doesn't appear pattern specific
@@ -456,38 +439,12 @@ plot_hdr_workflow <- function(HDOI) {
     labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(HDOI[1], " - POST EXTENSION"))
   
   
-  nS <- (WS_HDRs %>%dplyr::filter(HDRid == HDOI[2]))$minStart
+  nS <- (WS_HDRs %>% dplyr::filter(HDRid == HDOI[2]))$minStart
   nE <- (WS_HDRs %>% dplyr::filter(HDRid == HDOI[2]))$maxEnd
   
   hdr_transformed_plt <- ggplot() +
     geom_rect(data = nucmer_extended %>% dplyr::filter(HDRid == HDOI[2]), mapping = aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.3) +
     annotate("rect", ymin = nS / 1e6, ymax = nE   / 1e6, xmin = -Inf, xmax = Inf, fill = "gray", alpha = 1) +
-    geom_segment(data = nucmer_mark_extend %>%
-                   dplyr::filter(any_extend == T) %>%
-                   dplyr::filter(HDRid == HDOI[2]) %>%
-                   dplyr::filter(N2E < hdr_end_extended),
-                 aes(x = leadS / 1e6, xend = leadE / 1e6, y = leadWSS / 1e6, yend = leadWSE / 1e6, color = "leading"), linewidth = 1) +
-    geom_segment(data = nucmer_mark_extend %>%
-                   dplyr::filter(any_extend == T) %>%
-                   dplyr::filter(HDRid == HDOI[2]) %>%
-                   dplyr::filter(N2S > hdr_start_extended),
-                 aes(x = lagS / 1e6, xend = lagE / 1e6, y = lagWSS / 1e6, yend = lagWSE / 1e6, color = "lagging"), linewidth = 1) +
-    geom_segment(data = nucmer_extended %>%
-                   dplyr::filter(HDRid == HDOI[2]),
-                 aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = "w/Extension"), linewidth = 1) +
-    geom_segment(data = nucmer_mark_extend %>%
-                   dplyr::filter(HDRid == HDOI[2]),
-                 aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = "overlapping"), linewidth = 1) +
-    facet_wrap(~chrom) +
-    theme(panel.border = element_rect(color = 'black', fill = NA),
-          panel.background = element_blank(),
-          legend.title = element_blank()) +
-    labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(HDOI[1], " - POST EXTENSION"))
-  
-  pretty_plot <- ggplot() +
-    geom_rect(data = nucmer_extended %>% dplyr::filter(HDRid == HDOI[2]), 
-              mapping = aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.3) +
-    annotate("rect", ymin = nS / 1e6, ymax = nE / 1e6, xmin = -Inf, xmax = Inf, fill = "gray", alpha = 1) +
     geom_segment(data = nucmer_mark_extend %>%
                    dplyr::filter(any_extend == T) %>%
                    dplyr::filter(HDRid == HDOI[2]) %>%
@@ -517,39 +474,87 @@ plot_hdr_workflow <- function(HDOI) {
        ctg_mark   = ctg_mark_plt,
        lead_lag   = hdr_leadlag_plt,
        extended   = hdr_extended_plt,
-       hdr        = hdr_transformed_plt,
-       pretty_hdr = pretty_plot)
+       hdr        = hdr_transformed_plt)
+}
+
+pretty_plot <- function(HDOI) {
+  ws_hdr_start <- (WS_HDRs %>% dplyr::filter(HDRid == HDOI[2]))$minStart
+  ws_hdr_end <- (WS_HDRs %>% dplyr::filter(HDRid == HDOI[2]))$maxEnd
+  
+  ggplot() +
+  geom_rect(data = nucmer_extended %>% dplyr::filter(HDRid == HDOI[2]) %>% dplyr::distinct(hdr_start_extended, .keep_all = T), 
+            mapping = aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.3) +
+  annotate("rect", ymin = ws_hdr_start / 1e6, ymax = ws_hdr_end / 1e6, xmin = -Inf, xmax = Inf, fill = "blue", alpha = 0.3) +
+    
+  geom_segment(data = nucmer_extended %>% dplyr::filter(HDRid == HDOI[2]) %>% dplyr::distinct(hdr_start_extended, .keep_all = T), 
+               aes(x = -Inf, xend = Inf, y = ws_hdr_start / 1e6, yend = ws_hdr_start / 1e6), color = 'gray18') +
+  geom_segment(data = nucmer_extended %>% dplyr::filter(HDRid == HDOI[2]) %>% dplyr::distinct(hdr_start_extended, .keep_all = T), 
+                aes(x = -Inf, xend = Inf, y = ws_hdr_end / 1e6, yend = ws_hdr_end / 1e6), color = 'gray18') +
+  geom_segment(data = nucmer_extended %>% dplyr::filter(HDRid == HDOI[2]) %>% dplyr::distinct(hdr_start_extended, .keep_all = T), 
+               aes(x = hdr_start_extended / 1e6, xend = hdr_start_extended / 1e6, y = -Inf, yend = Inf), color = 'gray18') +
+  geom_segment(data = nucmer_extended %>% dplyr::filter(HDRid == HDOI[2]) %>% dplyr::distinct(hdr_start_extended, .keep_all = T), 
+               aes(x = hdr_end_extended / 1e6, xend = hdr_end_extended / 1e6, y = -Inf, yend = Inf), color = 'gray18') +
+    
+  geom_segment(data = nucmer_mark_extend %>%
+                 dplyr::filter(any_extend == T) %>%
+                 dplyr::filter(HDRid == HDOI[2]) %>%
+                 dplyr::filter(N2E < hdr_end_extended),
+               aes(x = leadS / 1e6, xend = leadE / 1e6, y = leadWSS / 1e6, yend = leadWSE / 1e6, color = "leading"), linewidth = 1) +
+  geom_segment(data = nucmer_mark_extend %>%
+                 dplyr::filter(any_extend == T) %>%
+                 dplyr::filter(HDRid == HDOI[2]) %>%
+                 dplyr::filter(N2S > hdr_start_extended),
+               aes(x = lagS / 1e6, xend = lagE / 1e6, y = lagWSS / 1e6, yend = lagWSE / 1e6, color = "lagging"), linewidth = 1) +
+  geom_segment(data = nucmer_extended %>%
+                 dplyr::filter(HDRid == HDOI[2]),
+               aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = "w/Extension"), linewidth = 1) +
+  geom_segment(data = nucmer_mark_extend %>%
+                 dplyr::filter(HDRid == HDOI[2]),
+               aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = "overlapping"), linewidth = 1) +
+  facet_wrap(~chrom) +
+  scale_color_manual(values = c("leading" = 'red', "overlapping" = "blue", "lagging" = "green3", "w/Extension" = "purple")) +
+  theme(panel.border = element_rect(color = 'black', fill = NA),
+        panel.background = element_blank(),
+        axis.text = element_text(size = 10, color = 'black'),
+        axis.title = element_text(size = 14, color = 'black'),
+        plot.title = element_text(size = 16, color = 'black'),
+        plot.margin = margin(t = 5, b = 5, l = 5, r = 5),
+        strip.text = element_text(size = 12, color = 'black'),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 12, color = 'black')) +
+  labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0("Final HDR lift-over: ", HDOI[1])) 
 }
 
 # You can pick any test cases from this df to visualize below
 # View(WS_HDRs)
 
-# Set your pick here
-HDOI <- c("ECA2109","ECA2109V1752300017533000") # same contig, two alignments, same size, only two so is missed by jump correction
-HDOI <- c("ECA3005","ECA3005V1842400019264000") #jump correction limit is high low for this fella
+# Assess HDR lift-over for complicated alignments
+HDOI <- c("ECA2109","ECA2109V1752300017533000") # same contig, two alignments, same size, only two so is missed by jump correction - NOW CORRECTED!!
+HDOI <- c("ECA3005","ECA3005V1842400019264000") # A great example of a lift-over!
+HDOI <- c("ECA1493","ECA1493V25490003687000") # A great example of a lift-over!
+HDOI <- c("ECA2187","ECA2187V26820003414000") # A great example of a lift-over!
 
-HDOI <- c("ECA1493","ECA1493V25490003687000") #large, but looks legit
-HDOI <- c("ECA2187","ECA2187V26820003414000") #large, but looks legit
-
-# Lance's test cases - 3309000
-HDOI <- c("ECA3088", "ECA3088II33090003360000")
+HDOI <- c("ECA3088", "ECA3088II33090003360000") # CRAZINESS.....
 HDOI <- c("ECA3088", "ECA3088X1709900017105000")
 HDOI <- c("ECA3088", "ECA3088I1226600012278000")
 HDOI <- c("ECA3088", "ECA3088II17030001717000")
 HDOI <- c("ECA3088", "ECA3088II10400001049000")
 HDOI <- c("ECA3088", "ECA3088IV1417000014189000")
+HDOI <- c("ECA701", "ECA701X0288000") 
+
 HDOI <- c("ECA3088", "ECA3088X1435500014378000") # example of an extension
-HDOI <- c("ECA3088", "ECA3088V1704500017120000")
-HDOI <- c("ECA3088", "ECA1409V1712600017364000")
-HDOI <- c("ECA723", "ECA723II1431400014341000") # largest different in N2 HDR size versus lifted-over WS HDR size
-HDOI <- c("ECA2948", "ECA2948V1685600017120000") # second largest
+
+HDOI <- c("ECA3088", "ECA3088V1704500017120000") # extreme repeat expansion!
+HDOI <- c("ECA3088", "ECA1409V1712600017364000") # extreme repeat expansion!
+
+HDOI <- c("ECA1725", "ECA1725V1835700019261000") # largest different in N2 HDR size versus lifted-over WS HDR size
+HDOI <- c("ECA2151", "ECA2151V1515000016071000") # second largest & second largest WS HDR lift-ver
+
 HDOI <- c("ECA1769", "ECA1769V1515000016104000") # largest HDR among all 140 WSs
-HDOI <- c("ECA1725", "ECA1725V1835700019261000") # new largest  / looks legit
-HDOI <- c("ECA2151", "ECA2151V1515000016071000") # 2nd largest / checks out
-HDOI <- c("ECA701", "ECA701X0288000") #wtf is this, but checks out
+
 
 # Get plot list for HDOI
-diag_list <- plot_hdr_workflow(HDOI)
+# diag_list <- plot_hdr_workflow(HDOI)
 
 #jump correction errors visualized here
 # cowplot::plot_grid(diag_list[[1]]+theme(legend.position = 'none'),diag_list[[2]],nrow=1,align = 'h',axis = 'tb',rel_widths = c(0.8,1))
@@ -563,10 +568,15 @@ diag_list <- plot_hdr_workflow(HDOI)
 #previous steps all at once - overview
 # cowplot::plot_grid(diag_list[[3]]+theme(legend.position = 'none'), diag_list[[4]]+theme(axis.title.y=element_blank()), diag_list[[5]], diag_list[[7]],nrow=1, align = 'h', axis = 'tb',rel_widths = c(0.6,0.8,1,1))
 
-pretty_plot <- diag_list[[8]]
-pretty_plot
+pretty_plot(HDOI)
 
-# Find HDR clusters separated by less than 5kb
+
+
+
+
+
+
+# Find WS HDR clusters separated by less than 5kb
 gap_clust_WS_HDRs <- WS_HDRs %>%
   dplyr::select(longest_contig,minStart,maxEnd,strain) %>%
   dplyr::rename(CHROM=longest_contig,STRAIN=strain) %>%
@@ -580,7 +590,7 @@ gap_clust_WS_HDRs <- WS_HDRs %>%
   dplyr::mutate(dec3g=ifelse(is.na(dec3g),"nojoin",dec3g)) %>%
   dplyr::ungroup()
 
-# Join the clusters
+# Join WS HDR clusters
 joinClust_WS_HDRs<- gap_clust_WS_HDRs %>% 
   dplyr::filter(dec3g=="join") %>%
   dplyr::group_by(STRAIN,CHROM) %>%
@@ -611,7 +621,7 @@ nojoin_WS_HDRs <- gap_clust_WS_HDRs %>%
   dplyr::select(CHROM,minStart,maxEnd,divSize,STRAIN) %>%
   dplyr::mutate(nclust=1)
 
-# Join joined and unclustered regions
+# Join the joined and unclustered regions
 # Size filter
 # Order by divergence
 all_calls_WS_HDRs<- rbind(joinClust_WS_HDRs,nojoin_WS_HDRs) %>%
@@ -625,14 +635,32 @@ all_calls_WS_HDRs<- rbind(joinClust_WS_HDRs,nojoin_WS_HDRs) %>%
   dplyr::group_by(STRAIN) %>%
   dplyr::mutate(ystrain=cur_group_id()) %>%
   dplyr::ungroup() %>%
-  dplyr::rename(contig=CHROM,strain=STRAIN,strain_order=ystrain) %>%
+  dplyr::rename(contig=CHROM,strain=STRAIN,strain_order=ystrain,ws_hdr_size=divSize, ws_hdr_start = minStart, ws_hdr_end = maxEnd) %>%
   dplyr::select(-nclust,-ncalls,-sorter,-rleID) %>%
-  dplyr::arrange(strain_order,contig,minStart)
+  dplyr::arrange(desc(strain_order),contig,ws_hdr_start) %>% # ordering strains from MOST to least divergent based on number of HDR calls 
+  dplyr::select(strain_order) 
 
-# View(all_calls_WS_HDRs) #strains are orderered from least-to-most divergent based on HDR count
+# Calculating total sequence classified as divergent in each wild strain
+span_ws_hdrs <- all_calls_WS_HDRs %>%
+  dplyr::group_by(strain) %>% 
+  dplyr::mutate(span_hdrs = sum(ws_hdr_size)) %>%
+  dplyr::ungroup() %>%
+  dplyr::arrange(desc(span_hdrs)) %>% # This is extremely concordant with SV calls!
+  dplyr::distinct(strain, span_hdrs) %>%
+  dplyr::mutate(strain = factor(strain, levels = (strain)))
 
-
-
+ggplot(data = span_ws_hdrs) + 
+  geom_col(aes(x = strain, y = span_hdrs / 1e6), fill = 'chocolate4') +
+  theme(
+    axis.title.x = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    axis.text.x = element_text(size = 8, color= 'black', angle = 60, hjust = 1),
+    axis.title.y = element_text(size = 14, color = 'black'),
+    axis.text.y = element_text(size = 12, color = 'black')
+  ) +
+  labs(y = "Total WS HDR span") +
+  scale_y_continuous(expand = expansion(mult = c(0, .05)))
 
 
 
@@ -643,7 +671,6 @@ all_calls_WS_HDRs<- rbind(joinClust_WS_HDRs,nojoin_WS_HDRs) %>%
 # ======================================================================================================================================================================================== #
 # Adding WS genes to each alignment, and then collapsing by N2 gene to get a matrix of syntenic genes #
 # ======================================================================================================================================================================================== #
-
 
 wsg <- data.table::as.data.table(ws_genes)
 ws_hdrs <- FINAL_hdrs %>% dplyr::select(longest_contig, WS_hdr_start_min_updated, WS_hdr_end_max_updated, spans_hdr, chrom, og_hdr_start, og_hdr_end, N2S, N2E, WSS, WSE) %>%
@@ -689,6 +716,11 @@ syntelog_matrix <- joined %>%
 
 
 
+
+names(results_df) = c("Strain", "num_N2_hdrs", "num_WS_aln_HDRs", "mean_N2_hdr_size", "median_N2_hdr_size", 
+                      "mean_WS_hdr_size", "median_WS_hdr_size", 'max_WS_hdr_size', "min_WS_hdr_size", "num_WS_hdr_liftover",
+                      "num_WS_core_genes", "num_WS_acc_genes", "num_WS_priv_genes", "num_WS_core_inHDR", "num_WS_acc_inHDR", "num_WS_priv_inHDR", 
+                      "total_WS_genes", "total_WS_genes_inHDRs") # also include num HDRS with only one overlapping boundary and then num HDRs with no overlapping HDRs alignments
 
 
 
