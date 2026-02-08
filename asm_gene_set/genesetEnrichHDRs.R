@@ -138,8 +138,9 @@ genes_class <- all_genes_strain %>%
 # }
 
 
+
 # ======================================================================================================================================================================================== #
-# Extracting the longest WS contig alignment for every HDR #
+# Lifting over N2 HDRs to wild strains #
 # ======================================================================================================================================================================================== #
 # Nic Moya was here
 
@@ -259,7 +260,7 @@ nucmer_longest_jumpRemoved <- nucmer_longest %>%
   dplyr::arrange(HDRid,St2) %>%
   dplyr::group_by(HDRid) %>%
   dplyr::mutate(leadDiff=lead(St2)-Et2) %>%
-  dplyr::mutate(jump=ifelse(leadDiff > 7.5e4, 1 ,0)) %>% # Modified to 75kb - reduce situations where HDRs are called for repetitive alignment with large, interspersed jumps
+  dplyr::mutate(jump=ifelse(leadDiff > 7.5e4, 1 ,0)) %>% # Modified to 75kb - reduced situations where HDRs are called for repetitive alignment with large, interspersed jumps
   dplyr::mutate(leadDiff=ifelse(is.na(leadDiff),0,leadDiff)) %>%
   dplyr::mutate(run_id = cumsum(c(1, head(jump, -1)))) %>%
   dplyr::ungroup() %>%
@@ -286,8 +287,8 @@ trim_spacer = 1e3
 nucmer_longest_trimmed <- nucmer_longest_jumpRemoved %>%
   dplyr::rowwise() %>%
   dplyr::mutate(scale_distortion = ((L2 - L1)/L1)) %>%
-  dplyr::mutate(lboundDist=hdr_start_extended-N2S) %>% #change to og start if extensions are dropped
-  dplyr::mutate(rboundDist=N2E-hdr_end_extended) %>%#change to og start if extensions are dropped
+  dplyr::mutate(lboundDist=hdr_start_extended-N2S) %>% 
+  dplyr::mutate(rboundDist=N2E-hdr_end_extended) %>%
   dplyr::mutate(N2E=ifelse(rboundDist>trim_spacer,(N2E-(rboundDist-trim_spacer)),N2E)) %>%
   dplyr::mutate(N2S=ifelse(lboundDist>trim_spacer,(N2S+(lboundDist-trim_spacer)),N2S)) %>%
   dplyr::mutate(WSE=ifelse(rboundDist>trim_spacer & inv==T,(WSE+(rboundDist-trim_spacer)+(rboundDist*scale_distortion)),WSE)) %>%
@@ -570,10 +571,19 @@ HDOI <- c("ECA1769", "ECA1769V1515000016104000") # largest HDR among all 140 WSs
 
 pretty_plot(HDOI)
 
-
-
-
-
+# Plotting the size difference of the WS HDR lift-overs
+ggplot(data = WS_HDRs) + 
+  geom_point(aes(x = og_divSize / 1e6, y = divSize / 1e6, color = strain)) +
+  geom_line(data = data.frame(x = c(0, 1.2)), aes(x = x, y = x), linetype = "dashed") +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    axis.text = element_text(size = 12, color= 'black'),
+    axis.title = element_text(size = 14, color = 'black')
+  ) +
+  labs(y = "WS HDR size", x = "N2 HDR size") +
+  scale_y_continuous(expand = c(0.005,0)) +
+  scale_x_continuous(expand = c(0.005,0))
 
 
 # Find WS HDR clusters separated by less than 5kb
@@ -638,7 +648,7 @@ all_calls_WS_HDRs<- rbind(joinClust_WS_HDRs,nojoin_WS_HDRs) %>%
   dplyr::rename(contig=CHROM,strain=STRAIN,strain_order=ystrain,ws_hdr_size=divSize, ws_hdr_start = minStart, ws_hdr_end = maxEnd) %>%
   dplyr::select(-nclust,-ncalls,-sorter,-rleID) %>%
   dplyr::arrange(desc(strain_order),contig,ws_hdr_start) %>% # ordering strains from MOST to least divergent based on number of HDR calls 
-  dplyr::select(strain_order) 
+  dplyr::select(-strain_order) 
 
 # Calculating total sequence classified as divergent in each wild strain
 span_ws_hdrs <- all_calls_WS_HDRs %>%
@@ -649,6 +659,7 @@ span_ws_hdrs <- all_calls_WS_HDRs %>%
   dplyr::distinct(strain, span_hdrs) %>%
   dplyr::mutate(strain = factor(strain, levels = (strain)))
 
+# Plotting total WS HDR span 
 ggplot(data = span_ws_hdrs) + 
   geom_col(aes(x = strain, y = span_hdrs / 1e6), fill = 'chocolate4') +
   theme(
@@ -659,55 +670,100 @@ ggplot(data = span_ws_hdrs) +
     axis.title.y = element_text(size = 14, color = 'black'),
     axis.text.y = element_text(size = 12, color = 'black')
   ) +
-  labs(y = "Total WS HDR span") +
+  labs(y = "Total WS HDR span (Mb)") +
   scale_y_continuous(expand = expansion(mult = c(0, .05)))
 
 
+# Calculate the number of HDRs per wild strain
+hdr_count <- all_calls_WS_HDRs %>% 
+  dplyr::select(strain) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(ws_hdr_count = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::left_join(span_ws_hdrs, by = "strain") %>%
+  dplyr::distinct(strain, ws_hdr_count, span_hdrs)
 
+r_val <- cor(hdr_count$ws_hdr_count, hdr_count$span_hdrs, method = "spearman", use = "complete.obs")
+
+# Plotting total WS HDR span by count of HDRs
+ggplot(data = hdr_count) + 
+  geom_point(aes(x = ws_hdr_count, y = span_hdrs / 1e6, color = strain)) +
+  geom_smooth(aes(x = ws_hdr_count, y = span_hdrs / 1e6), method = "lm", se = TRUE, color = "black", linewidth = 1) +
+  annotate("text", x = Inf, y = Inf, label = paste0("Spearman ρ = ", round(r_val, 2)), hjust = 1.1, vjust = 1.5, size = 5) +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    axis.title = element_text(size = 14, color = 'black'),
+    axis.text = element_text(size = 12, color = 'black')
+  ) +
+  labs(y = "Total WS HDR span (Mb)", x = "WS HDR count")
 
 
 
 
 # ======================================================================================================================================================================================== #
-# Adding WS genes to each alignment, and then collapsing by N2 gene to get a matrix of syntenic genes #
+# Pulling WS genes that are in lifted-over WS HDRs #
 # ======================================================================================================================================================================================== #
+# Prepping input of WS HDRs and WS genes
+ws_hdrs <- data.table::as.data.table(all_calls_WS_HDRs %>% dplyr::select(strain, contig, ws_hdr_start, ws_hdr_end) %>% dplyr::rename(start = ws_hdr_start, end = ws_hdr_end))
+ws_genes <- genes_class %>% dplyr::select(strain, seqid, start, end, gene, class) %>% dplyr::filter(strain != "N2" & strain != "CGC1") %>% dplyr::rename(contig = seqid) %>% data.table::as.data.table()
 
-wsg <- data.table::as.data.table(ws_genes)
-ws_hdrs <- FINAL_hdrs %>% dplyr::select(longest_contig, WS_hdr_start_min_updated, WS_hdr_end_max_updated, spans_hdr, chrom, og_hdr_start, og_hdr_end, N2S, N2E, WSS, WSE) %>%
-  data.table::as.data.table()
+# Setting the keys for foverlaps
+data.table::setkey(ws_hdrs, strain, contig, start, end)
+data.table::setkey(ws_genes, strain, contig, start, end)
 
-# print() # the max and min WS start and end coordinate among any contig
+ws_genes_hdrs <- foverlaps(
+  x = ws_genes,
+  y = ws_hdrs,
+  type = "any",
+  nomatch = NA) 
+
+# Calculating the number of genes in each gene set for every strain
+ws_genes_count <- ws_genes %>%
+  dplyr::group_by(strain, class) %>%
+  dplyr::mutate(ws_class_count = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(strain,class, gene, ws_class_count)
+
+# Pulling stats of genes in HDRs and proportion of each gene set
+ws_genes_hdrs_stats <- ws_genes_hdrs %>%
+  dplyr::filter(!is.na(start)) %>%
+  dplyr::group_by(strain, class) %>% 
+  dplyr::mutate(ws_class_count_inHDR = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::left_join(ws_genes_count, by = c("strain", "gene", "class")) %>%
+  dplyr::mutate(prop_genes_inHDRs = ws_class_count_inHDR / ws_class_count) %>%
+  dplyr::distinct(strain,class,ws_class_count, ws_class_count_inHDR, prop_genes_inHDRs) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(ws_total_gene_count = sum(ws_class_count),
+                ws_total_inHDR_gene_count = sum(ws_class_count_inHDR),
+                prop_total_ws_genes_inHDRs = ws_total_inHDR_gene_count / ws_total_gene_count) %>%
+  dplyr::ungroup() 
+
+prop_genes_in_hdrs <- ws_genes_hdrs_stats %>%
+  dplyr::distinct(strain, prop_total_ws_genes_inHDRs) %>%
+  dplyr::arrange(desc(prop_total_ws_genes_inHDRs)) %>%
+  dplyr::mutate(strain = factor(strain, levels = strain))
+
+# Plotting stats of WS genes in HDRs 
+ggplot(data = prop_genes_in_hdrs) + 
+  geom_col(aes(x = strain, y = prop_total_ws_genes_inHDRs * 100), fill = 'blue') +
+  geom_point(data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6) ), color = "green", size = 2) +
+  geom_line( data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6) , group = 1), color = "green", linewidth = 1) +
+  theme(
+    axis.title.x = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    axis.text.x = element_text(size = 8, color= 'black', angle = 60, hjust = 1),
+    axis.title.y = element_text(size = 14, color = 'black'),
+    axis.text.y = element_text(size = 12, color = 'black'),
+    plot.margin = margin(t = 5, b = 5, l = 5, r = 5)) +
+  labs(y = "Proportion of WS genes in HDRs (%)") +
+  scale_y_continuous(name = "Proportion of WS genes in HDRs (%)", 
+                     sec.axis = sec_axis(~. / 1 ,name = "Total WS HDR span (Mb)"), expand = expansion(mult = c(0, .05))) 
 
 
 
-clean_tigTrim <- tigTrim %>%
-  dplyr::group_by(n2_gene,strain) %>%
-  dplyr::select(chrom, unchanged_start_aln, unchanged_end_aln, start_aln, end_aln, L1, start_gene, end_gene, n2_gene, WSS, WSE, inv, longest_contig, nalign, L2, strain) %>%
-  dplyr::mutate(invStartTrimmed = ifelse(inv == T, WSE, WSS), invEndTrimmed = ifelse(inv == T, WSS, WSE))
-
-filt_nucm_long <- data.table::as.data.table(clean_tigTrim)
-
-data.table::setnames(filt_nucm_long, c("longest_contig", "invStartTrimmed", "invEndTrimmed"), c("contig", "start", "end")) # use St2 Et2 because the gff coordinates will be reported in this way
-
-data.table::setkey(wsg, contig, strain, start, end)
-data.table::setkey(filt_nucm_long, contig, strain, start, end)
-
-joined <- foverlaps(
-  x = wsg,
-  y = filt_nucm_long,
-  type = "any" # if the start/end of the gene is contained within the N2 gene space or touching the boundaries of the WS alignment coordinates
-) 
-
-syntelog_matrix <- joined %>%
-  dplyr::select(n2_gene,strain,attributes) %>%
-  dplyr::rename(WS_gene = attributes) %>%
-  tidyr::pivot_wider(
-    id_cols = n2_gene,
-    names_from = c(strain),
-    values_from = c(WS_gene),
-    values_fn = \(x) paste(unique(x), collapse = ",")
-  ) %>%
-  dplyr::filter(!is.na(n2_gene)) # remove the row that contains all non-syntenic predicted WS genes
 
 
 
@@ -717,10 +773,36 @@ syntelog_matrix <- joined %>%
 
 
 
-names(results_df) = c("Strain", "num_N2_hdrs", "num_WS_aln_HDRs", "mean_N2_hdr_size", "median_N2_hdr_size", 
-                      "mean_WS_hdr_size", "median_WS_hdr_size", 'max_WS_hdr_size', "min_WS_hdr_size", "num_WS_hdr_liftover",
-                      "num_WS_core_genes", "num_WS_acc_genes", "num_WS_priv_genes", "num_WS_core_inHDR", "num_WS_acc_inHDR", "num_WS_priv_inHDR", 
-                      "total_WS_genes", "total_WS_genes_inHDRs") # also include num HDRS with only one overlapping boundary and then num HDRs with no overlapping HDRs alignments
+
+
+# Creating a stats table to summarize HDR lift-over
+n2_hdr_stats <- strain_hdr %>%
+  dplyr::distinct(strain, chrom, og_hdr_start, og_hdr_end) %>%
+  dplyr::mutate(n2_hdr_size = og_hdr_end - og_hdr_start) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(n2_hdr_count = n()) %>%
+  dplyr::mutate(n2_hdr_span = sum(n2_hdr_size)) %>%
+  dplyr::mutate(largest_n2_hdr = max(n2_hdr_size)) %>%
+  dplyr::mutate(mean_n2_hdr_size = n2_hdr_span / n2_hdr_count) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(strain,n2_hdr_count, n2_hdr_span, largest_n2_hdr, mean_n2_hdr_size)
+
+stats <- all_calls_WS_HDRs %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(largest_ws_hdr = max(ws_hdr_size)) %>%
+  dplyr::select(strain, largest_ws_hdr) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(ws_hdr_count = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::left_join(span_ws_hdrs, by = "strain") %>%
+  dplyr::distinct(strain, ws_hdr_count, span_hdrs, largest_ws_hdr) %>%
+  dplyr::mutate(mean_ws_hdr_size = span_hdrs / ws_hdr_count) %>%
+  dplyr::left_join(n2_hdr_stats, by = "strain") %>%
+  dplyr::rename(span_ws_hdrs = span_hdrs)
+
+
+# "num_WS_core_genes", "num_WS_acc_genes", "num_WS_priv_genes", "num_WS_core_inHDR", "num_WS_acc_inHDR", "num_WS_priv_inHDR", 
+# "total_WS_genes", "total_WS_genes_inHDRs") 
 
 
 
