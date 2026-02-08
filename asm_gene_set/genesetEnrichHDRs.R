@@ -762,18 +762,26 @@ pie_df <- geneSet_prop %>%
 # Plot 140 pies, 14 high x 10 wide
 ggplot(pie_df, aes(x = "", y = pie_frac, fill = `Gene set`), alpha = 0.7) +
   geom_col(width = 1, color = "white", linewidth = 0.2) +
-  scale_fill_manual(values = c("Core" = "green4", "Accessory" = "#DB6333", "Private" = "magenta3")) +
+  scale_fill_manual(values = c(
+    "Core" = "green4",
+    "Accessory" = "#DB6333",
+    "Private" = "magenta3"
+  )) +
   coord_polar(theta = "y") +
   facet_wrap(~ strain, nrow = 10, ncol = 14, as.table = FALSE) +
   theme_void() +
   theme(
-    strip.text = element_text(size = 10, color = 'black'),
+    strip.text = element_text(size = 10, color = "black"),
     legend.position = "right",
-    legend.title = element_text(size = 12, color = 'black'),
-    legend.text = element_text(size = 12, color = 'black'),
-    plot.title = element_text(size = 16, color = 'black', hjust = 0.5, face = 'bold', margin = margin(b = 15)),
-    plot.margin = margin(t = 10)) +
-  labs(title = "Contributions of genes in HDRs to each gene set")
+    legend.title = element_text(size = 12, color = "black"),
+    legend.text = element_text(size = 12, color = "black"),
+    plot.title = element_text(size = 16, hjust = 0.5, face = "bold", margin = margin(b = 10)),
+    plot.subtitle = element_text(size = 14, hjust = 0.5, margin = margin(b = 10)),
+    plot.margin = margin(t = 15)) +
+  labs(
+    title = "Contributions of genes in HDRs to each gene set",
+    subtitle = "• ECA1493: 4,344 genes (most)\n• NIC2: 81 genes (fewest)")
+
 
 
 # Average proportion of WS genes in each gene set among all wild strains
