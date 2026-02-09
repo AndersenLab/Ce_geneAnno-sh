@@ -826,8 +826,9 @@ gene_summed_length <- all_genes_strain %>%
   dplyr::mutate(gene_size = end - start) %>%
   dplyr::group_by(strain) %>%
   dplyr::mutate(summed_gene_size = sum(gene_size)) %>%
+  dplyr::mutate(gene_count = n()) %>%
   dplyr::ungroup() %>%
-  dplyr::distinct(strain,summed_gene_size) %>%
+  dplyr::distinct(strain,gene_count, summed_gene_size) %>%
   dplyr::left_join(genome_sizes, by = "strain") %>%
   dplyr::mutate(prop_coding = summed_gene_size / genome_size)
 
@@ -854,6 +855,49 @@ prop_hdr_coding <- all_calls_WS_HDRs %>%
   dplyr::mutate(fold_enrich_HDR = prop_coding_HDR / prop_coding) # greater than 1 for every wild strain
 # All HDRs are more gene dense compared to the genome-wide average
 # (summed gene length in HDR / summed length of HDRs) / (summed_genes in entire genome / genome size)
+
+# What is relationship between wild strain genome size and proprtion of genome that is hyper-divergent?
+genome_size_hdr <- prop_hdr_coding %>%
+  dplyr::select(strain,genome_size,gene_count,summed_hdr_size) %>%
+  dplyr::arrange(desc(genome_size)) %>%
+  dplyr::mutate(strain = factor(strain, levels = strain))
+
+# Relationship between genome size and span of HDRs
+ggplot(data = genome_size_hdr) + 
+  geom_col(aes(x = strain, y = genome_size / 1e6, fill = summed_hdr_size / 1e6)) +
+  scale_fill_gradient(low = "gold", high = "blue") +
+  theme(
+    axis.title.x = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    legend.title = element_text(size = 12, color = 'black'),
+    legend.text = element_text(size = 11, color = 'black'),
+    axis.text.x = element_text(size = 8, color= 'black', angle = 60, hjust = 1),
+    axis.title.y = element_text(size = 14, color = 'black'),
+    axis.text.y = element_text(size = 12, color = 'black'),
+    plot.margin = margin(t = 5, b = 5, l = 5, r = 5)) +
+  labs(y = "Wild strain genome size (Mb)", fill = 'Hyper-divergent genome size (Mb)') +
+  scale_y_continuous(expand = c(0,0)) 
+
+r_val2 <- cor(genome_size_hdr$genome_size, genome_size_hdr$summed_hdr_size, method = "spearman", use = "complete.obs")
+
+# Looking at the relationship among genome size, spans of HDRs, and predicted gene count
+ggplot(data = genome_size_hdr) +
+  geom_point(aes(x = genome_size / 1e6, y = summed_hdr_size / 1e6, fill = gene_count), shape = 21, size = 4) +
+  geom_smooth(aes(x = genome_size / 1e6, y = summed_hdr_size / 1e6), method = "lm", se = TRUE, color = "black", linewidth = 1) +
+  annotate("text", x = Inf, y = Inf, label = paste0("Spearman ρ = ", round(r_val2, 2)), hjust = 1.1, vjust = 1.5, size = 5) +
+  scale_fill_gradient(low = "yellow", high = "red") +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    legend.title = element_text(size = 12, color = 'black'),
+    legend.text = element_text(size = 11, color = 'black'),
+    axis.title = element_text(size = 16, color = 'black'),
+    axis.text = element_text(size = 14, color = 'black'),
+    plot.margin = margin(t = 5, b = 5, l = 5, r = 5)) +
+  labs(x = "Wild strain genome size (Mb)", y = "Hyper-divergent genome size (Mb)", fill = "Wild strain gene count") +
+  coord_cartesian(xlim = c(102,113))
+  # scale_x_continuous(expand = c(0,0))
 
 # ======================================================================================================================================================================================== #
 # Creating a final stats table #
