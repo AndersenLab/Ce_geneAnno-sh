@@ -879,15 +879,37 @@ ggplot(data = genome_size_hdr) +
   labs(y = "Wild strain genome size (Mb)", fill = 'Hyper-divergent genome size (Mb)') +
   scale_y_continuous(expand = c(0,0)) 
 
+# Relationship between genome size and predicted PC genes
+ggplot(data = genome_size_hdr) + 
+  geom_col(aes(x = strain, y = genome_size / 1e6, fill = gene_count)) +
+  scale_fill_gradient(low = "plum1", high = "blue") +
+  theme(
+    axis.title.x = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    legend.title = element_text(size = 12, color = 'black'),
+    legend.text = element_text(size = 11, color = 'black'),
+    axis.text.x = element_text(size = 8, color= 'black', angle = 60, hjust = 1),
+    axis.title.y = element_text(size = 14, color = 'black'),
+    axis.text.y = element_text(size = 12, color = 'black'),
+    plot.margin = margin(t = 5, b = 5, l = 5, r = 5)) +
+  labs(y = "Wild strain genome size (Mb)", fill = 'Wild strain gene count') +
+  scale_y_continuous(expand = c(0,0)) 
+
 r_val2 <- cor(genome_size_hdr$genome_size, genome_size_hdr$summed_hdr_size, method = "spearman", use = "complete.obs")
 
+hdr_genes <- ws_genes_hdrs_stats %>%
+  dplyr::distinct(strain,ws_total_inHDR_gene_count)
+
 # Looking at the relationship among genome size, spans of HDRs, and predicted gene count
-ggplot(data = genome_size_hdr) +
-  geom_point(aes(x = genome_size / 1e6, y = summed_hdr_size / 1e6, fill = gene_count), shape = 21, size = 4) +
+ggplot(data = genome_size_hdr %>% dplyr::left_join(hdr_genes, by = 'strain')) +
+  geom_point(aes(x = genome_size / 1e6, y = summed_hdr_size / 1e6, fill = gene_count, size = ws_total_inHDR_gene_count), shape = 21) +
   geom_smooth(aes(x = genome_size / 1e6, y = summed_hdr_size / 1e6), method = "lm", se = TRUE, color = "black", linewidth = 1) +
   annotate("text", x = Inf, y = Inf, label = paste0("Spearman ρ = ", round(r_val2, 2)), hjust = 1.1, vjust = 1.5, size = 5) +
+  ggrepel::geom_text_repel(data = dplyr::filter(genome_size_hdr, genome_size > 110e6 | summed_hdr_size > 13e6),
+                           aes(x = genome_size / 1e6, y = summed_hdr_size / 1e6, label = strain), size = 4, max.overlaps = Inf, point.padding = 12) +
   scale_fill_gradient(low = "yellow", high = "red") +
-  theme(
+  scale_size_continuous(name = "Wild strain HDR gene count", breaks = c(1000, 2500, 4000), range = c(1, 8)) +  theme(
     panel.border = element_rect(color = 'black', fill = NA),
     panel.background = element_blank(),
     legend.title = element_text(size = 12, color = 'black'),
