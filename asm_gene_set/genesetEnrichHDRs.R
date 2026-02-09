@@ -27,7 +27,7 @@ strain_hdr <- hdrs %>%
   
 # Load alignments
 nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>% 
-  dplyr::filter(strain != "ECA396") %>%
+  dplyr::filter(strain != "ECA396" & strain != "CGC1") %>%
   dplyr::mutate(inv = ifelse((WSS > WSE), T, F)) 
 
 # Rename variables, arrange by WS coordinates, get lag and leading coordinates of alignments in WS space
@@ -815,6 +815,45 @@ hdr_genes_pangenome_class <- ws_genes_hdrs_stats %>%
 ### 133,445 / 1,055,492 accessory
 ### 2,459 / 16,560 private
 
+# Look at gene density inside of HDRs compared to genome-wide average
+genome_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/Ce_strains_genome_sizes.tsv", col_names = c("strain", "genome_size")) %>%
+  dplyr::filter(strain %in% WSs) 
+
+# Identifying what proportion of WS genomes have gene models predicted
+gene_summed_length <- all_genes_strain %>%
+  dplyr::select(start,end,strain) %>%
+  dplyr::filter(strain %in% WSs) %>%
+  dplyr::mutate(gene_size = end - start) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(summed_gene_size = sum(gene_size)) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(strain,summed_gene_size) %>%
+  dplyr::left_join(genome_sizes, by = "strain") %>%
+  dplyr::mutate(prop_coding = summed_gene_size / genome_size)
+
+# Total summed length of genes in HDRs
+ws_genes_summed <- ws_genes_hdrs %>%
+  dplyr::filter(!is.na(start)) %>%
+  dplyr::select(strain,start,i.start,i.end) %>%
+  dplyr::mutate(gene_size = i.end - i.start) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(summed_genes_inHDRs = sum(gene_size)) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(strain,summed_genes_inHDRs)
+
+# Proportion of HDRs that are coding
+prop_hdr_coding <- all_calls_WS_HDRs %>%
+  dplyr::select(strain,ws_hdr_size) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(summed_hdr_size = sum(ws_hdr_size)) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(strain,summed_hdr_size) %>%
+  dplyr::left_join(ws_genes_summed, by = 'strain') %>%
+  dplyr::mutate(prop_coding_HDR = summed_genes_inHDRs / summed_hdr_size) %>%
+  dplyr::left_join(gene_summed_length, by = "strain") %>%
+  dplyr::mutate(fold_enrich_HDR = prop_coding_HDR / prop_coding) # greater than 1 for every wild strain
+# All HDRs are more gene dense compared to the genome-wide average
+# (summed gene length in HDR / summed length of HDRs) / (summed_genes in entire genome / genome size)
 
 # ======================================================================================================================================================================================== #
 # Creating a final stats table #
