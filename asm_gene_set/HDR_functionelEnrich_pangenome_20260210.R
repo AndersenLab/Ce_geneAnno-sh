@@ -10,6 +10,10 @@ library(GO.db)
 library(AnnotationDbi)
 library(stringr)
 library(data.table)
+# install.packages("rnaturalearth")
+library(rnaturalearth)
+# install.packages("rnaturalearthdata")
+library(rnaturalearthdata)
 
 # ======================================================================================================================================================================================== #
 # OG matrix and gene set classification #
@@ -90,7 +94,10 @@ long_class <- all_class %>%
   tidyr::separate_rows(gene, sep = ",\\s*") %>%
   dplyr::select(strain, gene, class) %>%
   dplyr::mutate(gene = sub("\\.[^.]*$", "", gene)) %>%
-  dplyr::mutate(gene = paste0(strain, "_", gene))
+  dplyr::mutate(gene = paste0(strain, "_", gene)) %>%
+  dplyr::filter(strain != "N2" & strain != "CGC1")
+
+WSs <- long_class %>% dplyr::distinct(strain) %>% dplyr::pull()
 
 
 
@@ -107,146 +114,292 @@ ws_hdr_genes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_
 ws_hdr_priv_genes <- ws_hdr_genes %>% dplyr::filter(class == "private") %>% dplyr::pull(gene)
 ws_hdr_acc_genes <- ws_hdr_genes %>% dplyr::filter(class == "accessory") %>% dplyr::pull(gene)
 ws_hdr_core_genes <- ws_hdr_genes %>% dplyr::filter(class == "core") %>% dplyr::pull(gene)
+all_ws_hdr_genes <- ws_hdr_genes %>% dplyr::pull(gene)
 
 all_ipr_background <- all_ipr %>% 
   dplyr::filter(!is.na(IPR_description) & IPR_accession != "-") %>%
-  dplyr::distinct(tran, IPR_accession, IPR_description) %>%
+  dplyr::distinct(tran, IPR_accession, IPR_description) %>% # only one type of IPR annotation per gene
   dplyr::group_by(IPR_accession) %>%
   dplyr::mutate(n_IPR_acc_background = n()) %>%
   dplyr::ungroup() %>%
   dplyr::arrange(desc(n_IPR_acc_background)) %>%
-  dplyr::mutate(tran = sub("\\.[^.]*$", "", tran))
+  dplyr::mutate(tran = sub("\\.[^.]*$", "", tran)) # 2,360,448 wild strain pangenome genes have an IPR annotation
 
 ipr_background_genes <- all_ipr_background %>% dplyr::distinct(tran) %>% dplyr::pull()
 
-# PRIVATE PANGENOME
-priv_ipr_genes <- all_ipr_background %>%
-  dplyr::filter(tran %in% ws_hdr_priv_genes) %>%
-  dplyr::group_by(IPR_accession) %>% 
-  dplyr::mutate(n_IPR_acc_priv = n()) %>%
+# Counting the number of different gene classes in WS HDRs based on IPR classification
+ws_hdr_gene_class <- long_class %>%
+  dplyr::filter(gene %in% all_ws_hdr_genes) %>%
+  dplyr::left_join(all_ipr_background %>% dplyr::select(-n_IPR_acc_background), by = c("gene" = "tran")) %>% # a total of 206,225 genes are in WS HDRs
+  dplyr::filter(!is.na(IPR_description)) %>% # 159,191 of the 206,255 HDR genes have an IPR annotation
+  dplyr::mutate(rough_gene_class = ifelse(grepl("7TM",IPR_description), "GPCR", 
+                                          ifelse(grepl("C-type lectin", IPR_description), "C-type lectin", 
+                                                 ifelse(grepl("Cytochrome P450", IPR_description), "Cytochrome P450", 
+                                                        ifelse(grepl("F-box", IPR_description), "F-box", IPR_description))))) # assigning gene class based on IPR annotation
+# Total number of each (roughly estimated) gene class
+ws_hdr_gene_class_count <- ws_hdr_gene_class %>% 
+  dplyr::select(strain, gene, class, rough_gene_class) %>%
+  dplyr::filter(rough_gene_class == "GPCR" | rough_gene_class == "C-type lectin" | rough_gene_class == "Cytochrome P450" | rough_gene_class == "F-box") %>%
+  dplyr::group_by(rough_gene_class) %>%
+  dplyr::mutate(class_count = n()) %>%
+  dplyr::distinct(rough_gene_class, class_count) %>%
+  dplyr::mutate(average_per_strain_hdrs = class_count / 140)
+
+# Most abundant IPR terms 
+ipr_desc_most <- ws_hdr_gene_class %>%
+  dplyr::select(strain, gene, class, IPR_description) %>%
+  dplyr::group_by(IPR_description) %>%
+  dplyr::mutate(count_ipr = n()) %>%
   dplyr::ungroup() %>%
-  dplyr::arrange(desc(n_IPR_acc_priv))
-
-ratio <- all_ipr_background %>% dplyr::distinct(IPR_accession, .keep_all = T) %>%
-  dplyr::left_join(priv_ipr_genes %>% dplyr::distinct(IPR_accession, .keep_all = T) %>% dplyr::select(IPR_accession, n_IPR_acc_priv), by = "IPR_accession") %>%
-  dplyr::select(IPR_accession, IPR_description, n_IPR_acc_background, n_IPR_acc_priv) %>%
-  dplyr::mutate(IPR_ratio = n_IPR_acc_priv / n_IPR_acc_background) %>%
-  dplyr::filter(!is.na(n_IPR_acc_priv)) %>%
-  dplyr::filter(n_IPR_acc_background > 100) %>% # removed very rarely appearing terms
-  dplyr::arrange(desc(IPR_ratio))
-
-ratio_plot <- ratio %>% dplyr::arrange(desc(IPR_ratio)) %>%
-  # dplyr::filter(IPR_accession != "IPR008164") %>% # filtering out "repeat of unknown function XGLTT
-  dplyr::rename(`IPR count in private pangenome` = n_IPR_acc_priv) %>%
-  dplyr::slice_head(n=50) %>%
-  dplyr::mutate(IPR_description = factor(IPR_description, levels = rev(IPR_description)))
-
-ggplot(data = ratio_plot, aes(x = IPR_ratio, y = IPR_description)) +
-  geom_bar(aes(fill = `IPR count in private pangenome`),stat = "identity", alpha = 0.5, color = "black", linewidth = 0.3) +
-  scale_fill_gradient(low = 'blue', high = 'magenta3') +
-  theme(
-    axis.text.y = element_text(size = 10, color = 'black'),
-    axis.title.y = element_blank(),
-    legend.position = 'inside',
-    legend.position.inside = c(0.7,0.2),
-    axis.text.x = element_text(size = 19, color = 'black'),
-    axis.title.x = element_text(size = 18, color = 'black', face = 'bold'),
-    panel.background = element_blank(),
-    plot.title = element_text(size = 20, color ='black', face = 'bold', hjust = 0.5),
-    legend.text = element_text(color = 'black', size = 14),
-    legend.title = element_text(color = 'black', size = 16),
-    panel.border = element_rect(color = 'black', fill = NA)) +
-  xlab("Count of IPR in private / whole pangenome") +
-  ggtitle("IPR enrichment for private pangenome") +
-  scale_x_continuous(expand = c(0.01,0))
-
-# ACCESSORY PANGENOME
-acc_ipr_genes <- all_ipr_background %>%
-  dplyr::filter(tran %in% ws_hdr_acc_genes) %>%
-  dplyr::group_by(IPR_accession) %>% 
-  dplyr::mutate(n_IPR_acc_acc = n()) %>%
+  dplyr::distinct(IPR_description, count_ipr) %>%
+  dplyr::arrange(desc(count_ipr))
+  
+# Most abundant IPR term for each strains hyper-divergent genome!
+ipr_desc_most_strain <- ws_hdr_gene_class %>%
+  dplyr::select(strain, gene, class, IPR_description) %>%
+  dplyr::group_by(strain, IPR_description) %>%
+  dplyr::mutate(count_ipr = n()) %>%
   dplyr::ungroup() %>%
-  dplyr::arrange(desc(n_IPR_acc_acc))
-
-ratio <- all_ipr_background %>% dplyr::distinct(IPR_accession, .keep_all = T) %>%
-  dplyr::left_join(acc_ipr_genes %>% dplyr::distinct(IPR_accession, .keep_all = T) %>% dplyr::select(IPR_accession, n_IPR_acc_acc), by = "IPR_accession") %>%
-  dplyr::select(IPR_accession, IPR_description, n_IPR_acc_background, n_IPR_acc_acc) %>%
-  dplyr::mutate(IPR_ratio = n_IPR_acc_acc / n_IPR_acc_background) %>%
-  dplyr::filter(!is.na(n_IPR_acc_acc)) %>%
-  # dplyr::filter(n_IPR_acc_background > 400) %>% # removed very rarely appearing terms
-  dplyr::arrange(desc(IPR_ratio))
-
-ratio_plot <- ratio %>% dplyr::arrange(desc(IPR_ratio)) %>%
-  # dplyr::filter(IPR_accession != "IPR008164") %>% # filtering out "repeat of unknown function XGLTT
-  dplyr::rename(`IPR count in accessory pangenome` = n_IPR_acc_acc) %>%
-  dplyr::slice_head(n=50) %>%
-  dplyr::mutate(IPR_description = factor(IPR_description, levels = rev(IPR_description)))
-
-ggplot(data = ratio_plot, aes(x = IPR_ratio, y = IPR_description)) +
-  geom_bar(aes(fill = `IPR count in accessory pangenome`),stat = "identity", alpha = 0.5, color = "black", linewidth = 0.3) +
-  scale_fill_gradient(low = 'skyblue', high = '#DB6333') +
-  theme(
-    axis.text.y = element_text(size = 10, color = 'black'),
-    axis.title.y = element_blank(),
-    legend.position = 'inside',
-    legend.position.inside = c(0.7,0.2),
-    axis.text.x = element_text(size = 19, color = 'black'),
-    axis.title.x = element_text(size = 18, color = 'black', face = 'bold'),
-    panel.background = element_blank(),
-    plot.title = element_text(size = 20, color ='black', face = 'bold', hjust = 0.5),
-    legend.text = element_text(color = 'black', size = 14),
-    legend.title = element_text(color = 'black', size = 16),
-    panel.border = element_rect(color = 'black', fill = NA)) +
-  xlab("Count of IPR in accessory / whole pangenome") +
-  ggtitle("IPR enrichment for accessory pangenome") +
-  scale_x_continuous(expand = c(0.01,0))
-
-
-
-# CORE PANGENOME
-core_ipr_genes <- all_ipr_background %>%
-  dplyr::filter(tran %in% ws_hdr_core_genes) %>%
-  dplyr::group_by(IPR_accession) %>% 
-  dplyr::mutate(n_IPR_acc_core = n()) %>%
+  dplyr::distinct(strain, IPR_description, count_ipr) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::arrange(desc(count_ipr)) %>%
+  dplyr::slice_head(n = 1) %>%
   dplyr::ungroup() %>%
-  dplyr::arrange(desc(n_IPR_acc_core))
+  dplyr::arrange(IPR_description, desc(count_ipr)) %>%
+  dplyr::mutate(strain = factor(strain, levels = strain))
 
-ratio <- all_ipr_background %>% dplyr::distinct(IPR_accession, .keep_all = T) %>%
-  dplyr::left_join(core_ipr_genes %>% dplyr::distinct(IPR_accession, .keep_all = T) %>% dplyr::select(IPR_accession, n_IPR_acc_core), by = "IPR_accession") %>%
-  dplyr::select(IPR_accession, IPR_description, n_IPR_acc_background, n_IPR_acc_core) %>%
-  dplyr::mutate(IPR_ratio = n_IPR_acc_core / n_IPR_acc_background) %>%
-  dplyr::filter(!is.na(n_IPR_acc_core)) %>%
-  dplyr::filter(n_IPR_acc_background > 100) %>% # removed very rarely appearing terms
-  dplyr::arrange(desc(IPR_ratio))
+geo.colors <- c("7TM GPCR, serpentine receptor class h (Srh)" = "red", "7TM GPCR, serpentine receptor class w (Srw)" = "chocolate",
+                "C-type lectin fold" = "orange", "Domain of unknown function DUF38/FTH, Caenorhabditis species" = "gray40", 
+                "E3 ubiquitin-protein ligase RING-type" = "forestgreen", "F-box domain" = "green", "GPCR, rhodopsin-like, 7TM" = "red3", "MATH/TRAF domain" = "skyblue", 
+                "Nuclear hormone receptor-like domain superfamily" = "blue", "SKP1/BTB/POZ domain superfamily" = "purple", "TRA-1 regulated" = 'violet', "Zinc finger, RING/FYVE/PHD-type" = "pink")
 
-ratio_plot <- ratio %>% dplyr::arrange(desc(IPR_ratio)) %>%
-  # dplyr::filter(IPR_accession != "IPR008164") %>% # filtering out "repeat of unknown function XGLTT
-  dplyr::rename(`IPR count in core pangenome` = n_IPR_acc_core) %>%
-  dplyr::slice_head(n=50) %>%
-  dplyr::mutate(IPR_description = factor(IPR_description, levels = rev(IPR_description)))
-
-ggplot(data = ratio_plot, aes(x = IPR_ratio, y = IPR_description)) +
-  geom_bar(aes(fill = `IPR count in core pangenome`),stat = "identity", alpha = 0.5, color = "black", linewidth = 0.3) +
-  scale_fill_gradient(low = 'pink', high = 'green4') +
+# Most abundant IPR term
+ggplot(data = ipr_desc_most_strain) + 
+  geom_col(aes(x = strain, y = count_ipr, fill = IPR_description)) +
+  scale_fill_manual(values = geo.colors) +
   theme(
-    axis.text.y = element_text(size = 10, color = 'black'),
-    axis.title.y = element_blank(),
-    legend.position = 'inside',
-    legend.position.inside = c(0.7,0.2),
-    axis.text.x = element_text(size = 19, color = 'black'),
-    axis.title.x = element_text(size = 18, color = 'black', face = 'bold'),
     panel.background = element_blank(),
-    plot.title = element_text(size = 20, color ='black', face = 'bold', hjust = 0.5),
-    legend.text = element_text(color = 'black', size = 14),
-    legend.title = element_text(color = 'black', size = 16),
-    panel.border = element_rect(color = 'black', fill = NA)) +
-  xlab("Count of IPR in core / whole pangenome") +
-  ggtitle("IPR enrichment for core pangenome") +
-  scale_x_continuous(expand = c(0.01,0))
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.text.y = element_text(size = 12, color = 'black'),
+    axis.text.x = element_text(size = 9, color = 'black', angle = 75, hjust = 1),
+    axis.title.y = element_text(size = 14, color = 'black'),
+    axis.title.x = element_blank(),
+    legend.text = element_text(size = 12, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black')
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, .05))) +
+  labs(y = "IPR description count (number of genes)", fill = "Most abundant IPR description")
+
+# Assessing if IPR term is enriched in specific geo locations
+geo_initial <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/elegans_isotypes_sampling_geo.tsv")
+hawaii_islands <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/elegans_isotypes_sampling_geo_hawaii_islands.tsv") %>% dplyr::select(isotype,collection_island_Hawaii)
+
+# Isolation site of each wild strain
+geo <- geo_initial %>%
+  dplyr::left_join(hawaii_islands, by = "isotype") %>%
+  dplyr::mutate(geo = ifelse(geo == "Hawaii",collection_island_Hawaii,geo)) %>%
+  dplyr::select(isotype, lat, long, geo) %>%
+  dplyr::filter(isotype %in% WSs)
+
+ipr_most_geo <- ipr_desc_most_strain %>%
+  dplyr::left_join(geo, by = c("strain" = "isotype")) %>%
+  dplyr::mutate(lat = as.numeric(lat),
+                long = as.numeric(long))
+
+# world polygons
+world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
+
+ggplot() +
+  geom_sf(data = world, fill = "gray95", color = "gray70", linewidth = 0.2) +
+  geom_point(data = ipr_most_geo,
+             aes(x = long, y = lat, color = IPR_description), 
+             size = 3, alpha = 0.85) +
+  scale_color_manual(values = geo.colors) +
+  coord_sf(expand = FALSE) +
+  theme_minimal() +
+  labs(x = NULL, y = NULL, color = "Most abundant IPR description")
+
+# just the Hawaiian islands
+ggplot() +
+  geom_sf(data = world, fill = "gray95", color = "gray70", linewidth = 0.2) +
+  geom_point(
+    data = ipr_most_geo, 
+    aes(x = long, y = lat, color = IPR_description, size = count_ipr),
+    position = position_jitter(width = 0.1, height = 0.1), alpha = 0.85) +
+  scale_color_manual(values = geo.colors) +
+  coord_sf(xlim = c(-161, -154), ylim = c(18.5, 23), expand = FALSE) +
+  theme_minimal() +
+  labs(x = NULL, y = NULL, color = "Most abundant IPR description")
+
+
+
+# Top 2 most abundanct IPR terms
+ipr_desc_most_strain_2 <- ws_hdr_gene_class %>%
+  dplyr::select(strain, gene, class, IPR_description) %>%
+  dplyr::group_by(strain, IPR_description) %>%
+  dplyr::mutate(count_ipr = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(strain, IPR_description, count_ipr) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::arrange(desc(count_ipr)) %>%
+  dplyr::slice_head(n = 2) %>%
+  dplyr::mutate(rank = dplyr::row_number()) %>% 
+  dplyr::ungroup() %>%
+  dplyr::arrange(IPR_description, desc(count_ipr)) 
+
+strain_order <- ipr_desc_most_strain %>% dplyr::pull(strain) # ipr_desc_most_strain_2 %>%
+#   dplyr::group_by(strain) %>%
+#   dplyr::mutate(total_count = sum(count_ipr)) %>%
+#   dplyr::slice_head(n = 1) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::arrange(desc(total_count)) %>%
+#   dplyr::pull(strain)
+
+# Top 2 most abundant IPR terms
+ggplot(data = ipr_desc_most_strain_2 %>% dplyr::mutate(strain = factor(strain, levels = strain_order))) + 
+  geom_col(aes(x = strain, y = count_ipr, fill = IPR_description), position = 'stack') +
+  theme(
+    panel.background = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.text.y = element_text(size = 12, color = 'black'),
+    axis.text.x = element_text(size = 9, color = 'black', angle = 75, hjust = 1),
+    axis.title.y = element_text(size = 14, color = 'black'),
+    axis.title.x = element_blank(),
+    legend.text = element_text(size = 12, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black')
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, .05))) +
+  labs(y = "IPR description count (number of genes)", fill = "Top 2 most abundant IPR description")
 
 
 
 
+
+    
+# # PRIVATE PANGENOME
+# priv_ipr_genes <- all_ipr_background %>%
+#   dplyr::filter(tran %in% ws_hdr_priv_genes) %>%
+#   dplyr::group_by(IPR_accession) %>% 
+#   dplyr::mutate(n_IPR_acc_priv = n()) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::arrange(desc(n_IPR_acc_priv))
+# 
+# ratio <- all_ipr_background %>% dplyr::distinct(IPR_accession, .keep_all = T) %>%
+#   dplyr::left_join(priv_ipr_genes %>% dplyr::distinct(IPR_accession, .keep_all = T) %>% dplyr::select(IPR_accession, n_IPR_acc_priv), by = "IPR_accession") %>%
+#   dplyr::select(IPR_accession, IPR_description, n_IPR_acc_background, n_IPR_acc_priv) %>%
+#   dplyr::mutate(IPR_ratio = n_IPR_acc_priv / n_IPR_acc_background) %>%
+#   dplyr::filter(!is.na(n_IPR_acc_priv)) %>%
+#   dplyr::filter(n_IPR_acc_background > 100) %>% # removed very rarely appearing terms
+#   dplyr::arrange(desc(IPR_ratio))
+# 
+# ratio_plot <- ratio %>% dplyr::arrange(desc(IPR_ratio)) %>%
+#   # dplyr::filter(IPR_accession != "IPR008164") %>% # filtering out "repeat of unknown function XGLTT
+#   dplyr::rename(`IPR count in private pangenome` = n_IPR_acc_priv) %>%
+#   dplyr::slice_head(n=50) %>%
+#   dplyr::mutate(IPR_description = factor(IPR_description, levels = rev(IPR_description)))
+# 
+# ggplot(data = ratio_plot, aes(x = IPR_ratio, y = IPR_description)) +
+#   geom_bar(aes(fill = `IPR count in private pangenome`),stat = "identity", alpha = 0.5, color = "black", linewidth = 0.3) +
+#   scale_fill_gradient(low = 'blue', high = 'magenta3') +
+#   theme(
+#     axis.text.y = element_text(size = 10, color = 'black'),
+#     axis.title.y = element_blank(),
+#     legend.position = 'inside',
+#     legend.position.inside = c(0.7,0.2),
+#     axis.text.x = element_text(size = 19, color = 'black'),
+#     axis.title.x = element_text(size = 18, color = 'black', face = 'bold'),
+#     panel.background = element_blank(),
+#     plot.title = element_text(size = 20, color ='black', face = 'bold', hjust = 0.5),
+#     legend.text = element_text(color = 'black', size = 14),
+#     legend.title = element_text(color = 'black', size = 16),
+#     panel.border = element_rect(color = 'black', fill = NA)) +
+#   xlab("Count of IPR in private / whole pangenome") +
+#   ggtitle("IPR enrichment for private pangenome") +
+#   scale_x_continuous(expand = c(0.01,0))
+# 
+# # ACCESSORY PANGENOME
+# acc_ipr_genes <- all_ipr_background %>%
+#   dplyr::filter(tran %in% ws_hdr_acc_genes) %>%
+#   dplyr::group_by(IPR_accession) %>% 
+#   dplyr::mutate(n_IPR_acc_acc = n()) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::arrange(desc(n_IPR_acc_acc))
+# 
+# ratio <- all_ipr_background %>% dplyr::distinct(IPR_accession, .keep_all = T) %>%
+#   dplyr::left_join(acc_ipr_genes %>% dplyr::distinct(IPR_accession, .keep_all = T) %>% dplyr::select(IPR_accession, n_IPR_acc_acc), by = "IPR_accession") %>%
+#   dplyr::select(IPR_accession, IPR_description, n_IPR_acc_background, n_IPR_acc_acc) %>%
+#   dplyr::mutate(IPR_ratio = n_IPR_acc_acc / n_IPR_acc_background) %>%
+#   dplyr::filter(!is.na(n_IPR_acc_acc)) %>%
+#   # dplyr::filter(n_IPR_acc_background > 400) %>% # removed very rarely appearing terms
+#   dplyr::arrange(desc(IPR_ratio))
+# 
+# ratio_plot <- ratio %>% dplyr::arrange(desc(IPR_ratio)) %>%
+#   # dplyr::filter(IPR_accession != "IPR008164") %>% # filtering out "repeat of unknown function XGLTT
+#   dplyr::rename(`IPR count in accessory pangenome` = n_IPR_acc_acc) %>%
+#   dplyr::slice_head(n=50) %>%
+#   dplyr::mutate(IPR_description = factor(IPR_description, levels = rev(IPR_description)))
+# 
+# ggplot(data = ratio_plot, aes(x = IPR_ratio, y = IPR_description)) +
+#   geom_bar(aes(fill = `IPR count in accessory pangenome`),stat = "identity", alpha = 0.5, color = "black", linewidth = 0.3) +
+#   scale_fill_gradient(low = 'skyblue', high = '#DB6333') +
+#   theme(
+#     axis.text.y = element_text(size = 10, color = 'black'),
+#     axis.title.y = element_blank(),
+#     legend.position = 'inside',
+#     legend.position.inside = c(0.7,0.2),
+#     axis.text.x = element_text(size = 19, color = 'black'),
+#     axis.title.x = element_text(size = 18, color = 'black', face = 'bold'),
+#     panel.background = element_blank(),
+#     plot.title = element_text(size = 20, color ='black', face = 'bold', hjust = 0.5),
+#     legend.text = element_text(color = 'black', size = 14),
+#     legend.title = element_text(color = 'black', size = 16),
+#     panel.border = element_rect(color = 'black', fill = NA)) +
+#   xlab("Count of IPR in accessory / whole pangenome") +
+#   ggtitle("IPR enrichment for accessory pangenome") +
+#   scale_x_continuous(expand = c(0.01,0))
+# 
+# 
+# 
+# # CORE PANGENOME
+# core_ipr_genes <- all_ipr_background %>%
+#   dplyr::filter(tran %in% ws_hdr_core_genes) %>%
+#   dplyr::group_by(IPR_accession) %>% 
+#   dplyr::mutate(n_IPR_acc_core = n()) %>%
+#   dplyr::ungroup() %>%
+#   dplyr::arrange(desc(n_IPR_acc_core))
+# 
+# ratio <- all_ipr_background %>% dplyr::distinct(IPR_accession, .keep_all = T) %>%
+#   dplyr::left_join(core_ipr_genes %>% dplyr::distinct(IPR_accession, .keep_all = T) %>% dplyr::select(IPR_accession, n_IPR_acc_core), by = "IPR_accession") %>%
+#   dplyr::select(IPR_accession, IPR_description, n_IPR_acc_background, n_IPR_acc_core) %>%
+#   dplyr::mutate(IPR_ratio = n_IPR_acc_core / n_IPR_acc_background) %>%
+#   dplyr::filter(!is.na(n_IPR_acc_core)) %>%
+#   dplyr::filter(n_IPR_acc_background > 100) %>% # removed very rarely appearing terms
+#   dplyr::arrange(desc(IPR_ratio))
+# 
+# ratio_plot <- ratio %>% dplyr::arrange(desc(IPR_ratio)) %>%
+#   # dplyr::filter(IPR_accession != "IPR008164") %>% # filtering out "repeat of unknown function XGLTT
+#   dplyr::rename(`IPR count in core pangenome` = n_IPR_acc_core) %>%
+#   dplyr::slice_head(n=50) %>%
+#   dplyr::mutate(IPR_description = factor(IPR_description, levels = rev(IPR_description)))
+# 
+# ggplot(data = ratio_plot, aes(x = IPR_ratio, y = IPR_description)) +
+#   geom_bar(aes(fill = `IPR count in core pangenome`),stat = "identity", alpha = 0.5, color = "black", linewidth = 0.3) +
+#   scale_fill_gradient(low = 'pink', high = 'green4') +
+#   theme(
+#     axis.text.y = element_text(size = 10, color = 'black'),
+#     axis.title.y = element_blank(),
+#     legend.position = 'inside',
+#     legend.position.inside = c(0.7,0.2),
+#     axis.text.x = element_text(size = 19, color = 'black'),
+#     axis.title.x = element_text(size = 18, color = 'black', face = 'bold'),
+#     panel.background = element_blank(),
+#     plot.title = element_text(size = 20, color ='black', face = 'bold', hjust = 0.5),
+#     legend.text = element_text(color = 'black', size = 14),
+#     legend.title = element_text(color = 'black', size = 16),
+#     panel.border = element_rect(color = 'black', fill = NA)) +
+#   xlab("Count of IPR in core / whole pangenome") +
+#   ggtitle("IPR enrichment for core pangenome") +
+#   scale_x_continuous(expand = c(0.01,0))
 
 
 
@@ -317,66 +470,6 @@ ipr_sig_gene_collapsed <- all_ipr_background %>%
   dplyr::left_join(ipr_sig %>% dplyr::select(IPR_accession, x, k, n, N, expected, enrich_ratio, OR, pval, FDR_p.adjust), by = "IPR_accession") %>%
   dplyr::mutate(Region = "Private pangenome")
 
-# 
-# # Now for non-HDR arm genes
-# univ_genes2 <- unique(ipr_gene$QX1410)
-# nhdr_genes  <- intersect(nHD_gene_vector, univ_genes2) # 3,427 genes 
-# 
-# N <- length(univ_genes2)
-# n <- length(nhdr_genes)
-# 
-# # Counts per IPR (k = in universe, x = in HDR subset) 
-# k_tbl2 <- ipr_gene %>%
-#   dplyr::count(IPR_accession, name = "k")
-# 
-# x_tbl2 <- ipr_gene %>%
-#   dplyr::filter(QX1410 %in% nhdr_genes) %>%
-#   dplyr::count(IPR_accession, name = "x")
-# 
-# desc_tbl2 <- ipr_gene %>%
-#   dplyr::distinct(IPR_accession, IPR_description)
-# 
-# # Hypergeometric enrichment (one-sided)
-# ipr_enrichment_nHDR <- k_tbl2 %>%
-#   dplyr::left_join(x_tbl2, by = "IPR_accession") %>%
-#   dplyr::mutate(x = tidyr::replace_na(x, 0L)) %>%
-#   dplyr::mutate(
-#     pval = stats::phyper(q = x - 1, m = k, n = N - k, k = n, lower.tail = FALSE),
-#     expected = (n * k) / N, # if IPR genes are randomly distributed, you’d expect this many HDR genes to carry the IPR.
-#     enrich_ratio = dplyr::if_else(expected > 0, x / expected, NA_real_), # (x HDR with IPR / k background with IPR) / (n HDR genes / N background genes)
-#     # odds ratio with Haldane–Anscombe correction (adding 0.5 to each cell to avoid infinities)
-#     OR = {
-#       a <- x + 0.5                                # HDR & has IPR
-#       b <- (n - x) + 0.5                          # HDR & no IPR
-#       c <- (k - x) + 0.5                          # non-HDR & has IPR
-#       d <- (N - n - (k - x)) + 0.5                # non-HDR & no IPR
-#       (a / b) / (c / d)
-#     },
-#     FDR_p.adjust = stats::p.adjust(pval, method = "BH")
-#   ) %>%
-#   dplyr::left_join(desc_tbl2, by = "IPR_accession") %>%
-#   dplyr::mutate(N = N, n = n) %>%
-#   dplyr::select(IPR_accession, IPR_description, x, k, n, N, expected, enrich_ratio, OR, pval, FDR_p.adjust) %>%
-#   dplyr::arrange(FDR_p.adjust, dplyr::desc(enrich_ratio))
-# 
-# ipr_sig2 <- ipr_enrichment_nHDR %>%
-#   dplyr::filter(FDR_p.adjust < 0.05)
-# 
-# ipr_sig2 %>% dplyr::slice_head(n = 20)
-# 
-# ipr_sig_gene_collapsed2 <- ipr_gene %>%
-#   dplyr::filter(IPR_accession %in% ipr_sig2$IPR_accession) %>%
-#   dplyr::group_by(IPR_accession) %>%
-#   dplyr::summarise(
-#     IPR_description = dplyr::first(stats::na.omit(IPR_description)),
-#     n_genes_HDR = dplyr::n_distinct(QX1410[QX1410 %in% hdr_genes]),
-#     genes_HDR   = paste(sort(unique(QX1410[QX1410 %in% hdr_genes])), collapse = ", "),
-#     n_genes_all = dplyr::n_distinct(QX1410),
-#     genes_all   = paste(sort(unique(QX1410)), collapse = ", "),
-#     .groups = "drop") %>%
-#   dplyr::left_join(ipr_sig2 %>% dplyr::select(IPR_accession, x, k, n, N, expected, enrich_ratio, OR, pval, FDR_p.adjust), by = "IPR_accession") %>%
-#   dplyr::mutate(Region = "non HDRs")
-
 
 binded <- ipr_sig_gene_collapsed %>% dplyr::arrange(FDR_p.adjust) ##  %>% dplyr::bind_rows(ipr_sig_gene_collapsed2)
 
@@ -385,10 +478,10 @@ data_plt_priv <- binded %>% dplyr::slice_head(n = 20) %>% dplyr::arrange(desc(FD
 plot_ipr_priv <- ggplot(data_plt_priv) +
   geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
   geom_point(aes(x = -log10(FDR_p.adjust), y = plotpoint, size = enrich_ratio, fill = n_genes_HDR), shape = 21) + #### CHANGE TO SHAPE = REGION in aes FOR HDR AND nHDR IN SAME PLOT
-  scale_y_continuous(breaks = data_plt$plotpoint, labels = data_plt$IPR_description, name = "", expand = c(0.02,0.02)) +
+  scale_y_continuous(breaks = data_plt_priv$plotpoint, labels = data_plt_priv$IPR_description, name = "", expand = c(0.02,0.02)) +
   scale_shape_manual(values = c("hyper-divergent regions" = 21, "non HDRs" = 22)) +
-  scale_fill_gradient(low = "blue", high = "red", breaks = c(round(min(data_plt$n_genes_HDR, na.rm = TRUE)), round((max(data_plt$n_genes_HDR, na.rm = TRUE) + min(data_plt$n_genes_HDR, na.rm = TRUE) ) / 2), round(max(data_plt$n_genes_HDR, na.rm = TRUE)))) +
-  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(data_plt$enrich_ratio, n = 3)) +
+  scale_fill_gradient(low = "blue", high = "red", breaks = c(round(min(data_plt_priv$n_genes_HDR, na.rm = TRUE)), round((max(data_plt_priv$n_genes_HDR, na.rm = TRUE) + min(data_plt_priv$n_genes_HDR, na.rm = TRUE) ) / 2), round(max(data_plt_priv$n_genes_HDR, na.rm = TRUE)))) +
+  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(data_plt_priv$enrich_ratio, n = 3)) +
   theme(axis.text.x = element_text(size=8, color='black'),
         axis.text.y = element_text(size=10, color='black'),
         axis.title = element_text(size=10, color='black', face = 'bold'),
@@ -483,66 +576,6 @@ ipr_sig_gene_collapsed <- all_ipr_background %>%
   dplyr::left_join(ipr_sig %>% dplyr::select(IPR_accession, x, k, n, N, expected, enrich_ratio, OR, pval, FDR_p.adjust), by = "IPR_accession") %>%
   dplyr::mutate(Region = "Accessory pangenome")
 
-# 
-# # Now for non-HDR arm genes
-# univ_genes2 <- unique(ipr_gene$QX1410)
-# nhdr_genes  <- intersect(nHD_gene_vector, univ_genes2) # 3,427 genes 
-# 
-# N <- length(univ_genes2)
-# n <- length(nhdr_genes)
-# 
-# # Counts per IPR (k = in universe, x = in HDR subset) 
-# k_tbl2 <- ipr_gene %>%
-#   dplyr::count(IPR_accession, name = "k")
-# 
-# x_tbl2 <- ipr_gene %>%
-#   dplyr::filter(QX1410 %in% nhdr_genes) %>%
-#   dplyr::count(IPR_accession, name = "x")
-# 
-# desc_tbl2 <- ipr_gene %>%
-#   dplyr::distinct(IPR_accession, IPR_description)
-# 
-# # Hypergeometric enrichment (one-sided)
-# ipr_enrichment_nHDR <- k_tbl2 %>%
-#   dplyr::left_join(x_tbl2, by = "IPR_accession") %>%
-#   dplyr::mutate(x = tidyr::replace_na(x, 0L)) %>%
-#   dplyr::mutate(
-#     pval = stats::phyper(q = x - 1, m = k, n = N - k, k = n, lower.tail = FALSE),
-#     expected = (n * k) / N, # if IPR genes are randomly distributed, you’d expect this many HDR genes to carry the IPR.
-#     enrich_ratio = dplyr::if_else(expected > 0, x / expected, NA_real_), # (x HDR with IPR / k background with IPR) / (n HDR genes / N background genes)
-#     # odds ratio with Haldane–Anscombe correction (adding 0.5 to each cell to avoid infinities)
-#     OR = {
-#       a <- x + 0.5                                # HDR & has IPR
-#       b <- (n - x) + 0.5                          # HDR & no IPR
-#       c <- (k - x) + 0.5                          # non-HDR & has IPR
-#       d <- (N - n - (k - x)) + 0.5                # non-HDR & no IPR
-#       (a / b) / (c / d)
-#     },
-#     FDR_p.adjust = stats::p.adjust(pval, method = "BH")
-#   ) %>%
-#   dplyr::left_join(desc_tbl2, by = "IPR_accession") %>%
-#   dplyr::mutate(N = N, n = n) %>%
-#   dplyr::select(IPR_accession, IPR_description, x, k, n, N, expected, enrich_ratio, OR, pval, FDR_p.adjust) %>%
-#   dplyr::arrange(FDR_p.adjust, dplyr::desc(enrich_ratio))
-# 
-# ipr_sig2 <- ipr_enrichment_nHDR %>%
-#   dplyr::filter(FDR_p.adjust < 0.05)
-# 
-# ipr_sig2 %>% dplyr::slice_head(n = 20)
-# 
-# ipr_sig_gene_collapsed2 <- ipr_gene %>%
-#   dplyr::filter(IPR_accession %in% ipr_sig2$IPR_accession) %>%
-#   dplyr::group_by(IPR_accession) %>%
-#   dplyr::summarise(
-#     IPR_description = dplyr::first(stats::na.omit(IPR_description)),
-#     n_genes_HDR = dplyr::n_distinct(QX1410[QX1410 %in% hdr_genes]),
-#     genes_HDR   = paste(sort(unique(QX1410[QX1410 %in% hdr_genes])), collapse = ", "),
-#     n_genes_all = dplyr::n_distinct(QX1410),
-#     genes_all   = paste(sort(unique(QX1410)), collapse = ", "),
-#     .groups = "drop") %>%
-#   dplyr::left_join(ipr_sig2 %>% dplyr::select(IPR_accession, x, k, n, N, expected, enrich_ratio, OR, pval, FDR_p.adjust), by = "IPR_accession") %>%
-#   dplyr::mutate(Region = "non HDRs")
-
 
 binded <- ipr_sig_gene_collapsed %>% dplyr::arrange(FDR_p.adjust) ##  %>% dplyr::bind_rows(ipr_sig_gene_collapsed2)
 
@@ -551,10 +584,10 @@ data_plt_acc <- binded %>% dplyr::slice_head(n = 20) %>% dplyr::arrange(desc(FDR
 plot_ipr_acc <- ggplot(data_plt_acc) +
   geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
   geom_point(aes(x = -log10(FDR_p.adjust), y = plotpoint, size = enrich_ratio, fill = n_genes_HDR), shape = 21) + #### CHANGE TO SHAPE = REGION in aes FOR HDR AND nHDR IN SAME PLOT
-  scale_y_continuous(breaks = data_plt$plotpoint, labels = data_plt$IPR_description, name = "", expand = c(0.02,0.02)) +
+  scale_y_continuous(breaks = data_plt_acc$plotpoint, labels = data_plt_acc$IPR_description, name = "", expand = c(0.02,0.02)) +
   scale_shape_manual(values = c("hyper-divergent regions" = 21, "non HDRs" = 22)) +
-  scale_fill_gradient(low = "blue", high = "#DB6333", breaks = c(round(min(data_plt$n_genes_HDR, na.rm = TRUE)), round((max(data_plt$n_genes_HDR, na.rm = TRUE) + min(data_plt$n_genes_HDR, na.rm = TRUE) ) / 2), round(max(data_plt$n_genes_HDR, na.rm = TRUE)))) +
-  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(data_plt$enrich_ratio, n = 3)) +
+  scale_fill_gradient(low = "blue", high = "#DB6333", breaks = c(round(min(data_plt_acc$n_genes_HDR, na.rm = TRUE)), round((max(data_plt_acc$n_genes_HDR, na.rm = TRUE) + min(data_plt_acc$n_genes_HDR, na.rm = TRUE) ) / 2), round(max(data_plt_acc$n_genes_HDR, na.rm = TRUE)))) +
+  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(data_plt_acc$enrich_ratio, n = 3)) +
   theme(axis.text.x = element_text(size=8, color='black'),
         axis.text.y = element_text(size=10, color='black'),
         axis.title = element_text(size=10, color='black', face = 'bold'),
@@ -650,66 +683,6 @@ ipr_sig_gene_collapsed <- all_ipr_background %>%
   dplyr::left_join(ipr_sig %>% dplyr::select(IPR_accession, x, k, n, N, expected, enrich_ratio, OR, pval, FDR_p.adjust), by = "IPR_accession") %>%
   dplyr::mutate(Region = "Core pangenome")
 
- 
-# # Now for non-HDR arm genes
-# univ_genes2 <- unique(ipr_gene$QX1410)
-# nhdr_genes  <- intersect(nHD_gene_vector, univ_genes2) # 3,427 genes 
-# 
-# N <- length(univ_genes2)
-# n <- length(nhdr_genes)
-# 
-# # Counts per IPR (k = in universe, x = in HDR subset) 
-# k_tbl2 <- ipr_gene %>%
-#   dplyr::count(IPR_accession, name = "k")
-# 
-# x_tbl2 <- ipr_gene %>%
-#   dplyr::filter(QX1410 %in% nhdr_genes) %>%
-#   dplyr::count(IPR_accession, name = "x")
-# 
-# desc_tbl2 <- ipr_gene %>%
-#   dplyr::distinct(IPR_accession, IPR_description)
-# 
-# # Hypergeometric enrichment (one-sided)
-# ipr_enrichment_nHDR <- k_tbl2 %>%
-#   dplyr::left_join(x_tbl2, by = "IPR_accession") %>%
-#   dplyr::mutate(x = tidyr::replace_na(x, 0L)) %>%
-#   dplyr::mutate(
-#     pval = stats::phyper(q = x - 1, m = k, n = N - k, k = n, lower.tail = FALSE),
-#     expected = (n * k) / N, # if IPR genes are randomly distributed, you’d expect this many HDR genes to carry the IPR.
-#     enrich_ratio = dplyr::if_else(expected > 0, x / expected, NA_real_), # (x HDR with IPR / k background with IPR) / (n HDR genes / N background genes)
-#     # odds ratio with Haldane–Anscombe correction (adding 0.5 to each cell to avoid infinities)
-#     OR = {
-#       a <- x + 0.5                                # HDR & has IPR
-#       b <- (n - x) + 0.5                          # HDR & no IPR
-#       c <- (k - x) + 0.5                          # non-HDR & has IPR
-#       d <- (N - n - (k - x)) + 0.5                # non-HDR & no IPR
-#       (a / b) / (c / d)
-#     },
-#     FDR_p.adjust = stats::p.adjust(pval, method = "BH")
-#   ) %>%
-#   dplyr::left_join(desc_tbl2, by = "IPR_accession") %>%
-#   dplyr::mutate(N = N, n = n) %>%
-#   dplyr::select(IPR_accession, IPR_description, x, k, n, N, expected, enrich_ratio, OR, pval, FDR_p.adjust) %>%
-#   dplyr::arrange(FDR_p.adjust, dplyr::desc(enrich_ratio))
-# 
-# ipr_sig2 <- ipr_enrichment_nHDR %>%
-#   dplyr::filter(FDR_p.adjust < 0.05)
-# 
-# ipr_sig2 %>% dplyr::slice_head(n = 20)
-# 
-# ipr_sig_gene_collapsed2 <- ipr_gene %>%
-#   dplyr::filter(IPR_accession %in% ipr_sig2$IPR_accession) %>%
-#   dplyr::group_by(IPR_accession) %>%
-#   dplyr::summarise(
-#     IPR_description = dplyr::first(stats::na.omit(IPR_description)),
-#     n_genes_HDR = dplyr::n_distinct(QX1410[QX1410 %in% hdr_genes]),
-#     genes_HDR   = paste(sort(unique(QX1410[QX1410 %in% hdr_genes])), collapse = ", "),
-#     n_genes_all = dplyr::n_distinct(QX1410),
-#     genes_all   = paste(sort(unique(QX1410)), collapse = ", "),
-#     .groups = "drop") %>%
-#   dplyr::left_join(ipr_sig2 %>% dplyr::select(IPR_accession, x, k, n, N, expected, enrich_ratio, OR, pval, FDR_p.adjust), by = "IPR_accession") %>%
-#   dplyr::mutate(Region = "non HDRs")
-
 
 binded <- ipr_sig_gene_collapsed %>% dplyr::arrange(FDR_p.adjust) ##  %>% dplyr::bind_rows(ipr_sig_gene_collapsed2)
 
@@ -718,10 +691,10 @@ data_plt_core <- binded %>% dplyr::slice_head(n = 20) %>% dplyr::arrange(desc(FD
 plot_ipr_core <- ggplot(data_plt_core) +
   geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
   geom_point(aes(x = -log10(FDR_p.adjust), y = plotpoint, size = enrich_ratio, fill = n_genes_HDR), shape = 21) + #### CHANGE TO SHAPE = REGION in aes FOR HDR AND nHDR IN SAME PLOT
-  scale_y_continuous(breaks = data_plt$plotpoint, labels = data_plt$IPR_description, name = "", expand = c(0.02,0.02)) +
+  scale_y_continuous(breaks = data_plt_core$plotpoint, labels = data_plt_core$IPR_description, name = "", expand = c(0.02,0.02)) +
   scale_shape_manual(values = c("hyper-divergent regions" = 21, "non HDRs" = 22)) +
-  scale_fill_gradient(low = "blue", high = "green4", breaks = c(round(min(data_plt$n_genes_HDR, na.rm = TRUE)), round((max(data_plt$n_genes_HDR, na.rm = TRUE) + min(data_plt$n_genes_HDR, na.rm = TRUE) ) / 2), round(max(data_plt$n_genes_HDR, na.rm = TRUE)))) +
-  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(data_plt$enrich_ratio, n = 3)) +
+  scale_fill_gradient(low = "blue", high = "green4", breaks = c(round(min(data_plt_core$n_genes_HDR, na.rm = TRUE)), round((max(data_plt_core$n_genes_HDR, na.rm = TRUE) + min(data_plt_core$n_genes_HDR, na.rm = TRUE) ) / 2), round(max(data_plt_core$n_genes_HDR, na.rm = TRUE)))) +
+  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(data_plt_core$enrich_ratio, n = 3)) +
   theme(axis.text.x = element_text(size=8, color='black'),
         axis.text.y = element_text(size=10, color='black'),
         axis.title = element_text(size=10, color='black', face = 'bold'),
@@ -762,26 +735,31 @@ cowplot::plot_grid(
 concat_IPR_enrich <- data_plt_priv %>% dplyr::bind_rows(data_plt_acc, data_plt_core) %>%
   dplyr::select(-plotpoint) %>%
   dplyr::arrange(FDR_p.adjust) %>%
+  dplyr::slice_head(n = 40) %>%
+  dplyr::arrange(desc(FDR_p.adjust)) %>%
   dplyr::mutate(plotpoint = dplyr::row_number()) %>%
-  dplyr::slice_head(n = 40)
+  dplyr::rename(`Gene set` = Region) %>%
+  dplyr::mutate(`Gene set` = ifelse(`Gene set` == "Accessory pangenome", "Accessory", 
+                                    ifelse(`Gene set` == "Core pangenome", "Core", "Private"))) %>%
+  dplyr::mutate(FDR_p.adjust = pmax(FDR_p.adjust, 1e-320)) # p values that are "00000e+00" are clipped so that they aren't displayed as infinity
 
-plot_IPR_all <- ggplot(data_plt_core) +
+plot_IPR_all <- ggplot(concat_IPR_enrich) +
   geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
-  geom_point(aes(x = -log10(FDR_p.adjust), y = plotpoint, size = enrich_ratio, fill = n_genes_HDR), shape = 21) + #### CHANGE TO SHAPE = REGION in aes FOR HDR AND nHDR IN SAME PLOT
-  scale_y_continuous(breaks = data_plt$plotpoint, labels = data_plt$IPR_description, name = "", expand = c(0.02,0.02)) +
-  scale_shape_manual(values = c("hyper-divergent regions" = 21, "non HDRs" = 22)) +
-  scale_fill_gradient(low = "blue", high = "green4", breaks = c(round(min(data_plt$n_genes_HDR, na.rm = TRUE)), round((max(data_plt$n_genes_HDR, na.rm = TRUE) + min(data_plt$n_genes_HDR, na.rm = TRUE) ) / 2), round(max(data_plt$n_genes_HDR, na.rm = TRUE)))) +
-  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(data_plt$enrich_ratio, n = 3)) +
+  geom_point(aes(x = -log10(FDR_p.adjust), y = plotpoint, size = enrich_ratio, fill = n_genes_HDR, shape = `Gene set`)) + #### CHANGE TO SHAPE = REGION in aes FOR HDR AND nHDR IN SAME PLOT
+  scale_y_continuous(breaks = concat_IPR_enrich$plotpoint, labels = concat_IPR_enrich$IPR_description, name = "", expand = c(0.02,0.02)) +
+  scale_shape_manual(values = c("Core" = 21, "Accessory" = 22, "Private" = 24)) +
+  scale_fill_gradient(low = "yellow", high = "red", breaks = c(round(min(concat_IPR_enrich$n_genes_HDR, na.rm = TRUE)), round((max(concat_IPR_enrich$n_genes_HDR, na.rm = TRUE) + min(concat_IPR_enrich$n_genes_HDR, na.rm = TRUE) ) / 2), round(max(concat_IPR_enrich$n_genes_HDR, na.rm = TRUE)))) +
+  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(concat_IPR_enrich$enrich_ratio, n = 4)) +
+  # coord_cartesian(xlim = c(0, 320)) +
   theme(axis.text.x = element_text(size=8, color='black'),
         axis.text.y = element_text(size=10, color='black'),
         axis.title = element_text(size=10, color='black', face = 'bold'),
-        axis.title.x = element_blank(),
-        # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        plot.title = element_blank(),
-        legend.title = element_text(size = 7, color='black', hjust = 1),
-        legend.text = element_text(size = 6, color='black', hjust = 1),
+        plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+        # plot.title = element_blank(),
+        legend.title = element_text(size = 13, color='black', hjust = 1),
+        legend.text = element_text(size = 12, color='black', hjust = 1),
         legend.position = "inside",
-        legend.position.inside = c(0.78, 0.2),
+        legend.position.inside = c(0.2, 0.2),
         legend.direction = "horizontal", legend.box = "vertical",
         legend.spacing.y = unit(0.0001, 'cm'),
         legend.key.height = unit(0.01, "cm"),
@@ -792,15 +770,56 @@ plot_IPR_all <- ggplot(data_plt_core) +
         panel.background = element_blank(),
         panel.border = element_rect(fill = NA),
         plot.margin = margin(b = 5, t = 10, r = 10, l = 22, unit = "pt")) +
-  # legend.spacing.x = unit(0.02, "cm"),
-  # legend.key.size = unit(0.3, 'cm')) +
   guides(
-    fill = guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
+    fill = guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 10, barheight = 2),
     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE),
-    shape = 'none') +
-  # shape = guide_legend(nrow=1, order = 3, title.position = "top", title.hjust = 1, force = TRUE)) +
-  labs(title = "Enriched IPR terms for core pangenome",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
+    shape = guide_legend(nrow = 3, order = 3, title.position = "top", title.hjust = 1, force = TRUE)) +
+  labs(title = "Enriched IPR terms for wild strain genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
 plot_IPR_all
+
+
+
+diff <- concat_IPR_enrich %>%
+  dplyr::select(-plotpoint) %>%
+  dplyr::arrange(n_genes_HDR) %>%
+  dplyr::mutate(plotpoint = dplyr::row_number())
+
+plot_IPR_all_diff <- ggplot(diff) +
+  geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
+  geom_point(aes(x = n_genes_HDR, y = plotpoint, size = enrich_ratio, fill = -log10(FDR_p.adjust), shape = `Gene set`)) + #### CHANGE TO SHAPE = REGION in aes FOR HDR AND nHDR IN SAME PLOT
+  scale_y_continuous(breaks = diff$plotpoint, labels = diff$IPR_description, name = "", expand = c(0.02,0.02)) +
+  scale_shape_manual(values = c("Core" = 21, "Accessory" = 22, "Private" = 24)) +
+  scale_fill_gradient(low = "yellow", high = "red", breaks = c(round(min(-log10(diff$FDR_p.adjust))), round((max(-log10(diff$FDR_p.adjust)) + min(-log10(diff$FDR_p.adjust))) / 2), round(max(-log10(diff$FDR_p.adjust))))) +
+  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(diff$enrich_ratio, n = 4)) +
+  coord_cartesian(xlim = c(0, 12000)) +
+  theme(axis.text.x = element_text(size=8, color='black'),
+        axis.text.y = element_text(size=10, color='black'),
+        axis.title = element_text(size=10, color='black', face = 'bold'),
+        plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+        # plot.title = element_blank(),
+        legend.title = element_text(size = 13, color='black', hjust = 1),
+        legend.text = element_text(size = 12, color='black', hjust = 1),
+        legend.position = "inside",
+        legend.position.inside = c(0.8, 0.2),
+        legend.direction = "horizontal", legend.box = "vertical",
+        legend.spacing.y = unit(0.0001, 'cm'),
+        legend.key.height = unit(0.01, "cm"),
+        legend.key.width = unit(0.5, "cm"),
+        legend.box.just = "right",
+        text = element_text(family="Helvetica"),
+        panel.grid = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_rect(fill = NA),
+        plot.margin = margin(b = 5, t = 10, r = 10, l = 22, unit = "pt")) +
+  guides(
+    fill = guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 10, barheight = 2),
+    size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE),
+    shape = guide_legend(nrow = 3, order = 3, title.position = "top", title.hjust = 1, override.aes = list(size = 7))) +
+  labs(title = "Enriched IPR terms for wild strain genes in HDRs",  x = "Gene count", size = "Fold enrichment", fill = expression(-log[10]~"(corrected p-value)"))
+plot_IPR_all_diff
+
+
+
 
 
 
@@ -949,6 +968,9 @@ plot_GO_MF
 
 
 
+
+
+
 ########################################### ACCESSORY PANGENOME GO ENRICHMENT ##########################################################
 go_ipr <- all_ipr %>%
   dplyr::filter(!is.na(GO) & GO != "-") %>%
@@ -1086,6 +1108,8 @@ plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
   labs(title = "Enriched GO:MF terms for accessory pangenome",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
 plot_GO_MF
+
+
 
 
 
