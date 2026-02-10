@@ -693,7 +693,22 @@ ws_genes_hdrs_stats <- ws_genes_hdrs %>%
   dplyr::mutate(ws_class_count_inHDR = n()) %>%
   dplyr::ungroup() %>%
   dplyr::distinct(strain, class, ws_class_count_inHDR)
-  
+
+# Number of genes in each gene set in HDRs compared to entire gene set
+ws_genes_class <- ws_genes_hdrs_stats %>%
+  dplyr::group_by(class) %>%
+  dplyr::mutate(ws_class_count_total = sum(ws_class_count),
+                ws_class_count_inHDR_total = sum(ws_class_count_inHDR)) %>%
+  dplyr::distinct(class, ws_class_count_total, ws_class_count_inHDR_total)
+
+# Writing a table of all WS genes in HDRs
+# ws_hdr_genes <- ws_genes_hdrs %>%
+#   dplyr::filter(!is.na(start)) %>%
+#   dplyr::select(strain, gene, class)
+# 
+# write.table(ws_hdr_genes, "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/ws_HDR_liftover/WS_genes_inHDRs.tsv", sep = '\t', quote = F, col.names = T, row.names = F)
+
+
 ws_genes_hdrs_stats <- ws_genes_count %>%
   dplyr::left_join(ws_genes_hdrs_stats, by = c("strain", "class")) %>%
   dplyr::mutate(ws_class_count_inHDR = ifelse(is.na(ws_class_count_inHDR),0, ws_class_count_inHDR)) %>%
