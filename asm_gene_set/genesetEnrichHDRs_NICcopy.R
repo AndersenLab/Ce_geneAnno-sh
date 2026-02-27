@@ -226,7 +226,7 @@ nucmer_longest_jumpRemoved <- nucmer_longest %>%
   dplyr::arrange(HDRid,St2) %>%
   dplyr::group_by(HDRid) %>%
   dplyr::mutate(leadDiff=lead(St2)-Et2) %>%
-  dplyr::mutate(jump=ifelse(leadDiff > 7.5e4, 1 ,0)) %>% #modified to 75kb
+  dplyr::mutate(jump=ifelse(leadDiff > 7.5e4, 1 ,0)) %>% #m odified to 75kb
   dplyr::mutate(leadDiff=ifelse(is.na(leadDiff),0,leadDiff)) %>%
   dplyr::mutate(run_id = cumsum(c(1, head(jump, -1)))) %>%
   dplyr::ungroup() %>%
@@ -287,78 +287,6 @@ nucmer_to_extend <- nucmer_mark_extend %>%
                                             ifelse(iWSE_extend==T & min(lagS,lagE) > hdr_end_extended & WSE > max(lagWSS,lagWSE), lagS-N2E,NA))) %>%
   dplyr::ungroup()
 
-#visualizes the distributions of possible extension sizes
-#very similar to C.b.
-#50-25kb looks good as a limit
-# extendDat <- rbind(nucmer_to_extend %>% 
-#                      dplyr::select(extend_length_REF_lead,extend_length_WI_lead) %>% 
-#                      dplyr::rename(extend_length_WI=extend_length_WI_lead,extend_length_REF=extend_length_REF_lead),
-#                    nucmer_to_extend %>% 
-#                      dplyr::select(extend_length_REF_lag,extend_length_WI_lag) %>% 
-#                      dplyr::rename(extend_length_WI=extend_length_WI_lag,extend_length_REF=extend_length_REF_lag)) %>%
-#   dplyr::filter(!is.na(extend_length_WI) & !is.na(extend_length_REF))
-# 
-# sc <- ggplot(data=extendDat) + 
-#   geom_point(aes(x=extend_length_REF/1e3,y=extend_length_WI/1e3),size=1) + 
-#   geom_rect(xmin=0,xmax=100,ymin=-Inf,ymax=Inf,fill=NA,color="grey",linetype="dashed")+
-#   geom_rect(xmin=Inf,xmax=-Inf,ymin=0,ymax=100,fill=NA,color="grey",linetype="dashed")+
-#   theme_classic() + 
-#   xlab("REF extension distances (kb)") + 
-#   ylab("WI extension distances (kb)") +
-#   scale_y_continuous(expand = c(0.01,0)) +
-#   scale_x_continuous(expand = c(0.01,0))
-# 
-# h1 <- ggplot(data=extendDat) + 
-#   geom_histogram(aes(x=extend_length_REF/1e3),binwidth = 1) + 
-#   theme_classic() + 
-#   xlab("") + 
-#   ylab("count") + 
-#   coord_cartesian(xlim=c(0,100)) +
-#   scale_y_continuous(expand = c(0.01,0),
-#                      labels = function(y) y / 1000,
-#                      name = "count (thousand)") +
-#   scale_x_continuous(expand = c(0.01,0))
-# 
-# h2 <- ggplot(data=extendDat) + 
-#   geom_histogram(aes(y=extend_length_WI/1e3),binwidth = 1) + 
-#   theme_classic() + ylab("") + 
-#   coord_cartesian(ylim=c(0,100)) +
-#   scale_x_continuous(labels = function(x) x / 1000,
-#                      expand = c(0.01, 0),
-#                      name = "count (thousand)") +
-#   scale_y_continuous(expand = c(0.01,0))
-# 
-# 
-# middle_row <- cowplot::plot_grid(
-#   sc,       
-#   h2, 
-#   ncol = 2,
-#   rel_widths = c(4, 1), 
-#   align = "hv"
-# )
-# 
-# empty_plot <- ggplot() +
-#   coord_cartesian(xlim = c(0, 1), ylim = c(0, 1)) +
-#   theme_void() 
-# 
-# top_row <- plot_grid(
-#   empty_plot,
-#   h1,
-#   empty_plot,
-#   ncol = 3,
-#   rel_widths = c(0.09,4, 1),
-#   align = "hv"
-# )
-# 
-# final_plot <- cowplot::plot_grid(
-#   top_row,      
-#   middle_row,    
-#   ncol = 1,
-#   rel_heights = c(1, 4),  
-#   align = "v"
-# )
-# final_plot 
-
 # bind unmarked extensions with aligments-to-extend
 nucmer_extensions <- rbind(nucmer_to_extend,nucmer_mark_extend %>% dplyr::filter(any_extend==F) %>% dplyr::mutate(extend_length_WI_lead=NA,extend_length_REF_lead=NA,extend_length_WI_lag=NA,extend_length_REF_lag=NA))
 
@@ -394,198 +322,144 @@ WS_HDRs <- nucmer_extended %>%
                    .groups = "drop") %>%
   dplyr::mutate(divSize=maxEnd-minStart,og_divSize=hdr_end_extended-hdr_start_extended,sizeDiff=abs(og_divSize-divSize))
 
-##### DIAGNOSTICS ######
 
-# diagnostic plots function
+
+##### DIAGNOSTIC PLOTTING FUNCTION ######
 plot_hdr_workflow <- function(HDOI) {
   
   # visualize selected contig
   ctg_select_plt <- ggplot(data = nucmer_longest %>% dplyr::filter(HDRid == HDOI[2])) +
-    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6,
-                  ymin = -Inf, ymax = Inf),
-              fill = "gray", alpha = 0.1) +
-    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6,
-                     y = WSS / 1e6, yend = WSE / 1e6,
-                     color = longest_contig),
-                 linewidth = 1) +
+    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.1) +
+    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = longest_contig), linewidth = 1) +
     facet_wrap(~chrom) +
     theme(panel.border = element_rect(color = 'black', fill = NA),
           panel.background = element_blank()) +
-    labs(x = "N2 genome position (Mb)",
-         y = "WS contig position (Mb)",
-         title = paste0(HDOI[1]))
+    labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(HDOI[1]))
   
   # visualize pre and post jump removal
   ctg_jumprm_plt <- ggplot(data = nucmer_longest_jumpRemoved %>% dplyr::filter(HDRid == HDOI[2])) +
-    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6,
-                  ymin = -Inf, ymax = Inf),
-              fill = "gray", alpha = 0.3) +
-    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6,
-                     y = WSS / 1e6, yend = WSE / 1e6,
-                     color = longest_contig),
-                 linewidth = 1) +
+    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.3) +
+    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = longest_contig), linewidth = 1) +
     facet_wrap(~chrom) +
     theme(panel.border = element_rect(color = 'black', fill = NA),
           panel.background = element_blank()) +
-    labs(x = "N2 genome position (Mb)",
-         y = "WS contig position (Mb)",
-         title = paste0(HDOI[1], " - POST JUMP RM"))
+    labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(HDOI[1], " - POST JUMP RM"))
   
   # visualize trimming after jump removal
   ctg_trim_plt <- ggplot(data = nucmer_longest_trimmed %>% dplyr::filter(HDRid == HDOI[2])) +
-    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6,
-                  ymin = -Inf, ymax = Inf),
-              fill = "gray", alpha = 0.3) +
-    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6,
-                     y = WSS / 1e6, yend = WSE / 1e6,
-                     color = longest_contig),
-                 linewidth = 1) +
+    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.3) +
+    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = longest_contig), linewidth = 1) +
     facet_wrap(~chrom) +
     theme(panel.border = element_rect(color = 'black', fill = NA),
           panel.background = element_blank()) +
-    labs(x = "N2 genome position (Mb)",
-         y = "WS contig position (Mb)",
-         title = paste0(HDOI[1], " - POST TRIM"))
+    labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(HDOI[1], " - POST TRIM"))
   
   # visualize mark for extending
   ctg_mark_plt <- ggplot(data = nucmer_mark_extend %>% dplyr::filter(HDRid == HDOI[2])) +
-    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6,
-                  ymin = -Inf, ymax = Inf),
-              fill = "gray", alpha = 0.3) +
-    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6,
-                     y = WSS / 1e6, yend = WSE / 1e6,
-                     color = any_extend),
-                 linewidth = 1) +
+    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.3) +
+    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = any_extend), linewidth = 1) +
     facet_wrap(~chrom) +
     theme(panel.border = element_rect(color = 'black', fill = NA),
           panel.background = element_blank()) +
-    labs(x = "N2 genome position (Mb)",
-         y = "WS contig position (Mb)",
-         title = paste0(HDOI[1], " - POST MARK"))
+    labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(HDOI[1], " - POST MARK"))
   
   # visualize potential extensions
   hdr_leadlag_plt <- ggplot(data = nucmer_mark_extend %>% dplyr::filter(HDRid == HDOI[2])) +
-    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6,
-                  ymin = -Inf, ymax = Inf),
-              fill = "gray", alpha = 0.3) +
+    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.3) +
     geom_segment(data = nucmer_mark_extend %>%
                    dplyr::filter(any_extend == T) %>%
                    dplyr::filter(HDRid == HDOI[2]) %>%
                    dplyr::filter(N2E < hdr_end_extended),
-                 aes(x = leadS / 1e6, xend = leadE / 1e6,
-                     y = leadWSS / 1e6, yend = leadWSE / 1e6,
-                     color = "leading"),
-                 linewidth = 1) +
+                 aes(x = leadS / 1e6, xend = leadE / 1e6, y = leadWSS / 1e6, yend = leadWSE / 1e6, color = "leading"), linewidth = 1) +
     geom_segment(data = nucmer_mark_extend %>%
                    dplyr::filter(any_extend == T) %>%
                    dplyr::filter(HDRid == HDOI[2]) %>%
                    dplyr::filter(N2S > hdr_start_extended),
-                 aes(x = lagS / 1e6, xend = lagE / 1e6,
-                     y = lagWSS / 1e6, yend = lagWSE / 1e6,
-                     color = "lagging"),
-                 linewidth = 1) +
-    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6,
-                     y = WSS / 1e6, yend = WSE / 1e6,
-                     color = "overlapping"),
-                 linewidth = 1) +
+                 aes(x = lagS / 1e6, xend = lagE / 1e6, y = lagWSS / 1e6, yend = lagWSE / 1e6, color = "lagging"), linewidth = 1) +
+    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = "overlapping"), linewidth = 1) +
     facet_wrap(~chrom) +
     theme(panel.border = element_rect(color = 'black', fill = NA),
           panel.background = element_blank(),
           legend.title = element_blank()) +
-    labs(x = "N2 genome position (Mb)",
-         y = "WS contig position (Mb)",
-         title = paste0(HDOI[1], " - POTENTIAL EXTENSION"))
+    labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(HDOI[1], " - POTENTIAL EXTENSION"))
   
   # visualize extensions
   hdr_extended_plt <- ggplot(data = nucmer_extended %>% dplyr::filter(HDRid == HDOI[2])) +
-    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6,
-                  ymin = -Inf, ymax = Inf),
-              fill = "gray", alpha = 0.3) +
+    geom_rect(aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.3) +
     geom_segment(data = nucmer_mark_extend %>%
                    dplyr::filter(any_extend == T) %>%
                    dplyr::filter(HDRid == HDOI[2]) %>%
                    dplyr::filter(N2E < hdr_end_extended),
-                 aes(x = leadS / 1e6, xend = leadE / 1e6,
-                     y = leadWSS / 1e6, yend = leadWSE / 1e6,
-                     color = "leading"),
-                 linewidth = 1) +
+                 aes(x = leadS / 1e6, xend = leadE / 1e6, y = leadWSS / 1e6, yend = leadWSE / 1e6, color = "leading"), linewidth = 1) +
     geom_segment(data = nucmer_mark_extend %>%
                    dplyr::filter(any_extend == T) %>%
                    dplyr::filter(HDRid == HDOI[2]) %>%
                    dplyr::filter(N2S > hdr_start_extended),
-                 aes(x = lagS / 1e6, xend = lagE / 1e6,
-                     y = lagWSS / 1e6, yend = lagWSE / 1e6,
-                     color = "lagging"),
-                 linewidth = 1) +
-    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6,
-                     y = WSS / 1e6, yend = WSE / 1e6,
-                     color = "w/Extension"),
-                 linewidth = 1) +
+                 aes(x = lagS / 1e6, xend = lagE / 1e6, y = lagWSS / 1e6, yend = lagWSE / 1e6, color = "lagging"), linewidth = 1) +
+    geom_segment(aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = "w/Extension"), linewidth = 1) +
     geom_segment(data = nucmer_mark_extend %>%
                    dplyr::filter(HDRid == HDOI[2]),
-                 aes(x = N2S / 1e6, xend = N2E / 1e6,
-                     y = WSS / 1e6, yend = WSE / 1e6,
-                     color = "overlapping"),
-                 linewidth = 1) +
+                 aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = "overlapping"), linewidth = 1) +
     facet_wrap(~chrom) +
     theme(panel.border = element_rect(color = 'black', fill = NA),
           panel.background = element_blank(),
           legend.title = element_blank()) +
-    labs(x = "N2 genome position (Mb)",
-         y = "WS contig position (Mb)",
-         title = paste0(HDOI[1], " - POST EXTENSION"))
+    labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(HDOI[1], " - POST EXTENSION"))
   
   
   nS <- (WS_HDRs %>%dplyr::filter(HDRid == HDOI[2]))$minStart
   nE <- (WS_HDRs %>% dplyr::filter(HDRid == HDOI[2]))$maxEnd
   
   hdr_transformed_plt <- ggplot() +
-    geom_rect(data = nucmer_extended %>% dplyr::filter(HDRid == HDOI[2]),
-              mapping = aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6,
-                            ymin = -Inf, ymax = Inf),
-              fill = "gray", alpha = 0.3) +
-    annotate("rect",
-             ymin = nS / 1e6,
-             ymax = nE   / 1e6,
-             xmin = -Inf,
-             xmax = Inf,
-             fill = "gray",
-             alpha = 1) +
+    geom_rect(data = nucmer_extended %>% dplyr::filter(HDRid == HDOI[2]), mapping = aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.3) +
+    annotate("rect", ymin = nS / 1e6, ymax = nE   / 1e6, xmin = -Inf, xmax = Inf, fill = "gray", alpha = 1) +
     geom_segment(data = nucmer_mark_extend %>%
                    dplyr::filter(any_extend == T) %>%
                    dplyr::filter(HDRid == HDOI[2]) %>%
                    dplyr::filter(N2E < hdr_end_extended),
-                 aes(x = leadS / 1e6, xend = leadE / 1e6,
-                     y = leadWSS / 1e6, yend = leadWSE / 1e6,
-                     color = "leading"),
-                 linewidth = 1) +
+                 aes(x = leadS / 1e6, xend = leadE / 1e6, y = leadWSS / 1e6, yend = leadWSE / 1e6, color = "leading"), linewidth = 1) +
     geom_segment(data = nucmer_mark_extend %>%
                    dplyr::filter(any_extend == T) %>%
                    dplyr::filter(HDRid == HDOI[2]) %>%
                    dplyr::filter(N2S > hdr_start_extended),
-                 aes(x = lagS / 1e6, xend = lagE / 1e6,
-                     y = lagWSS / 1e6, yend = lagWSE / 1e6,
-                     color = "lagging"),
-                 linewidth = 1) +
+                 aes(x = lagS / 1e6, xend = lagE / 1e6, y = lagWSS / 1e6, yend = lagWSE / 1e6, color = "lagging"), linewidth = 1) +
     geom_segment(data = nucmer_extended %>%
                    dplyr::filter(HDRid == HDOI[2]),
-                 aes(x = N2S / 1e6, xend = N2E / 1e6,
-                     y = WSS / 1e6, yend = WSE / 1e6,
-                     color = "w/Extension"),
-                 linewidth = 1) +
+                 aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = "w/Extension"), linewidth = 1) +
     geom_segment(data = nucmer_mark_extend %>%
                    dplyr::filter(HDRid == HDOI[2]),
-                 aes(x = N2S / 1e6, xend = N2E / 1e6,
-                     y = WSS / 1e6, yend = WSE / 1e6,
-                     color = "overlapping"),
-                 linewidth = 1) +
+                 aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = "overlapping"), linewidth = 1) +
     facet_wrap(~chrom) +
     theme(panel.border = element_rect(color = 'black', fill = NA),
           panel.background = element_blank(),
           legend.title = element_blank()) +
-    labs(x = "N2 genome position (Mb)",
-         y = "WS contig position (Mb)",
-         title = paste0(HDOI[1], " - POST EXTENSION"))
+    labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(HDOI[1], " - POST EXTENSION"))
+  
+  pretty_plot <- ggplot() +
+    geom_rect(data = nucmer_extended %>% dplyr::filter(HDRid == HDOI[2]), 
+              mapping = aes(xmin = hdr_start_extended / 1e6, xmax = hdr_end_extended / 1e6, ymin = -Inf, ymax = Inf), fill = "gray", alpha = 0.3) +
+    annotate("rect", ymin = nS / 1e6, ymax = nE / 1e6, xmin = -Inf, xmax = Inf, fill = "gray", alpha = 1) +
+    geom_segment(data = nucmer_mark_extend %>%
+                   dplyr::filter(any_extend == T) %>%
+                   dplyr::filter(HDRid == HDOI[2]) %>%
+                   dplyr::filter(N2E < hdr_end_extended),
+                 aes(x = leadS / 1e6, xend = leadE / 1e6, y = leadWSS / 1e6, yend = leadWSE / 1e6, color = "leading"), linewidth = 1) +
+    geom_segment(data = nucmer_mark_extend %>%
+                   dplyr::filter(any_extend == T) %>%
+                   dplyr::filter(HDRid == HDOI[2]) %>%
+                   dplyr::filter(N2S > hdr_start_extended),
+                 aes(x = lagS / 1e6, xend = lagE / 1e6, y = lagWSS / 1e6, yend = lagWSE / 1e6, color = "lagging"), linewidth = 1) +
+    geom_segment(data = nucmer_extended %>%
+                   dplyr::filter(HDRid == HDOI[2]),
+                 aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = "w/Extension"), linewidth = 1) +
+    geom_segment(data = nucmer_mark_extend %>%
+                   dplyr::filter(HDRid == HDOI[2]),
+                 aes(x = N2S / 1e6, xend = N2E / 1e6, y = WSS / 1e6, yend = WSE / 1e6, color = "overlapping"), linewidth = 1) +
+    facet_wrap(~chrom) +
+    theme(panel.border = element_rect(color = 'black', fill = NA),
+          panel.background = element_blank(),
+          legend.title = element_blank()) +
+    labs(x = "N2 genome position (Mb)", y = "WS contig position (Mb)", title = paste0(HDOI[1], " - POST EXTENSION"))
   
   # return plot list
   list(ctg_select = ctg_select_plt,
@@ -594,7 +468,8 @@ plot_hdr_workflow <- function(HDOI) {
        ctg_mark   = ctg_mark_plt,
        lead_lag   = hdr_leadlag_plt,
        extended   = hdr_extended_plt,
-       hdr        = hdr_transformed_plt)
+       hdr        = hdr_transformed_plt,
+       pretty_hdr = pretty_plot)
 }
 
 #you can pick any test cases from this df to visualize below
@@ -637,8 +512,11 @@ diag_list <- plot_hdr_workflow(HDOI)
 # cowplot::plot_grid(diag_list[[3]]+theme(legend.position = 'none'),diag_list[[4]]+theme(axis.title.y=element_blank()),diag_list[[5]],nrow=1,align = 'h',axis = 'tb',rel_widths = c(0.6,0.8,1))
 
 #previous steps all at once - overview
-cowplot::plot_grid(diag_list[[3]]+theme(legend.position = 'none'),diag_list[[4]]+theme(axis.title.y=element_blank()),diag_list[[5]],diag_list[[7]],nrow=1,align = 'h',axis = 'tb',rel_widths = c(0.6,0.8,1,1))
+# cowplot::plot_grid(diag_list[[3]]+theme(legend.position = 'none'), diag_list[[4]]+theme(axis.title.y=element_blank()), diag_list[[5]], diag_list[[7]],nrow=1, align = 'h', axis = 'tb',rel_widths = c(0.6,0.8,1,1))
 
+pretty_plot <- diag_list[[8]]
+pretty_plot
+  
 #find HDR clusters separated by less than 5kb
 gap_clust_WS_HDRs <- WS_HDRs %>%
   dplyr::select(longest_contig,minStart,maxEnd,strain) %>%

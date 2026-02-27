@@ -32,8 +32,8 @@ library(stringr)
 # 
 # want <- merged %>% dplyr::pull(strain)
 
-want <- c("N2","MY16","CB4856")
-want <- c("N2","CB4856","AB1","CB4852","ECA248","ECA251","JU311","JU346","JU394","MY16","ECA259","PX179","RC301","MY1")
+# want <- c("N2","MY16","CB4856")
+# want <- c("N2","CB4856","AB1","CB4852","ECA248","ECA251","JU311","JU346","JU394","MY16","ECA259","PX179","RC301","MY1")
   
   
 #read all pairwise genome coordinate comparisons
@@ -42,8 +42,8 @@ want <- c("N2","CB4856","AB1","CB4852","ECA248","ECA251","JU311","JU346","JU394"
 ## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
 transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv",col_names = F) 
 colnames(transformed_coords) <- c("S1","E1","S2","E2","L1","L2","IDY","LENR","LENQ","REF","HIFI","STRAIN") 
-transformed_coords <- transformed_coords %>% dplyr::filter(STRAIN != "ECA396") %>%
-  dplyr::filter(STRAIN %in% want)
+transformed_coords <- transformed_coords %>% dplyr::filter(STRAIN != "ECA396") #%>%
+  # dplyr::filter(STRAIN %in% want)
 
 #read concatentated gene models of every genome
 # gffCat1 <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/braker_runs/merged_gff/all_WI_braker.clean.gff", col_names = F) 
@@ -53,8 +53,8 @@ transformed_coords <- transformed_coords %>% dplyr::filter(STRAIN != "ECA396") %
 gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142strain_genemRNAfeatures.tsv", col_names = F)
 colnames(gffCat1) <- c("seqid","source","type","start","end","score","strand","phase","attributes","STRAIN")
 gffCat2 <- ape::read.gff("/vast/eande106/projects/Nicolas/gene_models/c.elegans/N2/wormbase/WS283/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
-gffCat <- rbind(gffCat1 %>% dplyr::filter(STRAIN != "ECA396"),gffCat2) %>% 
-  dplyr::filter(STRAIN %in% want)
+gffCat <- rbind(gffCat1 %>% dplyr::filter(STRAIN != "ECA396"), gffCat2) #%>% 
+  # dplyr::filter(STRAIN %in% want)
 
 #read ortholog relationships among gene models
 # orthos <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_78/OrthoFinder/Results_Mar20/Orthogroups/Orthogroups.tsv")
@@ -72,15 +72,28 @@ strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.prot
 colnames(orthos) <- strainCol_c2
 
 
+# Erik interval
+hdr_chrom = "V"
+hdr_start_pos = 8810000  
+hdr_end_pos = 8910000
+
+
+
+
+
+
+
+
+
 # Francoi interval
 # hdr_chrom = "I"
 # hdr_start_pos = 11430000 # 5 kb upstream
-hdr_start_pos = 11434000 # 1 kb upstram
+# hdr_start_pos = 11434000 # 1 kb upstram
 # hdr_end_pos = 11455000 # 1 kb downstream
 
-hdr_chrom = "I"
+# hdr_chrom = "I"
 # hdr_start_pos = 11469000 # 1 kb upstream
-hdr_end_pos = 11484000 # 1 kb downstream
+# hdr_end_pos = 11484000 # 1 kb downstream
 # hdr_end_pos = 11489000 # 5 kb downstream
 
 
@@ -453,7 +466,7 @@ orthoList <- list()
 orthoList_bound <- list()
 orthoList_raw <- list()
 strainCol_iter <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup","N2")]
-strainCol_iter <- strainCol_iter[strainCol_iter %in% want]
+# strainCol_iter <- strainCol_iter[strainCol_iter %in% want] ############################# For when you are only looking at a subset of strains
 
 for (i in 1:length(strainCol_iter)) {
   

@@ -861,7 +861,7 @@ snvs_inINV <- snvEC14 %>% dplyr::bind_rows(snvEC29, snvXZ) %>% dplyr::mutate(pos
 
 ggplot() + 
   # geom_point(data = snvs_inINV, aes(x = pos/1e6, y = 0.5), size = 2, color = 'black') +
-  geom_density(data = snvs_inINV, aes(x = pos/1e6, alpha = 0.6), adjust = 0.5, fill = "firebrick") +
+  geom_density(data = snvs_inINV, aes(x = pos/1e6, alpha = 0.6, after_stat(count)), adjust = 0.5, fill = "firebrick") +
   geom_rect(data = inv_rect, aes(xmin = (pos + sv_length) / 1e6, xmax = pos / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
   facet_wrap(~strain, ncol = 1)+
   theme(
@@ -874,11 +874,18 @@ ggplot() +
     panel.grid = element_blank(),
     panel.border = element_rect(fill = NA),
     plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
-  coord_cartesian(xlim = c(6.281940, 8)) +
+  coord_cartesian(xlim = c(6.281940, 8)) +s
   scale_x_continuous(expand = c(0,0)) +
   scale_y_continuous(expand = c(0,0.01)) +
   ggtitle("Largest inversion on CHROM IV") +
   labs(x = "N2 genome position (Mb)")
+
+bandwith <- snvs_inINV %>%
+  dplyr::group_by(strain) %>%
+  dplyr::summarise(bw = density(pos/1e6)$bw)
+bandwith
+
+
 
 
 
@@ -909,7 +916,7 @@ eca3088_snvs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assem
 ggplot() + 
   geom_rect(aes(xmin = 13.46, xmax = 17492403 / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.1) +
   # geom_point(data = eca3088_snvs, aes(x = pos/1e6, y = 0.2), size = 2, color = 'black') +
-  geom_density(data = eca3088_snvs, aes(x = pos/1e6, alpha = 0.6), adjust = 0.5, fill = "firebrick") +
+  geom_density(data = eca3088_snvs, aes(x = pos/1e6, alpha = 0.6, after_stat(count)), adjust = 0.5, fill = "firebrick") +
   geom_rect(aes(xmin = 13.5, xmax = 17492403 / 1e6, ymin = -Inf, ymax = Inf), fill = "gold", alpha = 0.5) +
   theme(
     axis.text = element_text(size = 14, color = 'black'),
@@ -928,6 +935,9 @@ ggplot() +
   labs(x = "N2 genome position (Mb)")
 
 
+bandwith <- eca3088_snvs %>%
+  dplyr::summarise(bw = density(pos/1e6)$bw)
+bandwith
 
 
 

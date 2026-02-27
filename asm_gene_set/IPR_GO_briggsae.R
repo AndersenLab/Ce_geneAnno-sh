@@ -1,13 +1,14 @@
 library(plyr)
 library(readr)
 library(tidyr)
+# BiocManager::install("org.Ce.eg.db")
 library(org.Ce.eg.db)
 library(GO.db)
 library(dplyr)
 library(ggplot2)
 library(stringr)
 library(tidyr)
-library(clusterProfiler) ## BiocManager::install("clusterProfiler") # need this and the next package???
+library(clusterProfiler) ## BiocManager::install("clusterProfiler", lib="~/rlibs_4.2", ask=FALSE, update=FALSE) - need to install ggplot2 version 3.4.4 FIRST, ggplot 4 > isn't compatible with ggtree dependency
 library(enrichplot)
 library(data.table)
 library(cowplot)

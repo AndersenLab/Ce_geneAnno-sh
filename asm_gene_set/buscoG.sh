@@ -11,4 +11,4 @@ source activate busco
 
 mkdir -p busco
 
-busco -i $file -c 12 -m genome -l /vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/busco_downloads/lineages/nematoda_odb10/ -o busco/${file%.*}.busco -c 12
+busco -i $file -c 12 -m genome -l /vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/busco_downloads/lineages/nematoda_odb10/ -o busco/genome/${file%.*}.CORECCTED.busco -c 12

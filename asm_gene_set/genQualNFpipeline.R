@@ -79,13 +79,15 @@ merged_worse <- n50 %>%
   
   
   
-data <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/20251025_master_sheet.tsv")
+data <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/20251126_master_asmSheet.tsv")
 
 data1 <- data %>%
   dplyr::filter(species == "CE") %>%
-  dplyr::filter(strain != "ECA2888" & strain != "ECA1887" & strain != "ECA1885" & strain != "ECA2949" & strain != "ECA741") %>%
+  dplyr::filter(strain != "ECA2888" & strain != "ECA1887" & strain != "ECA1885" & strain != "ECA2949" & strain != "ECA396") %>%
   dplyr::select(species,strain,ctg_N50,ctg_L90, fold_cov, hifi_mean_readlen) %>%
-  dplyr::mutate(ctg_N50 = as.numeric(ctg_N50), ctg_L90 = as.numeric(ctg_L90), fold_cov = as.numeric(fold_cov), hifi_mean_readlen = as.numeric(hifi_mean_readlen))
+  dplyr::mutate(ctg_N50 = as.numeric(ctg_N50), ctg_L90 = as.numeric(ctg_L90), fold_cov = as.numeric(fold_cov), hifi_mean_readlen = as.numeric(hifi_mean_readlen)) %>%
+  dplyr::mutate(fold_cov = ifelse(strain == "ECA1493", 43.5869583, fold_cov)) %>%
+  dplyr::mutate(fold_cov = ifelse(strain == "ECA741", 107.68495, fold_cov))
 
 n50 <- data1 %>% dplyr::filter(strain != "ECA2291")
 mean_N50 <- mean(n50$ctg_N50)
@@ -116,7 +118,7 @@ p1 <- ggplot(data1) +
   xlab("Contig N50 (Mb)") 
 p1
 
-# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/plots/Ce_assembly_stats_115.png", p1, height = 5, width = 9, dpi = 600)
+ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/plots/Ce_assembly_stats_115.png", p1, height = 5, width = 9, dpi = 600)
 
 p2 <- ggplot(data1) + 
   geom_point(aes(x=ctg_N50/1e6, y=ctg_L90, color = ctg_N50/1e6), size = 2.5) +

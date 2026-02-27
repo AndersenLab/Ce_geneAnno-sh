@@ -132,12 +132,13 @@ ws_hdr_gene_class <- long_class %>%
   dplyr::filter(gene %in% all_ws_hdr_genes) %>%
   dplyr::left_join(all_ipr_background %>% dplyr::select(-n_IPR_acc_background), by = c("gene" = "tran")) %>% # a total of 206,225 genes are in WS HDRs
   dplyr::filter(!is.na(IPR_description)) %>% # 159,191 of the 206,255 HDR genes have an IPR annotation
-  dplyr::mutate(rough_gene_class = ifelse(grepl("7TM",IPR_description), "GPCR", 
+  dplyr::mutate(rough_gene_class = ifelse(grepl("7TM", IPR_description), "GPCR", 
                                           ifelse(grepl("C-type lectin", IPR_description), "C-type lectin", 
                                                  ifelse(grepl("Cytochrome P450", IPR_description), "Cytochrome P450", 
                                                         ifelse(grepl("F-box", IPR_description), "F-box", IPR_description))))) # assigning gene class based on IPR annotation
+
 # Total number of each (roughly estimated) gene class
-ws_hdr_gene_class_count <- ws_hdr_gene_class %>% 
+ws_hdr_gene_class_count <- ws_hdr_gene_class %>%
   dplyr::select(strain, gene, class, rough_gene_class) %>%
   dplyr::filter(rough_gene_class == "GPCR" | rough_gene_class == "C-type lectin" | rough_gene_class == "Cytochrome P450" | rough_gene_class == "F-box") %>%
   dplyr::group_by(rough_gene_class) %>%
@@ -224,13 +225,12 @@ ggplot() +
   geom_sf(data = world, fill = "gray95", color = "gray70", linewidth = 0.2) +
   geom_point(
     data = ipr_most_geo, 
-    aes(x = long, y = lat, color = IPR_description, size = count_ipr),
-    position = position_jitter(width = 0.1, height = 0.1), alpha = 0.85) +
+    aes(x = long, y = lat, color = IPR_description),
+    size = 3, position = position_jitter(width = 0.1, height = 0.1), alpha = 0.85) +
   scale_color_manual(values = geo.colors) +
   coord_sf(xlim = c(-161, -154), ylim = c(18.5, 23), expand = FALSE) +
   theme_minimal() +
   labs(x = NULL, y = NULL, color = "Most abundant IPR description")
-
 
 
 # Top 2 most abundanct IPR terms

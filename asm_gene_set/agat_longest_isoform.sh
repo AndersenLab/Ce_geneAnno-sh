@@ -9,6 +9,7 @@
 
 source activate agat
 
-out_dir="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform"
+#out_dir="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform"
+out_dir="/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/prep"
 
 agat_sp_keep_longest_isoform.pl  -f $file -o $out_dir/${file%.*}.longest.gff3

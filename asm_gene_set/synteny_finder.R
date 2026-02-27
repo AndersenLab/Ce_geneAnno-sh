@@ -1223,7 +1223,8 @@ nucmer_longest_jumpRemoved_updated <- nucmer_longest_jumpRemoved_doublesGone %>%
 subset <- nucmer_longest_jumpRemoved_updated %>%
   dplyr::filter(n2_gene == "WBGene00044801" | n2_gene == "WBGene00011254" | n2_gene == "WBGene00022486")
 
-trim_spacer = 5e3 # trimming to 5kb on either side of the N2 gene
+# trim_spacer = 5e3 # trimming to 5kb on either side of the N2 gene
+trim_spacer = 500
 tigTrim_subset <- subset %>%
   dplyr::arrange(n2_gene,strain,start_aln) %>%
   dplyr::mutate(unchanged_start_aln = start_aln, unchanged_end_aln = end_aln) %>%
@@ -1263,7 +1264,7 @@ g7plt
 
 
 
-trim_spacer = 5e3 # trimming to 5kb on either side of the N2 gene
+trim_spacer = 500 # trimming to 5kb on either side of the N2 gene
 tigTrim <- nucmer_longest_jumpRemoved_updated %>%
   dplyr::arrange(n2_gene,strain,start_aln) %>%
   dplyr::mutate(unchanged_start_aln = start_aln, unchanged_end_aln = end_aln) %>%
@@ -1308,7 +1309,7 @@ g10plt <- ggplot(tigTrim %>% dplyr::filter(n2_gene == "WBGene00044801")) +
     plot.title = element_text(size = 16, color = 'black', face = 'bold', hjust = 0.5)) +
   ggtitle("WBGene00044801")
 g10plt
-# 
+ 
 # # ^ Same as plot above but for WSS and WSE
 # g11plt <- ggplot(tigTrim %>% dplyr::filter(n2_gene == "WBGene00044801")) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
@@ -1408,8 +1409,7 @@ syntelog_matrix <- joined %>%
   ) %>%
   dplyr::filter(!is.na(n2_gene)) # remove the row that contains all non-syntenic predicted WS genes
   
-# write.table(syntelog_matrix, file = "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/syntelog_matrix.tsv", sep = '\t', col.names = T, row.names = F, quote = F)
-  
+write.table(syntelog_matrix, file = "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/syntelog_matrix.tsv", sep = '\t', col.names = T, row.names = F, quote = F)
   
 
 # # Confirm this works by plotting N2 gene coordinates in x system and WS gene coordinates in y system
@@ -1513,26 +1513,6 @@ syntelog_matrix <- joined %>%
 # ugh3
 # 
 # 
-# synner <- joined %>% dplyr::filter(strain == "ECA923", n2_gene == "WBGene00021707")
-# syn0 <- ggplot(synner) +
-#   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "#DB6333", alpha = 0.3) +
-#   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.7) +
-#   geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = start / 1e6, yend = end / 1e6), color = "blue", linewidth = 1) +
-#   # geom_text(data = syn,
-#             # aes(x =  (start_aln + 400) / 1e6 , y = (i.end  - (i.end - i.start + 225) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
-#   # geom_text(data = syn,
-#             # aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = WSS / 1e6, label = "N2 gene: WBGene00021707"), vjust = -1, color = '#3B2F2F', size = 5, fontface = 'bold') +
-#   theme(
-#     legend.position = 'none',
-#     panel.background = element_blank(),
-#     axis.title = element_text(size = 14, color = 'black', face = 'bold'),
-#     panel.grid = element_blank(),
-#     axis.text = element_text(size = 14, color = 'black'),
-#     panel.border = element_rect(fill = NA),
-#   plot.title = element_text(size = 16, color = 'black', hjust = 0.5, face = 'bold')) +
-#   labs(y = "ECA923 genome coordinates (Mb)", x = "N2 genome coordinates (Mb)", title = "WBGene00021707 : V")
-# syn0
-# 
 # 
 # syn2 <- ggplot(joined %>% dplyr::filter(strain == "ECA369", n2_gene == "WBGene00013300")) +
 #   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "darkolivegreen4", alpha = 0.2) +
@@ -1616,9 +1596,9 @@ syn <- joined %>% dplyr::filter(strain == "AB1", n2_gene == "WBGene00020062")
 syn6 <- ggplot(syn) +
   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "#DB6333", alpha = 0.3) +
   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.7) +
-  geom_segment(aes(x = unchanged_start_aln / 1e6, xend = unchanged_end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = "blue", linewidth = 1) +
+  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = "blue", linewidth = 1) +
   geom_text(data = syn,
-            aes(x =  (start_aln + 475) / 1e6 , y = (i.end  - (i.end - i.start + 550) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 9, fontface = 'bold') +
+            aes(x =  (start_aln + 150) / 1e6 , y = (i.end  - (i.end - i.start + 550) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 9, fontface = 'bold') +
   geom_text(data = syn,
             aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = WSS / 1e6, label = "N2 gene: nhr-270"), vjust = -1, color = '#3B2F2F', size = 9, fontface = 'bold') +
   theme(
@@ -1661,11 +1641,11 @@ syn2 <- joined %>% dplyr::filter(strain == "ECA1260", n2_gene == "WBGene00011254
 syn7 <- ggplot(syn2) +
   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = i.start / 1e6, ymax = i.end / 1e6), fill = "#DB6333", alpha = 0.3) +
   geom_rect(aes(xmin = start_gene / 1e6, xmax = end_gene / 1e6, ymin = -Inf, ymax = Inf), fill = "#DB6333", alpha = 0.15) +
-  geom_segment(aes(x = unchanged_start_aln / 1e6, xend = unchanged_end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = 'blue', linewidth = 1) +
+  geom_segment(aes(x = start_aln / 1e6, xend = end_aln / 1e6, y = WSS / 1e6, yend = WSE / 1e6), color = 'blue', linewidth = 1) +
   geom_text(data = syn2,
-            aes(x =  17.7455, y = ((i.start / 1e6) + (i.end / 1e6)) / 2.0087, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 7, fontface = 'bold') +
+            aes(x =  17.7476, y = ((i.start / 1e6) + (i.end / 1e6)) / 2.0087, label = paste0("WS gene: ", attributes)), vjust = -1, color = '#3B2F2F', size = 7, fontface = 'bold') +
   geom_text(data = syn2 %>% dplyr::filter(L2 == "5151"),
-            aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = 0.31, label = "N2 gene: R12G8.1"), vjust = -1, color = '#3B2F2F', size = 7, fontface = 'bold') +
+            aes(x =  (end_gene - (end_gene - start_gene) / 2) / 1e6 , y = 0.317, label = "N2 gene: R12G8.1"), vjust = -1, color = '#3B2F2F', size = 7, fontface = 'bold') +
 
   # geom_text(data = joined %>% dplyr::filter(n2_gene == "WBGene00011254") %>% dplyr::filter(strain == "ECA1260"),
             # aes(x =  start_gene / 1e6 , y = (i.end  - (i.end - i.start) / 2) / 1e6, label = paste0("WS gene: ", attributes)), vjust = -1, color = 'blue', fontface = 'bold') +

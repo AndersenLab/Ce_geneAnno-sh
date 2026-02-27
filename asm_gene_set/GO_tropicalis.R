@@ -264,11 +264,6 @@ getGenesFromBed <- function(gff,regions) {
 }
 
 
-# nHDR_armDomain_BRIG <- readr::read_csv("/vast/eande106/projects/Nicolas/hyperdivergent_regions/briggsae/multi_reference/2024_release/QX1410/chromosome_domain_Cbriggsae.csv") %>%
-#   dplyr::rename(Chromosome=chrom) %>%
-#   dplyr::select(Chromosome,left,right) %>%
-#   dplyr::mutate(left=left*1e3,right=right*1e3)
-
 nHDR_armDomain <- readr::read_tsv("/vast/eande106/projects/Nicolas/hyperdivergent_regions/tropicalis/arm_domain_ranges.tsv") %>%
   dplyr::rename(left=domStart,right=domEnd) %>%
   dplyr::select(Chromosome,left,right)
@@ -360,7 +355,9 @@ GO_terms_merged <- AnnotationDbi::select(GO.db,
 merged_ont <- final_GO %>%
   dplyr::left_join(GO_terms_merged, by = c("GO" = "TERM")) 
 
-# HDR genes in arms against all NIC58 background set
+
+
+### BP ###
 enGO_HDR_merged <- clusterProfiler::enricher(
   gene = HD_gene_vector,
   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(GO,NIC58),
@@ -394,44 +391,6 @@ GO_list_BP <- enGO_HDR_dt %>%
                 Wrapped_Description = factor(Wrapped_Description, levels = unique(Wrapped_Description)),
                 plotpoint = dplyr::row_number())
 
-# GO_list_BP <- enGO_HDR_dt %>%
-#   dplyr::filter(p.adjust < 0.05) %>%
-#   dplyr::arrange(desc(p.adjust)) %>%  
-#   dplyr::mutate(Description = factor(Description, levels = unique(Description)), plotpoint = dplyr::row_number())
-
-# Dimensions for figure #
-# plot_GO_BP <- ggplot(GO_list_BP) +
-#   geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
-#   geom_point(aes(x = -log10(p.adjust), y = plotpoint, size = EnrichRatio, fill = Count), shape = 21) +
-#   scale_y_continuous(breaks = GO_list_BP$plotpoint, labels = GO_list_BP$Wrapped_Description, name = "", expand = c(0.02,0.02)) +
-#   scale_fill_gradient(low = "yellowgreen", high = "#53886C", breaks = c(round(min(GO_list_BP$Count, na.rm = TRUE)), round((max(GO_list_BP$Count, na.rm = TRUE) + min(GO_list_BP$Count, na.rm = TRUE) ) / 2), round(max(GO_list_BP$Count, na.rm = TRUE)))) +
-#   scale_size_continuous(range = c(0.1, 3), name = "Fold enrichment", breaks = pretty(GO_list_BP$EnrichRatio, n = 3)) +
-#   theme(axis.text.x = element_text(size=6, color='black'),
-#         axis.text.y = element_text(size=6, color='black'),
-#         axis.title = element_text(size=7, color='black', face = 'bold'),
-#         # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-#         plot.title = element_blank(),
-#         legend.title = element_text(size=5, color='black', hjust = 1),
-#         legend.text = element_text(size=4, color='black', hjust = 1),
-#         legend.position = "inside",
-#         legend.position.inside = c(0.8, 0.195),
-#         legend.direction = "horizontal", legend.box = "vertical",
-#         legend.spacing.y = unit(0.0001, 'cm'),
-#         legend.key.height = unit(0.01, "cm"),
-#         legend.key.width = unit(0.5, "cm"),
-#         legend.box.just = "right",
-#         panel.grid = element_blank(),
-#         panel.background = element_blank(),
-#         panel.border = element_rect(fill = NA),
-#         plot.margin = margin(t = 10, r = 10, b = 10, l = 20, unit = "pt")) +
-#   # legend.spacing.x = unit(0.02, "cm"),
-#   # legend.key.size = unit(0.3, 'cm')) +
-#   guides(
-#     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
-#     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-#   labs(title = "Enriched GO:BP terms for genes in HDRs", x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
-# plot_GO_BP
-
 
 plot_GO_BP <- ggplot(GO_list_BP) +
   geom_vline(xintercept = -log10(0.05), color='red', linewidth=0.4) +
@@ -444,8 +403,8 @@ plot_GO_BP <- ggplot(GO_list_BP) +
         axis.title = element_text(size=12, color='black', face = 'bold'),
         plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
         # plot.title = element_blank(),
-        legend.title = element_text(size=10, color='black', hjust = 1),
-        legend.text = element_text(size=8, color='black', hjust = 1),
+        legend.title = element_text(size=11, color='black', hjust = 1),
+        legend.text = element_text(size=10, color='black', hjust = 1),
         legend.position = "inside",
         legend.position.inside = c(0.8, 0.195),
         legend.direction = "horizontal", legend.box = "vertical",
@@ -465,80 +424,60 @@ plot_GO_BP <- ggplot(GO_list_BP) +
   labs(title = "Enriched GO:BP terms for genes in HDR arms", x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
 plot_GO_BP
 
-# GOBP_tableSave <- enGO_HDR_dt %>%
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/plot/GOBP_HDRs.png", plot_GO_BP, width = 10, height = 8, dpi = 600)
+
+ 
+# ### MF ###
+# enGO_HDR_merged_MF <- clusterProfiler::enricher(
+#   gene = HD_gene_vector,
+#   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(GO,NIC58),
+#   TERM2NAME = GO_terms_merged %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(TERM,TERM_NAME),
+#   universe = NIC58_merged_bgd_genes,
+#   pvalueCutoff = 0.05,
+#   pAdjustMethod = "BH",
+#   qvalueCutoff = 0.05,
+# )
+# 
+# head(enGO_HDR_merged_MF)
+# 
+# dotplot(enGO_HDR_merged_MF, showCategory = 40, title = "MF HDRs")
+# 
+# enGO_HDR_merged_MF <- as.data.table(enGO_HDR_merged_MF@result) %>%
+#   tidyr::separate(GeneRatio, into = c("hdr_gene_term", "hdr_gene_hit"), sep = "/", convert = TRUE) %>%
+#   tidyr::separate(BgRatio, into = c("bgd_term", "bgd_hit"), sep = "/", convert = TRUE) %>%
+#   dplyr::mutate(EnrichRatio = (hdr_gene_term / hdr_gene_hit) / (bgd_term / bgd_hit)) %>%
+#   dplyr::mutate(plotpoint = dplyr::row_number())
+# 
+# insert_linebreaks <- function(s, width = 40) {
+#   sapply(s, function(x) paste(strwrap(x, width = width), collapse = "\n"))
+# }
+# 
+# GO_list_MF <- enGO_HDR_merged_MF %>%
 #   dplyr::filter(p.adjust < 0.05) %>%
 #   dplyr::arrange(desc(p.adjust)) %>% 
-#   dplyr::select(-plotpoint) %>%
-#   dplyr::mutate(geneID = gsub("/", ", ", geneID))
-
-
-# Need to revert-back any simplifed Descritpions
-# write.table(GOBP_tableSave, file = "/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/briggsae/processed_data/final_plotsAndData/GOBP_HDRgenes.tsv",  col.names = TRUE, row.names = FALSE, sep = "\t", quote = FALSE)
-
-
-
-enGO_HDR_merged_MF <- clusterProfiler::enricher(
-  gene = HD_gene_vector,
-  TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(GO,NIC58),
-  TERM2NAME = GO_terms_merged %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(TERM,TERM_NAME),
-  universe = NIC58_merged_bgd_genes,
-  pvalueCutoff = 0.05,
-  pAdjustMethod = "BH",
-  qvalueCutoff = 0.05,
-)
-
-head(enGO_HDR_merged_MF)
-
-dotplot(enGO_HDR_merged_MF, showCategory = 40, title = "MF HDRs")
-
-enGO_HDR_merged_MF <- as.data.table(enGO_HDR_merged_MF@result) %>%
-  tidyr::separate(GeneRatio, into = c("hdr_gene_term", "hdr_gene_hit"), sep = "/", convert = TRUE) %>%
-  tidyr::separate(BgRatio, into = c("bgd_term", "bgd_hit"), sep = "/", convert = TRUE) %>%
-  dplyr::mutate(EnrichRatio = (hdr_gene_term / hdr_gene_hit) / (bgd_term / bgd_hit)) %>%
-  dplyr::mutate(plotpoint = dplyr::row_number())
-
-insert_linebreaks <- function(s, width = 40) {
-  sapply(s, function(x) paste(strwrap(x, width = width), collapse = "\n"))
-}
-
-GO_list_MF <- enGO_HDR_merged_MF %>%
-  dplyr::filter(p.adjust < 0.05) %>%
-  dplyr::arrange(desc(p.adjust)) %>% 
-  # dplyr::slice_head(n=30) %>%
-  dplyr::mutate(Wrapped_Description = insert_linebreaks(Description),
-                Wrapped_Description = factor(Wrapped_Description, levels = unique(Wrapped_Description)),
-                plotpoint = dplyr::row_number()) 
-
-# GO_list_MF <- GO_list_MF %>%
-#   dplyr::mutate(Description = gsub("oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen, reduced flavin or flavoprotein as one donor, and incorporation of one atom of oxygen","oxidoreductase activity (1)", Description), 
-#                 Description = gsub("oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen","oxidoreductase activity (2)", Description),
-#                 Description = gsub("transmitter-gated ion channel activity involved in regulation of postsynaptic membrane potential", "transmitter-gated ion channel (1)", Description))
-
-
-# oxidoreductase activity (1) = oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen, reduced flavin or flavoprotein as one donor, and incorporation of one atom of oxygen
-# oxidoreductase activity (2) = oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen
-# transmitter-gated ion channel (1) = transmitter-gated ion channel activity involved in regulation of postsynaptic membrane potential
-
-
-# ### Dimensions for figure ###
-# plot_GO_MF <- ggplot(GO_list_MF) +
-#   geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
+#   # dplyr::slice_head(n=30) %>%
+#   dplyr::mutate(Wrapped_Description = insert_linebreaks(Description),
+#                 Wrapped_Description = factor(Wrapped_Description, levels = unique(Wrapped_Description)),
+#                 plotpoint = dplyr::row_number()) 
+# 
+# plot_GO_MF <- ggplot(GO_list_MF) + 
+#   geom_vline(xintercept = -log10(0.05), color='red', linewidth=0.4) +
 #   geom_point(aes(x = -log10(p.adjust), y = plotpoint, size = EnrichRatio, fill = Count), shape = 21) +
-#   scale_y_continuous(breaks = GO_list_MF$plotpoint, labels = GO_list_MF$Description, name = "", expand = c(0.02,0.02)) +
-#   scale_fill_gradient(low = "yellowgreen", high = "#53886C", breaks = c(round(min(GO_list_MF$Count, na.rm = TRUE)), round((max(GO_list_MF$Count, na.rm = TRUE) + min(GO_list_MF$Count, na.rm = TRUE) ) / 2), round(max(GO_list_MF$Count, na.rm = TRUE)))) +
-#   scale_size_continuous(range = c(0.1, 3), name = "Fold enrichment", breaks = pretty(GO_list_MF$EnrichRatio, n = 3)) +
-#   theme(axis.text.x = element_text(size=6, color='black'), 
-#         axis.text.y = element_text(size=6, color='black'),
-#         axis.title = element_text(size=7, color='black', face = 'bold'), 
-#         # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-#         plot.title = element_blank(),
-#         legend.title = element_text(size=5, color='black', hjust = 1), 
-#         legend.text = element_text(size=4, color='black', hjust = 1), 
-#         legend.position = "inside", 
+#   scale_y_continuous(breaks = GO_list_MF$plotpoint, labels = GO_list_MF$Wrapped_Description, name = "", expand = c(0.02,0.02)) +
+#   scale_fill_gradient(low = "skyblue", high = "#0719BC", breaks = c(round(min(GO_list_MF$Count, na.rm = TRUE)), round((max(GO_list_MF$Count, na.rm = TRUE) + min(GO_list_MF$Count, na.rm = TRUE) ) / 2), round(max(GO_list_MF$Count, na.rm = TRUE)))) +
+#   scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(GO_list_MF$EnrichRatio, n = 3)) +
+#   theme(axis.text.x = element_text(size=12, color='black'),
+#         axis.text.y = element_text(size=12, color='black'),
+#         axis.title = element_text(size=12, color='black', face = 'bold'),
+#         plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+#         # plot.title = element_blank(),
+#         legend.title = element_text(size=10, color='black', hjust = 1),
+#         legend.text = element_text(size=8, color='black', hjust = 1),
+#         legend.position = "inside",
 #         legend.position.inside = c(0.8, 0.195),
 #         legend.direction = "horizontal", legend.box = "vertical",
-#         legend.spacing.y = unit(0.0001, 'cm'),
-#         legend.key.height = unit(0.01, "cm"), 
+#         legend.spacing.y = unit(0.01, 'cm'),
+#         legend.key.height = unit(0.1, "cm"),
 #         legend.key.width = unit(0.5, "cm"),
 #         legend.box.just = "right",
 #         panel.grid = element_blank(),
@@ -548,201 +487,145 @@ GO_list_MF <- enGO_HDR_merged_MF %>%
 #   # legend.spacing.x = unit(0.02, "cm"),
 #   # legend.key.size = unit(0.3, 'cm')) +
 #   guides(
-#     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
+#     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 1.5),
 #     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-#   labs(title = "Enriched GO:MF terms for genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count") 
+#   labs(title = "Enriched GO:MF terms for genes in HDR arms", x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
 # plot_GO_MF
-
-plot_GO_MF <- ggplot(GO_list_MF) + 
-  geom_vline(xintercept = -log10(0.05), color='red', linewidth=0.4) +
-  geom_point(aes(x = -log10(p.adjust), y = plotpoint, size = EnrichRatio, fill = Count), shape = 21) +
-  scale_y_continuous(breaks = GO_list_MF$plotpoint, labels = GO_list_MF$Wrapped_Description, name = "", expand = c(0.02,0.02)) +
-  scale_fill_gradient(low = "skyblue", high = "#0719BC", breaks = c(round(min(GO_list_MF$Count, na.rm = TRUE)), round((max(GO_list_MF$Count, na.rm = TRUE) + min(GO_list_MF$Count, na.rm = TRUE) ) / 2), round(max(GO_list_MF$Count, na.rm = TRUE)))) +
-  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(GO_list_MF$EnrichRatio, n = 3)) +
-  theme(axis.text.x = element_text(size=12, color='black'),
-        axis.text.y = element_text(size=12, color='black'),
-        axis.title = element_text(size=12, color='black', face = 'bold'),
-        plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        # plot.title = element_blank(),
-        legend.title = element_text(size=10, color='black', hjust = 1),
-        legend.text = element_text(size=8, color='black', hjust = 1),
-        legend.position = "inside",
-        legend.position.inside = c(0.8, 0.195),
-        legend.direction = "horizontal", legend.box = "vertical",
-        legend.spacing.y = unit(0.01, 'cm'),
-        legend.key.height = unit(0.1, "cm"),
-        legend.key.width = unit(0.5, "cm"),
-        legend.box.just = "right",
-        panel.grid = element_blank(),
-        panel.background = element_blank(),
-        panel.border = element_rect(fill = NA),
-        plot.margin = margin(t = 10, r = 10, b = 10, l = 20, unit = "pt")) +
-  # legend.spacing.x = unit(0.02, "cm"),
-  # legend.key.size = unit(0.3, 'cm')) +
-  guides(
-    fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 1.5),
-    size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-  labs(title = "Enriched GO:MF terms for genes in HDR arms", x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
-plot_GO_MF
-
-# GOMF_tableSave <- enGO_HDR_merged_MF %>%
+# 
+# 
+# 
+# 
+# ########### No enrichment in non-HDR arm domains ############
+# ### BP ###
+# enGO_nHDR_merged <- clusterProfiler::enricher(
+#   gene = nHD_gene_vector,
+#   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(GO,NIC58),
+#   TERM2NAME = GO_terms_merged %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(TERM,TERM_NAME),
+#   universe = NIC58_merged_bgd_genes,
+#   pvalueCutoff = 0.05,
+#   pAdjustMethod = "BH",
+#   qvalueCutoff = 0.05,
+# )
+# 
+# head(enGO_nHDR_merged)
+# 
+# dotplot(enGO_nHDR_merged, showCategory = 40, title = "BP HDRs")
+# 
+# enGO_nHDR_dt <- as.data.table(enGO_nHDR_merged@result) %>%
+#   tidyr::separate(GeneRatio, into = c("hdr_gene_term", "hdr_gene_hit"), sep = "/", convert = TRUE) %>%
+#   tidyr::separate(BgRatio, into = c("bgd_term", "bgd_hit"), sep = "/", convert = TRUE) %>%
+#   dplyr::mutate(EnrichRatio = (hdr_gene_term / hdr_gene_hit) / (bgd_term / bgd_hit)) %>%
+#   dplyr::mutate(plotpoint = dplyr::row_number())
+# 
+# 
+# insert_linebreaks <- function(s, width = 40) {
+#   sapply(s, function(x) paste(strwrap(x, width = width), collapse = "\n"))
+# }
+# 
+# GO_list_BP_nHDR <- enGO_nHDR_dt %>%
 #   dplyr::filter(p.adjust < 0.05) %>%
 #   dplyr::arrange(desc(p.adjust)) %>% 
-#   dplyr::select(-plotpoint) %>%
-#   dplyr::mutate(geneID = gsub("/", ", ", geneID))
-
-
-# Need to revert-back any simplifed Descritpions
-# write.table(GOMF_tableSave, file = "/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/briggsae/processed_data/final_plotsAndData/GOMF_HDRgenes.tsv",  col.names = TRUE, row.names = FALSE, sep = "\t", quote = FALSE)
-
-
- 
-# final_plot <- cowplot::plot_grid(
-#   plot_GO_BP, plot_GO_MF,
-#   ncol = 1,
-#   align = "v",
-#   axis = "lr",
-#   labels = c("A", "B"),
-#   label_size = 14,
-#   label_fontface = "plain")
-# final_plot
-
-
-# ggsave("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/briggsae/processed_data/final_plotsAndData/GOBP_GOMF_Cbrig.png", final_plot,  width = 7.5, height = 6, dpi = 600)
-
-
-
-########### No enrichment in non-HDR arm domains ############
-### BP ###
-enGO_nHDR_merged <- clusterProfiler::enricher(
-  gene = nHD_gene_vector,
-  TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(GO,NIC58),
-  TERM2NAME = GO_terms_merged %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(TERM,TERM_NAME),
-  universe = NIC58_merged_bgd_genes,
-  pvalueCutoff = 0.05,
-  pAdjustMethod = "BH",
-  qvalueCutoff = 0.05,
-)
-
-head(enGO_nHDR_merged)
-
-dotplot(enGO_nHDR_merged, showCategory = 40, title = "BP HDRs")
-
-enGO_nHDR_dt <- as.data.table(enGO_nHDR_merged@result) %>%
-  tidyr::separate(GeneRatio, into = c("hdr_gene_term", "hdr_gene_hit"), sep = "/", convert = TRUE) %>%
-  tidyr::separate(BgRatio, into = c("bgd_term", "bgd_hit"), sep = "/", convert = TRUE) %>%
-  dplyr::mutate(EnrichRatio = (hdr_gene_term / hdr_gene_hit) / (bgd_term / bgd_hit)) %>%
-  dplyr::mutate(plotpoint = dplyr::row_number())
-
-
-insert_linebreaks <- function(s, width = 40) {
-  sapply(s, function(x) paste(strwrap(x, width = width), collapse = "\n"))
-}
-
-GO_list_BP_nHDR <- enGO_nHDR_dt %>%
-  dplyr::filter(p.adjust < 0.05) %>%
-  dplyr::arrange(desc(p.adjust)) %>% 
-  # dplyr::slice_head(n=30) %>%
-  dplyr::mutate(Wrapped_Description = insert_linebreaks(Description),
-                Wrapped_Description = factor(Wrapped_Description, levels = unique(Wrapped_Description)),
-                plotpoint = dplyr::row_number())
-
-plot_GO_BP_nHDR <- ggplot(GO_list_BP_nHDR) +
-  geom_vline(xintercept = -log10(0.05), color='red', linewidth=0.4) +
-  geom_point(aes(x = -log10(p.adjust), y = plotpoint, size = EnrichRatio, fill = Count), shape = 21) +
-  scale_y_continuous(breaks = GO_list_BP_nHDR$plotpoint, labels = GO_list_BP_nHDR$Wrapped_Description, name = "", expand = c(0.02,0.02)) +
-  scale_fill_gradient(low = "skyblue", high = "#0719BC", breaks = c(round(min(GO_list_BP_nHDR$Count, na.rm = TRUE)), round((max(GO_list_BP_nHDR$Count, na.rm = TRUE) + min(GO_list_BP_nHDR$Count, na.rm = TRUE) ) / 2), round(max(GO_list_BP_nHDR$Count, na.rm = TRUE)))) +
-  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(GO_list_BP_nHDR$EnrichRatio, n = 3)) +
-  theme(axis.text.x = element_text(size=12, color='black'),
-        axis.text.y = element_text(size=12, color='black'),
-        axis.title = element_text(size=12, color='black', face = 'bold'),
-        plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        # plot.title = element_blank(),
-        legend.title = element_text(size=10, color='black', hjust = 1),
-        legend.text = element_text(size=8, color='black', hjust = 1),
-        legend.position = "inside",
-        legend.position.inside = c(0.8, 0.195),
-        legend.direction = "horizontal", legend.box = "vertical",
-        legend.spacing.y = unit(0.01, 'cm'),
-        legend.key.height = unit(0.1, "cm"),
-        legend.key.width = unit(0.5, "cm"),
-        legend.box.just = "right",
-        panel.grid = element_blank(),
-        panel.background = element_blank(),
-        panel.border = element_rect(fill = NA),
-        plot.margin = margin(t = 10, r = 10, b = 10, l = 20, unit = "pt")) +
-  # legend.spacing.x = unit(0.02, "cm"),
-  # legend.key.size = unit(0.3, 'cm')) +
-  guides(
-    fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 1.5),
-    size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-  labs(title = "Enriched GO:BP terms for genes in nHDR arms", x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
-plot_GO_BP_nHDR
-
-
-
-
-### MF ###
-enGO_nHDR_merged_MF <- clusterProfiler::enricher(
-  gene = nHD_gene_vector,
-  TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(GO,NIC58),
-  TERM2NAME = GO_terms_merged %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(TERM,TERM_NAME),
-  universe = NIC58_merged_bgd_genes,
-  pvalueCutoff = 0.05,
-  pAdjustMethod = "BH",
-  qvalueCutoff = 0.05,
-)
-
-head(enGO_nHDR_merged_MF)
-
-dotplot(enGO_nHDR_merged_MF, showCategory = 40, title = "MF nHDRs")
-
-enGO_nHDR_merged_MF <- as.data.table(enGO_nHDR_merged_MF@result) %>%
-  tidyr::separate(GeneRatio, into = c("hdr_gene_term", "hdr_gene_hit"), sep = "/", convert = TRUE) %>%
-  tidyr::separate(BgRatio, into = c("bgd_term", "bgd_hit"), sep = "/", convert = TRUE) %>%
-  dplyr::mutate(EnrichRatio = (hdr_gene_term / hdr_gene_hit) / (bgd_term / bgd_hit)) %>%
-  dplyr::mutate(plotpoint = dplyr::row_number())
-
-insert_linebreaks <- function(s, width = 40) {
-  sapply(s, function(x) paste(strwrap(x, width = width), collapse = "\n"))
-}
-
-GO_list_MF_nHDR <- enGO_nHDR_merged_MF %>%
-  dplyr::filter(p.adjust < 0.05) %>%
-  dplyr::arrange(desc(p.adjust)) %>% 
-  # dplyr::slice_head(n=30) %>%
-  dplyr::mutate(Wrapped_Description = insert_linebreaks(Description),
-                Wrapped_Description = factor(Wrapped_Description, levels = unique(Wrapped_Description)),
-                plotpoint = dplyr::row_number()) 
-
-plot_GO_MF_nHDR <- ggplot(GO_list_MF_nHDR) + 
-  geom_vline(xintercept = -log10(0.05), color='red', linewidth=0.4) +
-  geom_point(aes(x = -log10(p.adjust), y = plotpoint, size = EnrichRatio, fill = Count), shape = 21) +
-  scale_y_continuous(breaks = GO_list_MF_nHDR$plotpoint, labels = GO_list_MF_nHDR$Wrapped_Description, name = "", expand = c(0.02,0.02)) +
-  scale_fill_gradient(low = "skyblue", high = "#0719BC", breaks = c(round(min(GO_list_MF_nHDR$Count, na.rm = TRUE)), round((max(GO_list_MF_nHDR$Count, na.rm = TRUE) + min(GO_list_MF_nHDR$Count, na.rm = TRUE) ) / 2), round(max(GO_list_MF_nHDR$Count, na.rm = TRUE)))) +
-  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(GO_list_MF_nHDR$EnrichRatio, n = 3)) +
-  theme(axis.text.x = element_text(size=12, color='black'),
-        axis.text.y = element_text(size=12, color='black'),
-        axis.title = element_text(size=12, color='black', face = 'bold'),
-        plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        # plot.title = element_blank(),
-        legend.title = element_text(size=10, color='black', hjust = 1),
-        legend.text = element_text(size=8, color='black', hjust = 1),
-        legend.position = "inside",
-        legend.position.inside = c(0.8, 0.195),
-        legend.direction = "horizontal", legend.box = "vertical",
-        legend.spacing.y = unit(0.01, 'cm'),
-        legend.key.height = unit(0.1, "cm"),
-        legend.key.width = unit(0.5, "cm"),
-        legend.box.just = "right",
-        panel.grid = element_blank(),
-        panel.background = element_blank(),
-        panel.border = element_rect(fill = NA),
-        plot.margin = margin(t = 10, r = 10, b = 10, l = 20, unit = "pt")) +
-  # legend.spacing.x = unit(0.02, "cm"),
-  # legend.key.size = unit(0.3, 'cm')) +
-  guides(
-    fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 1.5),
-    size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-  labs(title = "Enriched GO:MF terms for genes in nHDR arms", x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
-plot_GO_MF_nHDR
+#   # dplyr::slice_head(n=30) %>%
+#   dplyr::mutate(Wrapped_Description = insert_linebreaks(Description),
+#                 Wrapped_Description = factor(Wrapped_Description, levels = unique(Wrapped_Description)),
+#                 plotpoint = dplyr::row_number())
+# 
+# plot_GO_BP_nHDR <- ggplot(GO_list_BP_nHDR) +
+#   geom_vline(xintercept = -log10(0.05), color='red', linewidth=0.4) +
+#   geom_point(aes(x = -log10(p.adjust), y = plotpoint, size = EnrichRatio, fill = Count), shape = 21) +
+#   scale_y_continuous(breaks = GO_list_BP_nHDR$plotpoint, labels = GO_list_BP_nHDR$Wrapped_Description, name = "", expand = c(0.02,0.02)) +
+#   scale_fill_gradient(low = "skyblue", high = "#0719BC", breaks = c(round(min(GO_list_BP_nHDR$Count, na.rm = TRUE)), round((max(GO_list_BP_nHDR$Count, na.rm = TRUE) + min(GO_list_BP_nHDR$Count, na.rm = TRUE) ) / 2), round(max(GO_list_BP_nHDR$Count, na.rm = TRUE)))) +
+#   scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(GO_list_BP_nHDR$EnrichRatio, n = 3)) +
+#   theme(axis.text.x = element_text(size=12, color='black'),
+#         axis.text.y = element_text(size=12, color='black'),
+#         axis.title = element_text(size=12, color='black', face = 'bold'),
+#         plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+#         # plot.title = element_blank(),
+#         legend.title = element_text(size=10, color='black', hjust = 1),
+#         legend.text = element_text(size=8, color='black', hjust = 1),
+#         legend.position = "inside",
+#         legend.position.inside = c(0.8, 0.195),
+#         legend.direction = "horizontal", legend.box = "vertical",
+#         legend.spacing.y = unit(0.01, 'cm'),
+#         legend.key.height = unit(0.1, "cm"),
+#         legend.key.width = unit(0.5, "cm"),
+#         legend.box.just = "right",
+#         panel.grid = element_blank(),
+#         panel.background = element_blank(),
+#         panel.border = element_rect(fill = NA),
+#         plot.margin = margin(t = 10, r = 10, b = 10, l = 20, unit = "pt")) +
+#   # legend.spacing.x = unit(0.02, "cm"),
+#   # legend.key.size = unit(0.3, 'cm')) +
+#   guides(
+#     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 1.5),
+#     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
+#   labs(title = "Enriched GO:BP terms for genes in nHDR arms", x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
+# plot_GO_BP_nHDR
+# 
+# 
+# 
+# 
+# ### MF ###
+# enGO_nHDR_merged_MF <- clusterProfiler::enricher(
+#   gene = nHD_gene_vector,
+#   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(GO,NIC58),
+#   TERM2NAME = GO_terms_merged %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(TERM,TERM_NAME),
+#   universe = NIC58_merged_bgd_genes,
+#   pvalueCutoff = 0.05,
+#   pAdjustMethod = "BH",
+#   qvalueCutoff = 0.05,
+# )
+# 
+# head(enGO_nHDR_merged_MF)
+# 
+# dotplot(enGO_nHDR_merged_MF, showCategory = 40, title = "MF nHDRs")
+# 
+# enGO_nHDR_merged_MF <- as.data.table(enGO_nHDR_merged_MF@result) %>%
+#   tidyr::separate(GeneRatio, into = c("hdr_gene_term", "hdr_gene_hit"), sep = "/", convert = TRUE) %>%
+#   tidyr::separate(BgRatio, into = c("bgd_term", "bgd_hit"), sep = "/", convert = TRUE) %>%
+#   dplyr::mutate(EnrichRatio = (hdr_gene_term / hdr_gene_hit) / (bgd_term / bgd_hit)) %>%
+#   dplyr::mutate(plotpoint = dplyr::row_number())
+# 
+# insert_linebreaks <- function(s, width = 40) {
+#   sapply(s, function(x) paste(strwrap(x, width = width), collapse = "\n"))
+# }
+# 
+# GO_list_MF_nHDR <- enGO_nHDR_merged_MF %>%
+#   dplyr::filter(p.adjust < 0.05) %>%
+#   dplyr::arrange(desc(p.adjust)) %>% 
+#   # dplyr::slice_head(n=30) %>%
+#   dplyr::mutate(Wrapped_Description = insert_linebreaks(Description),
+#                 Wrapped_Description = factor(Wrapped_Description, levels = unique(Wrapped_Description)),
+#                 plotpoint = dplyr::row_number()) 
+# 
+# plot_GO_MF_nHDR <- ggplot(GO_list_MF_nHDR) + 
+#   geom_vline(xintercept = -log10(0.05), color='red', linewidth=0.4) +
+#   geom_point(aes(x = -log10(p.adjust), y = plotpoint, size = EnrichRatio, fill = Count), shape = 21) +
+#   scale_y_continuous(breaks = GO_list_MF_nHDR$plotpoint, labels = GO_list_MF_nHDR$Wrapped_Description, name = "", expand = c(0.02,0.02)) +
+#   scale_fill_gradient(low = "skyblue", high = "#0719BC", breaks = c(round(min(GO_list_MF_nHDR$Count, na.rm = TRUE)), round((max(GO_list_MF_nHDR$Count, na.rm = TRUE) + min(GO_list_MF_nHDR$Count, na.rm = TRUE) ) / 2), round(max(GO_list_MF_nHDR$Count, na.rm = TRUE)))) +
+#   scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(GO_list_MF_nHDR$EnrichRatio, n = 3)) +
+#   theme(axis.text.x = element_text(size=12, color='black'),
+#         axis.text.y = element_text(size=12, color='black'),
+#         axis.title = element_text(size=12, color='black', face = 'bold'),
+#         plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+#         # plot.title = element_blank(),
+#         legend.title = element_text(size=10, color='black', hjust = 1),
+#         legend.text = element_text(size=8, color='black', hjust = 1),
+#         legend.position = "inside",
+#         legend.position.inside = c(0.8, 0.195),
+#         legend.direction = "horizontal", legend.box = "vertical",
+#         legend.spacing.y = unit(0.01, 'cm'),
+#         legend.key.height = unit(0.1, "cm"),
+#         legend.key.width = unit(0.5, "cm"),
+#         legend.box.just = "right",
+#         panel.grid = element_blank(),
+#         panel.background = element_blank(),
+#         panel.border = element_rect(fill = NA),
+#         plot.margin = margin(t = 10, r = 10, b = 10, l = 20, unit = "pt")) +
+#   # legend.spacing.x = unit(0.02, "cm"),
+#   # legend.key.size = unit(0.3, 'cm')) +
+#   guides(
+#     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 1.5),
+#     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
+#   labs(title = "Enriched GO:MF terms for genes in nHDR arms", x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
+# plot_GO_MF_nHDR

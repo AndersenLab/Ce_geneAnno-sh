@@ -893,7 +893,7 @@ plot_ipr
 
 #==============================================================================================================================================================================================================================#
 
-# INTERPROSCAN (Gene Ontology) - all pangenes as background
+# INTERPROSCAN (Gene Ontology) - all pangene as background
 
 #==============================================================================================================================================================================================================================#
 go_ipr <- all_ipr %>%
@@ -958,7 +958,7 @@ plot_GO_BP <- ggplot(enGO_HDR_merged_plot_BP) +
         legend.text = element_text(size=12, color='black', hjust = 1),
         legend.position = "inside",
         legend.position.inside = c(0.8, 0.2),
-        legend.direction = "horizontal", legend.box = "vertical",s
+        legend.direction = "horizontal", legend.box = "vertical",
         legend.spacing.y = unit(0.0001, 'cm'),
         legend.key.height = unit(0.01, "cm"),
         legend.key.width = unit(0.5, "cm"),

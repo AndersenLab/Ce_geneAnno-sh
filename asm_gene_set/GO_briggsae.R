@@ -95,9 +95,11 @@ HOG_class_count <- classification %>%
 # Extracting QX - N2 any-to-ones
 qn <- all_relations %>%
   dplyr::select(-AF16_count) %>%
-  dplyr::filter(QX1410_count >= 1) %>%
+  dplyr::filter(QX1410_count == 1) %>%  ################################# FILTERING FOR ONE-TO-ONES 
+  # dplyr::filter(QX1410_count >= 1) %>%
   dplyr::filter(N2_count == 1) %>% 
-  dplyr::filter(HOG != "N0.HOG0000062")
+  dplyr::filter(HOG != "N0.HOG0000062") %>%
+  dplyr::filter(HOG != "N0.HOG0000172")
 
 oneoneqn <- ortho_genes_dd %>%
   dplyr::filter(HOG %in% qn$HOG) %>%
@@ -159,8 +161,9 @@ sumdf <- ortho_genes_dd %>%
   dplyr::rename(QX1410 = QX1410.x) %>%
   tidyr::separate_rows(N2, sep = ",") %>%
   dplyr::left_join(rbbh, by = "N2") %>%
-  dplyr::filter(HOG != "N0.HOG0000062") # gene model error in this HOG - MANY QX1410 genes for a single N2 gene because of some AA similarity for different overlapping genes on Watson and Crick
-
+  dplyr::filter(HOG != "N0.HOG0000062") %>% # gene model error in this HOG - MANY QX1410 genes for a single N2 gene because of some AA similarity for different overlapping genes on Watson and Crick
+  dplyr::filter(HOG != "N0.HOG0000172")
+    
 rbbh_GO <- sumdf %>%
   dplyr::filter(is.na(GO) & !is.na(QX_rbbh)) %>%
   dplyr::select(HOG,QX1410,QX_rbbh,GO,N2) %>%
@@ -190,7 +193,8 @@ N2_alias <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/o
 # Isolating QX1410 - AF16 any-to-one
 cbcb <- all_relations %>%
   dplyr::select(-N2_count) %>%
-  dplyr::filter(QX1410_count >= 1) %>%
+  dplyr::filter(QX1410_count == 1) %>% ################################# FILTERING FOR ONE-TO-ONES 
+  # dplyr::filter(QX1410_count >= 1) %>%
   dplyr::filter(AF16_count <= 1) 
 
 # Adding AF16 alias names and left-joining with N2 alias' for GO ID lift over
@@ -206,6 +210,7 @@ cbcb_genes <- ortho_genes_dd %>%
   dplyr::rename(GO_fromAlias = GO)
 
 final_GO <- ortho_genes_dd %>%
+  dplyr::filter(HOG %in% cbcb$HOG) %>% ################################# FILTERING FOR ONE-TO-ONES 
   dplyr::select(QX1410) %>%
   tidyr::separate_rows(QX1410, sep = ',\\s') %>%
   dplyr::filter(!is.na(QX1410)) %>%
@@ -217,95 +222,172 @@ final_GO <- ortho_genes_dd %>%
   dplyr::filter(!is.na(GO)) %>%
   dplyr::select(QX1410, GO) # 11,568 
 
-
-
-# Assessing liftover for WormCat terms and N2 genes associated with them for Nic - 07/11 #
-test <- ortho_genes_dd %>%
-  dplyr::select(QX1410) %>%
+# 11,363 one-to-one's
+# validating.....
+oneone_HOG_list <- ortho_genes_dd %>%
+  dplyr::filter(HOG %in% cbcb$HOG) %>% ################################# FILTERING FOR ONE-TO-ONES 
+  dplyr::select(HOG,QX1410) %>%
   tidyr::separate_rows(QX1410, sep = ',\\s') %>%
   dplyr::filter(!is.na(QX1410)) %>%
   dplyr::left_join(join_final, by = "QX1410") %>%
   dplyr::left_join(cbcb_genes, by = "QX1410") %>%
-  dplyr::select(QX1410, N2.x, GO_final.x, N2_WBGeneID, GO_fromAlias) %>%
+  dplyr::select(HOG,QX1410, N2.x, GO_final.x, N2_WBGeneID, GO_fromAlias) %>%
   dplyr::mutate(N2 = ifelse(!is.na(N2.x), N2.x, N2_WBGeneID)) %>%
   dplyr::mutate(GO = ifelse(!is.na(GO_final.x), GO_final.x, GO_fromAlias)) %>%
   dplyr::filter(!is.na(GO)) %>%
-  dplyr::select(QX1410,GO,N2) 
-
-pulled <- test %>%
-  dplyr::select(N2) %>%
+  dplyr::select(HOG) %>%
   dplyr::distinct() %>%
   dplyr::pull()
 
-terms <- readr::read_csv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/misc/N2_WormCat_terms_andGenes.csv", col_names = c("seqID", "N2", "class","cat1","cat2", "cat3", "desc")) 
+filtered <- all_relations %>%
+  dplyr::filter(HOG %in% oneone_HOG_list)
 
-gpcr <- terms %>%
-  dplyr::filter(grepl("Signaling: heteromeric G protein", cat1)) %>%
-  dplyr::select(N2, cat1) %>%
-  dplyr::mutate(lifted_over = ifelse(N2 %in% pulled, TRUE, FALSE)) 
-summary_gp <- gpcr %>%
-  dplyr::count(lifted_over)
-test_gpcr <- test %>%
-  dplyr::left_join(gpcr, by = "N2") %>%
-  dplyr::mutate(inHDR = ifelse(QX1410 %in% HD_all_gene_vector, TRUE, FALSE)) %>%
-  dplyr::filter(!is.na(lifted_over)) %>%
-  dplyr::distinct(QX1410, .keep_all = T) %>%
-  dplyr::count(inHDR)
-summary_gpHDR <- test_gpcr %>%
-  dplyr::count(inHDR)
 
+
+
+# Looking at relationship (1:many ??) of QX1410 genes in HOGs enriched in embryo development (Ed) - 08/11
+# HOG_Ed <- c("N0.HOG0009028","N0.HOG0000528","N0.HOG0012456","N0.HOG0000527","N0.HOG0000172","N0.HOG0001923","N0.HOG0005314","N0.HOG0014321")
+# 
+# Ed <- ortho_genes_dd %>%
+#   dplyr::select(HOG, QX1410, N2) %>%
+#   dplyr::filter(HOG %in% HOG_Ed)
+# 
+# col_names <- colnames(Ed)
+# 
+# gene_count <- Ed
+# 
+# for (i in 2:length(col_names)) {
+#   print(paste0(i,"out of", length(col_names)))
+#   temp_colname = paste0(col_names[i], "_count")
+#   
+#   gene_count <- gene_count %>%
+#     dplyr::mutate(!!sym(temp_colname) := stringr::str_count(!!sym(col_names[i]),", ") + 1)
+# }
+
+# ^ apply above command to entire dataframe and then have a conditions of if N2_count == 1 and QX1410_count > n, remove row
+count_complexHOGs <- ortho_genes_dd %>%
+  dplyr::select(HOG,OG,QX1410,N2,AF16) %>%
+  dplyr::filter(!is.na(N2), !is.na(QX1410)) %>%
+  dplyr::filter(HOG != "N0.HOG0000062", HOG != "N0.HOG0000172") # already validated incorrect HOGs because of gene modeling errors resulting in fusions
+
+gene_count <- count_complexHOGs
+col_names <- colnames(count_complexHOGs)
+
+for (i in 3:length(col_names)) {
+  print(paste0(i,"out of", length(col_names)))
+  temp_colname = paste0(col_names[i], "_count")
   
-Clectin <- terms %>%
-  dplyr::filter(grepl("Stress response: C-type Lectin", cat1)) %>%
-  dplyr::select(N2, cat1) %>%
-  dplyr::mutate(lifted_over = ifelse(N2 %in% pulled, TRUE, FALSE))
-summary_Cl <- Clectin %>%
-  dplyr::count(lifted_over)
-test_Clectin <- test %>%
-  dplyr::left_join(Clectin, by = "N2") %>%
-  dplyr::mutate(inHDR = ifelse(QX1410 %in% HD_all_gene_vector, TRUE, FALSE)) %>%
-  dplyr::filter(!is.na(lifted_over)) %>%
-  dplyr::distinct(QX1410, .keep_all = T) %>%
-  dplyr::count(inHDR)
-                
+  gene_count <- gene_count %>%
+    dplyr::mutate(!!sym(temp_colname) := stringr::str_count(!!sym(col_names[i]),", ") + 1)
+}
 
-E3 <- terms %>%
-  dplyr::filter(grepl("Proteolysis proteasome: E3", cat1)) %>%
-  dplyr::select(N2, cat1) %>%
-  dplyr::mutate(lifted_over = ifelse(N2 %in% pulled, TRUE, FALSE)) 
-summary_E3 <- E3 %>%
-  dplyr::count(lifted_over)
-test_E3 <- test %>%
-  dplyr::left_join(E3, by = "N2") %>%
-  dplyr::mutate(inHDR = ifelse(QX1410 %in% HD_all_gene_vector, TRUE, FALSE)) %>%
-  dplyr::filter(!is.na(lifted_over)) %>%
-  dplyr::distinct(QX1410, .keep_all = T) %>%
-  dplyr::count(inHDR)
+howMany <- gene_count %>%
+  dplyr::mutate(complex = ifelse(N2_count == 1 & QX1410_count >=2, T,F)) %>%
+  dplyr::mutate(ratio = ifelse(complex == T, QX1410_count / N2_count, NA))
 
-               
-Fbox <- terms %>% 
-  dplyr::filter(grepl("Proteolysis proteasome: E3: F box", cat2)) %>%
-  dplyr::select(N2, cat2) %>%
-  dplyr::mutate(lifted_over = ifelse(N2 %in% pulled, TRUE, FALSE)) 
-summary_Fbox <- Fbox %>%
-  dplyr::count(lifted_over)
-test_Fbox <- test %>%
-  dplyr::left_join(Fbox, by = "N2") %>%
-  dplyr::mutate(inHDR = ifelse(QX1410 %in% HD_all_gene_vector, TRUE, FALSE)) %>%
-  dplyr::filter(!is.na(lifted_over)) %>%
-  dplyr::distinct(QX1410, .keep_all = T) %>%
-  dplyr::count(inHDR)
+ggplot(howMany) +
+  geom_histogram(aes(x = ratio), binwidth = 1, fill = 'purple') +
+  theme(
+    axis.title = element_text(size = 14, face = 'bold', color = 'black'),
+    axis.text = element_text(size = 12, color = 'black'),
+    panel.grid = element_blank(),
+    panel.background = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA)) +
+  scale_x_continuous(expand = c(0.01,0)) +
+  scale_y_continuous(expand = c(0.01,0)) +
+  xlab("N2 genes / QX1410 genes") +
+  ylab("Count")
 
-pals <- N2_alias %>%
-  dplyr::filter(grepl("pals", alias)) %>%
-  dplyr::rename(N2 = N2_WBGeneID) %>%
-  dplyr::mutate(lifted_over = ifelse(N2 %in% pulled, TRUE, FALSE))
-test_pals <- test %>%
-  dplyr::left_join(pals, by = "N2") %>%
-  dplyr::mutate(inHDR = ifelse(QX1410 %in% HD_all_gene_vector, TRUE, FALSE)) %>%
-  dplyr::filter(!is.na(lifted_over)) %>%
-  dplyr::distinct(QX1410, .keep_all = T) #%>%
-  dplyr::count(inHDR)
+
+
+
+# Assessing liftover for WormCat terms and N2 genes associated with them for Nic - 07/11 #
+# test <- ortho_genes_dd %>%
+#   dplyr::select(QX1410) %>%
+#   tidyr::separate_rows(QX1410, sep = ',\\s') %>%
+#   dplyr::filter(!is.na(QX1410)) %>%
+#   dplyr::left_join(join_final, by = "QX1410") %>%
+#   dplyr::left_join(cbcb_genes, by = "QX1410") %>%
+#   dplyr::select(QX1410, N2.x, GO_final.x, N2_WBGeneID, GO_fromAlias) %>%
+#   dplyr::mutate(N2 = ifelse(!is.na(N2.x), N2.x, N2_WBGeneID)) %>%
+#   dplyr::mutate(GO = ifelse(!is.na(GO_final.x), GO_final.x, GO_fromAlias)) %>%
+#   dplyr::filter(!is.na(GO)) %>%
+#   dplyr::select(QX1410,GO,N2) 
+# 
+# pulled <- test %>%
+#   dplyr::select(N2) %>%
+#   dplyr::distinct() %>%
+#   dplyr::pull()
+
+# terms <- readr::read_csv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/misc/N2_WormCat_terms_andGenes.csv", col_names = c("seqID", "N2", "class","cat1","cat2", "cat3", "desc")) 
+# 
+# gpcr <- terms %>%
+#   dplyr::filter(grepl("Signaling: heteromeric G protein", cat1)) %>%
+#   dplyr::select(N2, cat1) %>%
+#   dplyr::mutate(lifted_over = ifelse(N2 %in% pulled, TRUE, FALSE)) 
+# summary_gp <- gpcr %>%
+#   dplyr::count(lifted_over)
+# test_gpcr <- test %>%
+#   dplyr::left_join(gpcr, by = "N2") %>%
+#   dplyr::mutate(inHDR = ifelse(QX1410 %in% HD_all_gene_vector, TRUE, FALSE)) %>%
+#   dplyr::filter(!is.na(lifted_over)) %>%
+#   dplyr::distinct(QX1410, .keep_all = T) %>%
+#   dplyr::count(inHDR)
+# summary_gpHDR <- test_gpcr %>%
+#   dplyr::count(inHDR)
+# 
+#   
+# Clectin <- terms %>%
+#   dplyr::filter(grepl("Stress response: C-type Lectin", cat1)) %>%
+#   dplyr::select(N2, cat1) %>%
+#   dplyr::mutate(lifted_over = ifelse(N2 %in% pulled, TRUE, FALSE))
+# summary_Cl <- Clectin %>%
+#   dplyr::count(lifted_over)
+# test_Clectin <- test %>%
+#   dplyr::left_join(Clectin, by = "N2") %>%
+#   dplyr::mutate(inHDR = ifelse(QX1410 %in% HD_all_gene_vector, TRUE, FALSE)) %>%
+#   dplyr::filter(!is.na(lifted_over)) %>%
+#   dplyr::distinct(QX1410, .keep_all = T) %>%
+#   dplyr::count(inHDR)
+#                 
+# 
+# E3 <- terms %>%
+#   dplyr::filter(grepl("Proteolysis proteasome: E3", cat1)) %>%
+#   dplyr::select(N2, cat1) %>%
+#   dplyr::mutate(lifted_over = ifelse(N2 %in% pulled, TRUE, FALSE)) 
+# summary_E3 <- E3 %>%
+#   dplyr::count(lifted_over)
+# test_E3 <- test %>%
+#   dplyr::left_join(E3, by = "N2") %>%
+#   dplyr::mutate(inHDR = ifelse(QX1410 %in% HD_all_gene_vector, TRUE, FALSE)) %>%
+#   dplyr::filter(!is.na(lifted_over)) %>%
+#   dplyr::distinct(QX1410, .keep_all = T) %>%
+#   dplyr::count(inHDR)
+# 
+#                
+# Fbox <- terms %>% 
+#   dplyr::filter(grepl("Proteolysis proteasome: E3: F box", cat2)) %>%
+#   dplyr::select(N2, cat2) %>%
+#   dplyr::mutate(lifted_over = ifelse(N2 %in% pulled, TRUE, FALSE)) 
+# summary_Fbox <- Fbox %>%
+#   dplyr::count(lifted_over)
+# test_Fbox <- test %>%
+#   dplyr::left_join(Fbox, by = "N2") %>%
+#   dplyr::mutate(inHDR = ifelse(QX1410 %in% HD_all_gene_vector, TRUE, FALSE)) %>%
+#   dplyr::filter(!is.na(lifted_over)) %>%
+#   dplyr::distinct(QX1410, .keep_all = T) %>%
+#   dplyr::count(inHDR)
+# 
+# pals <- N2_alias %>%
+#   dplyr::filter(grepl("pals", alias)) %>%
+#   dplyr::rename(N2 = N2_WBGeneID) %>%
+#   dplyr::mutate(lifted_over = ifelse(N2 %in% pulled, TRUE, FALSE))
+# test_pals <- test %>%
+#   dplyr::left_join(pals, by = "N2") %>%
+#   dplyr::mutate(inHDR = ifelse(QX1410 %in% HD_all_gene_vector, TRUE, FALSE)) %>%
+#   dplyr::filter(!is.na(lifted_over)) %>%
+#   dplyr::distinct(QX1410, .keep_all = T) #%>%
+#   dplyr::count(inHDR)
 
 
 
@@ -494,10 +576,11 @@ nHDR_armDomain <- readr::read_csv("/vast/eande106/projects/Nicolas/hyperdivergen
   dplyr::select(Chromosome,left,right) %>%
   dplyr::mutate(left=left*1e3,right=right*1e3)
 
-hdr_regions <- readr::read_tsv("/vast/eande106/projects/Nicolas/hyperdivergent_regions/briggsae/multi_reference/reference_realign/HDR_CB_allStrain_5kbclust_20250613.tsv") 
+hdr_regions <- readr::read_tsv("/vast/eande106/projects/Nicolas/hyperdivergent_regions/briggsae/multi_reference/reference_realign/HDR_CB_allStrain_5kbclust_20250730.tsv") %>%
+  dplyr::filter(STRAIN != "ECA1605" & STRAIN != "ECA1559")
 
-# hdr_regions <- hdr_regions %>% 
-  # dplyr::filter(source == "ECA2666")
+hdr_regions <- hdr_regions %>%
+  dplyr::filter(source == "QX1410")
  # "QX1410"   "BRC20530" "NIC1660"  "BRC20492" "QG2902"   "NIC1667"  "ED3102"   "ECA2670"  "ECA2666"  "JU1348"   "QG1005"   "QG2964"
 
 HDreg_all <- ldply(getRegFreq(hdr_regions %>% dplyr::select(CHROM,minStart,maxEnd,STRAIN) %>% dplyr::arrange(CHROM,minStart) %>%dplyr::group_split(CHROM)), data.frame) %>% dplyr::select(-STRAIN) %>% dplyr::rename(start=minStart,end=maxEnd)
@@ -542,109 +625,6 @@ gffFinal <- gffCB %>%
 #   dplyr::filter(!is.na(N2)) %>%
 #   dplyr::select(-GO) %>%
 #   dplyr::distinct(QX1410, .keep_all = T)
-
-
-######### THIS IS DONE WITH N2 GENES AND N2 BACKGROUND ############
-# HDreg_arm <- ldply(reglist,data.frame)
-# HDreg_center <- ldply(reglist_center,data.frame)
-# HDgene <- getGenesFromBed(gffFinal,HDreg_arm)
-# HD_gene_vector <- HDgene[[]]
-# HD_n2_genes <- (do.call(rbind, HDgene))
-# # testHDR_genes <- dplyr::select(HD_n2_genes, N2) 
-# HD_gene_vector <- unique(HD_n2_genes$N2) # pulling a vector list of N2 genes that are in HDRs on QX1410 chromosomal arms
-# 
-# nHDreg <- classifyingArms(HDreg_arm %>% dplyr::rename(minStart=start,maxEnd=end), nHDR_armDomain) %>% dplyr::select(-domain)
-# nHDgene <- getGenesFromBed(gffFinal,nHDreg)
-# nHD_n2_genes <- do.call(rbind, nHDgene)
-# # testnHDR_genes <- dplyr::select(nHD_n2_genes, N2) 
-# nHD_gene_vector <- unique(nHD_n2_genes$N2) # pulling a vector list of N2 genes that are NOT in HDRs on QX1410 chromosomal arms
-# 
-# 
-# posplot <- ggplot() + 
-#   geom_rect(data=centers %>% dplyr::rename(CHROM=Chromosome), aes(xmin=center_start,xmax=center_end,ymin=-1,ymax=1,fill="nHDR_center")) +
-#   geom_rect(data=rbind(HDreg_arm %>% dplyr::mutate(class="HDR_arm"),nHDreg %>% dplyr::mutate(class="nHDR_arm"), HDreg_center %>% dplyr::mutate(class="HDR_center")), aes(xmin=start,xmax=end,ymin=-1,ymax=1,fill=class)) +
-#   facet_wrap(~CHROM,ncol=1,scales="free_x") +
-#   theme_bw() +
-#   theme(axis.text.y = element_blank(),
-#         axis.ticks.y = element_blank(),
-#         panel.grid = element_blank()) +
-#   scale_fill_manual(values=c("nHDR_center"="lightblue","nHDR_arm"="deepskyblue3","HDR_center"="pink","HDR_arm"="firebrick3"))+
-#   xlab("Physical postion (Mb)")
-# posplot
-# 
-# posplot2 <- ggplot() + 
-#   geom_rect(data=HD_n2_genes, aes(xmin=start,xmax=end,ymin=-1,ymax=1)) +
-#   facet_wrap(~CHROM,ncol=1,scales="free_x") +
-#   theme_bw() +
-#   theme(axis.text.y = element_blank(),
-#         axis.ticks.y = element_blank(),
-#         panel.grid = element_blank()) +
-#   xlab("Physical postion (Mb)")
-# posplot2
-# 
-# 
-# 
-# N2_merged_bgd_genes <- unique(merged$gene) # a vector of genes
-# GO_terms_merged <- AnnotationDbi::select(GO.db, 
-#                                          keys=unique(merged$GO),   
-#                                          columns = c("TERM", "DEFINITION", "ONTOLOGY"),
-#                                          keytype="GOID") %>% 
-#   dplyr::rename(TERM = GOID, TERM_NAME = TERM)
-# 
-# merged_ont <- merged %>%
-#   dplyr::left_join(GO_terms_merged, by = c("GO" = "TERM")) %>%
-#   dplyr::mutate(inHDR = ifelse(gene %in% testHDR_genes$N2, TRUE, FALSE))
-# 
-# 
-# # HDR genes in arms against all N2 background set
-# enGO_HDR_merged <- clusterProfiler::enricher(
-#   gene = HD_gene_vector,
-#   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(GO,gene),
-#   TERM2NAME = GO_terms_merged %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(TERM,TERM_NAME),
-#   universe = N2_merged_bgd_genes,
-#   pvalueCutoff = 0.5,
-#   # pAdjustMethod = "BH",
-#   qvalueCutoff = 0.5,
-# )
-# 
-# head(enGO_HDR_merged)
-# 
-# dotplot(enGO_HDR_merged, showCategory = 40, title = "BP HDRs")
-# 
-# # enGO_HDR_genes <- clusterProfiler::setReadable(enGO_HDR_merged, keyType = "WORMBASE", OrgDb = org.Ce.eg.db)
-# 
-# 
-# # nHDRs genes in arms against all N2 background set
-# enGO_nHDR_merged <- clusterProfiler::enricher(
-#   gene = nHD_gene_vector,
-#   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "CC") %>% dplyr::select(GO,gene),
-#   TERM2NAME = GO_terms_merged %>% dplyr::filter(ONTOLOGY == "CC") %>% dplyr::select(TERM,TERM_NAME),
-#   universe = N2_merged_bgd_genes,
-#   pvalueCutoff = 0.05,
-#   pAdjustMethod = "bonferroni",
-#   qvalueCutoff = 0.05,
-# )
-# 
-# head(enGO_nHDR_merged)
-# 
-# dotplot(enGO_nHDR_merged, showCategory = 40, title = "BP QX1410 nHDRs")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 ######### THIS IS DONE WITH QX1410 GENES AND QX1410 BACKGROUND ############
@@ -692,7 +672,7 @@ posplot2
 
 
 
-QX1410_merged_bgd_genes <- unique(final_GO$QX1410) #  12,532 genes
+QX1410_merged_bgd_genes <- unique(final_GO$QX1410) #  12,532 genes - 9,415 when filtering for one-to-ones
 GO_terms_merged <- AnnotationDbi::select(GO.db, 
                                          keys=unique(final_GO$GO),   
                                          columns = c("TERM", "DEFINITION", "ONTOLOGY"),
@@ -1205,7 +1185,6 @@ N2_tableSave <- GOBP_tableSave %>%
     .groups = "drop")
 
 # write.table(N2_tableSave, file = "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/briggsae/processed_data/final_plotsAndData/GOBP_HDRgenes_updated_NOsulp7.tsv",  col.names = TRUE, row.names = FALSE, sep = "\t", quote = FALSE)
-
 
 
 # MF

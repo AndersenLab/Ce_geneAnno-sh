@@ -470,6 +470,13 @@ ipr <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotatio
   dplyr::select(-tran) %>%
   dplyr::select(NIC58,signature_accession,signature_description,IPR_accession,IPR_description,GO) 
 
+# cleaned_table <- ipr %>%
+#   dplyr::filter(!is.na(IPR_description) & IPR_description != "-" | !is.na(GO) & GO != "-") %>% 
+#   dplyr::select(-signature_accession, -signature_description)
+# 
+# write.table(cleaned_table, "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/GO_enrichment/tropicalis/ipr/output/NIC58_cleaned_ipr_output_20251212.tsv", sep = '\t', quote = F, col.names = T, row.names = F)
+
+
 #==============================================================================================================================================================================================================================#
 
 # INTERPROSCAN - just ARM genes as background
