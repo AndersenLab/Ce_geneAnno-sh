@@ -695,11 +695,11 @@ ws_genes_hdrs_stats <- ws_genes_hdrs %>%
   dplyr::distinct(strain, class, ws_class_count_inHDR)
 
 # Number of genes in each gene set in HDRs compared to entire gene set
-ws_genes_class <- ws_genes_hdrs_stats %>%
-  dplyr::group_by(class) %>%
-  dplyr::mutate(ws_class_count_total = sum(ws_class_count),
-                ws_class_count_inHDR_total = sum(ws_class_count_inHDR)) %>%
-  dplyr::distinct(class, ws_class_count_total, ws_class_count_inHDR_total)
+# ws_genes_class <- ws_genes_hdrs_stats %>%
+#   dplyr::group_by(class) %>%
+#   dplyr::mutate(ws_class_count_total = sum(ws_class_count),
+#                 ws_class_count_inHDR_total = sum(ws_class_count_inHDR)) %>%
+#   dplyr::distinct(class, ws_class_count_total, ws_class_count_inHDR_total)
 
 # Writing a table of all WS genes in HDRs
 # ws_hdr_genes <- ws_genes_hdrs %>%
@@ -723,7 +723,7 @@ ws_genes_hdrs_stats <- ws_genes_count %>%
                 prop_total_ws_genes_inHDRs = ws_total_inHDR_gene_count / ws_total_gene_count) %>%
   dplyr::ungroup() 
 
-# test <- ws_genes_hdrs_stats %>% dplyr::filter(strain == "PX179") # PX179 has zero private genes in HDRs 
+test <- ws_genes_hdrs_stats %>% dplyr::filter(strain == "PX179") # PX179 has zero private genes in HDRs
 
 prop_genes_in_hdrs <- ws_genes_hdrs_stats %>%
   dplyr::distinct(strain, prop_total_ws_genes_inHDRs) %>%
@@ -733,8 +733,48 @@ prop_genes_in_hdrs <- ws_genes_hdrs_stats %>%
 # Plotting stats of WS genes in HDRs 
 ggplot(data = prop_genes_in_hdrs) + 
   geom_col(aes(x = strain, y = prop_total_ws_genes_inHDRs * 100), fill = 'blue') +
-  geom_point(data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6) ), color = "green", size = 2) +
+  geom_point(data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6)), color = "green", size = 5) +
   geom_line( data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6) , group = 1), color = "green", linewidth = 1) +
+  theme(
+    axis.title.x = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    axis.text.x = element_text(size = 12, color= 'black', angle = 60, hjust = 1),
+    axis.title.y = element_text(size = 24, color = 'black', face = 'bold'),
+    axis.text.y = element_text(size = 18, color = 'black'),
+    plot.margin = margin(t = 5, b = 5, l = 5, r = 5)) +
+  labs(y = "Proportion of wild strain genes in HDRs (%)") +
+  scale_y_continuous(name = "Proportion of wild strain genes in HDRs (%)", 
+                     sec.axis = sec_axis(~. / 1 ,name = "Total wild strain HDRs span (Mb)"), expand = expansion(mult = c(0, .05))) 
+
+# Plotting proportion of each gene set in WS HDR genes
+strain_order0 <- prop_genes_in_hdrs %>% dplyr::pull(strain)
+  
+final_prop_gs_final <- ws_genes_hdrs_stats %>%
+  dplyr::left_join(span_ws_hdrs, by = "strain") %>%
+  dplyr::select(strain,class,ws_class_count_inHDR, ws_total_gene_count, span_hdrs) %>%
+  dplyr::mutate(prop_gene_class_inHDR = (ws_class_count_inHDR / ws_total_gene_count) * 100,
+                span_hdrs = span_hdrs / 1e6) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(total_prop = sum(prop_gene_class_inHDR)) %>%
+  dplyr::ungroup() %>%
+  dplyr::arrange(desc(total_prop), desc(class)) %>%
+  dplyr::rename(`Gene set` = class) %>%
+  dplyr::mutate(`Gene set` = ifelse(`Gene set` == "core","Core",
+                                    ifelse(`Gene set` == "accessory", "Accessory", "Private"))) %>%
+  dplyr::mutate(
+    strain = factor(strain, levels = strain_order0),
+    `Gene set`  = factor(`Gene set`, levels = c("Private", "Accessory", "Core"))) 
+
+ggplot(data = final_prop_gs_final) + 
+  geom_col(aes(x = strain, y = prop_gene_class_inHDR, fill = `Gene set`)) +
+  geom_point(aes(x = strain, y = span_hdrs), color = "black", size = 2) +
+  geom_line( data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6) , group = 1), color = "black", linewidth = 1) +
+  scale_fill_manual(values = c(
+    "Core" = "green4",
+    "Accessory" = "#DB6333",
+    "Private" = "magenta3"
+  )) +
   theme(
     axis.title.x = element_blank(),
     panel.border = element_rect(color = 'black', fill = NA),
@@ -745,7 +785,9 @@ ggplot(data = prop_genes_in_hdrs) +
     plot.margin = margin(t = 5, b = 5, l = 5, r = 5)) +
   labs(y = "Proportion of WS genes in HDRs (%)") +
   scale_y_continuous(name = "Proportion of WS genes in HDRs (%)", 
-                     sec.axis = sec_axis(~. / 1 ,name = "Total WS HDR span (Mb)"), expand = expansion(mult = c(0, .05))) 
+                     sec.axis = sec_axis(~. / 1, name = "Total WS HDR span (Mb)"), expand = expansion(mult = c(0, .05))) 
+
+
 
 # Pie charts to display the proportion of genes in HDRs contributing to each gene set (scaled)
 geneSet_prop <- ws_genes_hdrs_stats %>%
@@ -753,7 +795,7 @@ geneSet_prop <- ws_genes_hdrs_stats %>%
   dplyr::group_by(strain) %>%
   dplyr::mutate(scaling_factor = 1 / gene_set_prop_inHDR) %>%
   dplyr::mutate(scaled_geneSet_props = prop_genes_inHDRs_class * scaling_factor) %>%
-  dplyr::ungroup() 
+  dplyr::ungroup()
 
 # Order the pies (facets) by lowest to greatest proportion of WS genes in HDRs
 strain_order <- geneSet_prop %>%
@@ -783,19 +825,20 @@ ggplot(pie_df, aes(x = "", y = pie_frac, fill = `Gene set`), alpha = 0.7) +
     "Private" = "magenta3"
   )) +
   coord_polar(theta = "y") +
-  facet_wrap(~ strain, nrow = 10, ncol = 14, as.table = FALSE) +
+  facet_wrap(~ strain, nrow = 7, ncol = 20, as.table = FALSE) +
   theme_void() +
   theme(
-    strip.text = element_text(size = 10, color = "black"),
-    legend.position = "right",
-    legend.title = element_text(size = 12, color = "black"),
-    legend.text = element_text(size = 12, color = "black"),
-    plot.title = element_text(size = 16, hjust = 0.5, face = "bold", margin = margin(b = 10)),
-    plot.subtitle = element_text(size = 14, hjust = 0.5, margin = margin(b = 10)),
+    strip.text = element_text(size = 16, color = "black"),
+    legend.position = "bottom",
+    legend.title = element_text(size = 22, color = "black"),
+    legend.text = element_text(size = 20, color = "black"),
+    # plot.title = element_text(size = 26, hjust = 0.5, face = "bold", margin = margin(b = 10)),
+    # plot.subtitle = element_text(size = 24, hjust = 0.5, margin = margin(b = 10)),
     plot.margin = margin(t = 15)) +
   labs(
-    title = "Contributions of genes in HDRs to each gene set",
-    subtitle = "• ECA1493: 4,344 genes (most)\n• NIC2: 81 genes (fewest)")
+    # title = "Contributions of genes in HDRs to each gene set",
+    fill = "Gene set:  ") 
+    # subtitle = "• ECA1493: 4,344 genes (most)\n• NIC2: 81 genes (fewest)")
 
 
 

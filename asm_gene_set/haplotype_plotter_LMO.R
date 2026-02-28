@@ -34,6 +34,7 @@ library(stringr)
 
 # want <- c("N2","MY16","CB4856")
 # want <- c("N2","CB4856","AB1","CB4852","ECA248","ECA251","JU311","JU346","JU394","MY16","ECA259","PX179","RC301","MY1")
+want <- c("N2", "NIC2", "CB4852","JU394","CGC1", "JU782", "ECA2952","ECA1493","ECA3088","XZ1516","ECA1851")
   
   
 #read all pairwise genome coordinate comparisons
@@ -42,8 +43,8 @@ library(stringr)
 ## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
 transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv",col_names = F) 
 colnames(transformed_coords) <- c("S1","E1","S2","E2","L1","L2","IDY","LENR","LENQ","REF","HIFI","STRAIN") 
-transformed_coords <- transformed_coords %>% dplyr::filter(STRAIN != "ECA396") #%>%
-  # dplyr::filter(STRAIN %in% want)
+transformed_coords <- transformed_coords %>% dplyr::filter(STRAIN != "ECA396") %>%
+  dplyr::filter(STRAIN %in% want)
 
 #read concatentated gene models of every genome
 # gffCat1 <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/braker_runs/merged_gff/all_WI_braker.clean.gff", col_names = F) 
@@ -53,8 +54,8 @@ transformed_coords <- transformed_coords %>% dplyr::filter(STRAIN != "ECA396") #
 gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142strain_genemRNAfeatures.tsv", col_names = F)
 colnames(gffCat1) <- c("seqid","source","type","start","end","score","strand","phase","attributes","STRAIN")
 gffCat2 <- ape::read.gff("/vast/eande106/projects/Nicolas/gene_models/c.elegans/N2/wormbase/WS283/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
-gffCat <- rbind(gffCat1 %>% dplyr::filter(STRAIN != "ECA396"), gffCat2) #%>% 
-  # dplyr::filter(STRAIN %in% want)
+gffCat <- rbind(gffCat1 %>% dplyr::filter(STRAIN != "ECA396"), gffCat2) %>% 
+  dplyr::filter(STRAIN %in% want)
 
 #read ortholog relationships among gene models
 # orthos <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_78/OrthoFinder/Results_Mar20/Orthogroups/Orthogroups.tsv")
@@ -466,7 +467,7 @@ orthoList <- list()
 orthoList_bound <- list()
 orthoList_raw <- list()
 strainCol_iter <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup","N2")]
-# strainCol_iter <- strainCol_iter[strainCol_iter %in% want] ############################# For when you are only looking at a subset of strains
+strainCol_iter <- strainCol_iter[strainCol_iter %in% want] ############################# For when you are only looking at a subset of strains
 
 for (i in 1:length(strainCol_iter)) {
   
@@ -681,6 +682,8 @@ g_count <- length(unique(N2_ad_corr$Parent))
 # desired_order <- c("DL238", "JU310", "CB4852", "JU311", "MY2693", "MY23", "ED3049") # DL238 has the highest fraction of Dauer
 # desired_order <- c("DL238", "JU310", "CB4852", "JU311", "MY2693") # DL238 has the highest fraction of Dauer
 # desired_order <- want %>% rev() # for diacetyl
+desired_order <- c("N2", "ECA3088", "ECA1851","ECA1493","XZ1516", "ECA2952", "JU782","JU394","CB4852","NIC2","CGC1")
+
 
 WI_ad <- boundGenes %>% 
   dplyr::filter(!STRAIN=="N2") %>%
@@ -706,7 +709,7 @@ WI_ad <- boundGenes %>%
   dplyr::arrange(start_sort, .by_group = TRUE) %>%
   dplyr::mutate(first_gene=dplyr::first(alias)) %>%
   dplyr::ungroup() %>%
-  # dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
+  dplyr::mutate(STRAIN = factor(STRAIN, levels = desired_order)) %>%
   dplyr::group_by(STRAIN) %>%
   dplyr::arrange(first_gene, n_gene, .by_group = TRUE) %>%
   dplyr::mutate(order_gene = dplyr::first(first_gene), order_num = dplyr::first(n_gene)) %>%

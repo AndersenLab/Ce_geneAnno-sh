@@ -126,13 +126,48 @@ ggplot() +
         panel.grid.major= element_line(color = 'gray80'),
         panel.grid.major.x = element_blank(),
         axis.title.x = element_blank(),
-        axis.text = element_text(size = 12, color = 'black'),
-        axis.text.x = element_text(color = 'black', size = 9, angle = 60, hjust = 1),
-        axis.title.y = element_text(size = 14, color = 'black', face = 'bold')) +
+        legend.title = element_text(size = 20, color = 'black'),
+        legend.text = element_text(size = 18, color = 'black'),
+        axis.text = element_text(size = 16, color = 'black'),
+        axis.text.x = element_text(color = 'black', size = 13, angle = 60, hjust = 1),
+        axis.title.y = element_text(size = 22, color = 'black', face = 'bold')) +
   coord_cartesian(ylim = c(0,14)) +
   scale_y_continuous(breaks = seq(0,14, by =2), expand = c(0,0))
 
+levels3 <- filt_calls %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(total_SV_length = sum(sv_length)) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(strain,total_SV_length) %>%
+  dplyr::arrange(total_SV_length) %>%
+  dplyr::distinct(strain) %>%
+  dplyr::pull()
 
+total_size2 <- filt_calls %>%
+  dplyr::select(sv_type,sv_length,strain) %>%
+  dplyr::group_by(strain,sv_type) %>%
+  dplyr::mutate(type_total_length = sum(sv_length)) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(strain,sv_type, type_total_length) %>%
+  dplyr::mutate(strain = factor(strain, levels = levels3)) %>%
+  dplyr::mutate(sv_type = factor(sv_type, levels = c("INV","DEL","INS"))) 
+
+ggplot() +
+  geom_bar(data = total_size2, aes(x = type_total_length / 1e6, y = strain, fill = sv_type), stat = "identity") +
+  scale_fill_manual(values = c("INS" = "blue", "DEL" = "red", "INV" = "gold")) +
+  labs(x = "Length of SVs (Mb)", fill = "SV type") +
+  theme(panel.border = element_rect(color = 'black', fill = NA),
+        panel.background = element_blank(),
+        panel.grid.major= element_line(color = 'gray80'),
+        panel.grid.major.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text = element_text(size = 18, color = 'black'),
+        axis.text.y = element_text(color = 'black', size = 8.5, hjust = 1),
+        legend.title = element_text(size = 18, color = 'black'),
+        legend.text = element_text(size = 16, color = 'black'),
+        axis.title.x = element_text(size = 20, color = 'black', face = 'bold')) +
+  coord_cartesian(xlim = c(0,13)) +
+  scale_x_continuous(breaks = seq(0,14, by =2), expand = c(0,0))
 
 
 
