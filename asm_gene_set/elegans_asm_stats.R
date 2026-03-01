@@ -33,16 +33,18 @@ plot_df <- stats %>%
 
 plot_df <- stats %>% 
   dplyr::transmute(strain,
-    `Genome assembly` = contig_bp / 1e6,
+    Assembly = contig_bp / 1e6,
     N50 = ctg_N50 / 1e6,
     N90 = ctg_N90 / 1e6) %>%
-  tidyr::pivot_longer(cols = c(`Genome assembly`, N50, N90),names_to = "metric",values_to = "value")
+  tidyr::pivot_longer(cols = c(Assembly, N50, N90),names_to = "metric",values_to = "value")
+
+av_gasm <- plot_df %>% dplyr::filter(metric == "Assembly") %>% dplyr::summarize(mean_asm = mean(value))
 
 top <- ggplot(plot_df, aes(x = metric, y = value)) +
-  geom_violin(aes(fill = metric), trim = TRUE, alpha = 0.5) +
-  scale_fill_manual(values = c("Genome assembly" = "blue", "N50" = "purple", "N90" = "orange")) +
-  stat_summary(fun=mean, geom="crossbar", width=0.5, color="black") +
-  geom_point(position = position_jitter(width = 0.12), size = 2.5, color = 'black') +
+  geom_point(position = position_jitter(width = 0.25), size = 0.3, color = 'black') +
+  geom_boxplot(aes(fill = metric),  outlier.shape = NA, alpha = 0.5, fatten = 2) +
+  scale_fill_manual(values = c("Assembly" = "blue", "N50" = "green", "N90" = "orange")) +
+  # stat_summary(fun=mean, geom="crossbar", width=0.5, color="black") +
   theme_bw() +
   theme(
     axis.title.x = element_blank(),
@@ -52,21 +54,23 @@ top <- ggplot(plot_df, aes(x = metric, y = value)) +
     axis.line.y = element_line(size = 0.5, linetype = "solid", colour = "black"),
     legend.position = 'none',
     axis.title = element_blank(),
-    axis.text.y  = element_text(size = 16, color = 'black'),
+    axis.text.y  = element_text(size = 10, color = 'black'),
     axis.text.x = element_blank(),
-    plot.margin = margin(l = 30, t = 2, r =2, b = 30),
+    plot.margin = margin(l = 20, t = 2, r =2, b = 7.5),
     axis.ticks.x  = element_blank()
   ) +
   labs(y = "Megabases") +
   coord_cartesian(ylim = c(100,115))
 top
 
+av_N50 <- plot_df %>% dplyr::filter(metric == "N50") %>% dplyr::summarize(mean_n50 = mean(value))
+av_N90 <- plot_df %>% dplyr::filter(metric == "N90") %>% dplyr::summarize(mean_n90 = mean(value))
 
 bottom <- ggplot(plot_df, aes(x = metric, y = value)) +
-  geom_violin(aes(fill = metric), trim = TRUE, alpha = 0.5) +
-  scale_fill_manual(values = c("Genome asembly" = "blue", "N50" = "purple", "N90" = "orange")) +
-  stat_summary(fun=mean, geom="crossbar", width=0.5, color="black") +
-  geom_point(position = position_jitter(width = 0.12), size = 2.5, color = 'black') +
+  geom_point(position = position_jitter(width = 0.25), size = 0.3, color = 'black') +
+  geom_boxplot(aes(fill = metric), outlier.shape = NA, alpha = 0.5, fatten = 2) +
+  scale_fill_manual(values = c("Asembly" = "blue", "N50" = "seagreen", "N90" = "orange")) +
+  # stat_summary(fun=mean, geom="crossbar", width=0.5, color="black") +
   theme_bw() +
   theme(
     axis.title.x = element_blank(),
@@ -76,10 +80,10 @@ bottom <- ggplot(plot_df, aes(x = metric, y = value)) +
     axis.line.x = element_line(size = 0.5, linetype = "solid", colour = "black"),
     axis.line.y = element_line(size = 0.5, linetype = "solid", colour = "black"),
     legend.position = 'none',
-    plot.margin = margin(l = 30, b = 2, r = 2, t = 30),
-    axis.text.x  = element_text(size = 18, color = 'black', face = 'bold'),
+    plot.margin = margin(l = 20, b = 2, r = 2, t = 7.5),
+    axis.text.x  = element_text(size = 10, color = 'black'),
     axis.title.y = element_blank(),
-    axis.text.y  = element_text(size = 16, color = 'black')
+    axis.text.y  = element_text(size = 10, color = 'black')
   ) +
   labs(y = "Megabases") +
   coord_cartesian(ylim = c(0,20))
@@ -89,12 +93,16 @@ aligned <- cowplot::align_plots(top, bottom, align = "v", axis = "lr")
 
 base <- cowplot::plot_grid(cowplot::plot_grid(
   aligned[[1]],aligned[[2]],
-  nrow = 2) + draw_label("Megabases", x=0, y=0.5, vjust= 1.5, angle=90, size = 18, color = 'black', fontface = 'bold'))
+  nrow = 2) + draw_label("Megabases", x=0.007, y=0.5, vjust= 1.5, angle=90, size = 12, color = 'black'))
 
-cowplot::ggdraw(base) +
+final_stats <- cowplot::ggdraw(base) +
   # Upper break marks
-  draw_line(x = c(0.04, 0.06), y = c(0.52, 0.54), size = 1) +
-  draw_line(x = c(0.04, 0.06), y = c(0.465, 0.485), size = 1)
+  draw_line(x = c(0.145, 0.16), y = c(0.535, 0.540), size = 0.6) +
+  draw_line(x = c(0.145, 0.16), y = c(0.47, 0.475), size = 0.6)
+final_stats
+
+# Good to go!
+ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/plots/elegans_140_asm_stats.png", final_stats, width = 3.75, height = 3.75, dpi = 600)
 
 
 
