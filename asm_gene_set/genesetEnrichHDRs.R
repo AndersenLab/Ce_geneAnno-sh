@@ -732,14 +732,14 @@ prop_genes_in_hdrs <- ws_genes_hdrs_stats %>%
 
 # Plotting stats of WS genes in HDRs 
 ggplot(data = prop_genes_in_hdrs) + 
-  geom_col(aes(x = strain, y = prop_total_ws_genes_inHDRs * 100), fill = 'blue') +
+  geom_col(aes(x = strain, y = prop_total_ws_genes_inHDRs * 100), fill = 'chocolate4') +
   geom_point(data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6)), color = "green", size = 5) +
   geom_line( data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6) , group = 1), color = "green", linewidth = 1) +
   theme(
     axis.title.x = element_blank(),
     panel.border = element_rect(color = 'black', fill = NA),
     panel.background = element_blank(),
-    axis.text.x = element_text(size = 12, color= 'black', angle = 60, hjust = 1),
+    axis.text.x = element_text(size = 13.5, color= 'black', angle = 60, hjust = 1),
     axis.title.y = element_text(size = 24, color = 'black', face = 'bold'),
     axis.text.y = element_text(size = 18, color = 'black'),
     plot.margin = margin(t = 5, b = 5, l = 5, r = 5)) +
@@ -791,7 +791,6 @@ ggplot(data = final_prop_gs_final) +
   scale_y_continuous(name = "Proportion of WS genes in HDRs (%)", 
                      sec.axis = sec_axis(~. / 1, name = "Total WS HDR span (Mb)"), expand = expansion(mult = c(0, .05))) 
 
-########### For paper!!! ##################
 ggplot(data = final_prop_gs_final) + 
   geom_col(aes(x = strain, y = scaled_geneSet_props_final * 100, fill = `Gene set`)) +
   geom_point(aes(x = strain, y = span_hdrs), color = "black", size = 2) +
@@ -818,8 +817,6 @@ ggplot(data = final_prop_gs_final) +
                      sec.axis = sec_axis(~. / 1, name = "Total wild strain HDRs span (Mb)"), expand = expansion(mult = c(0, .05)))
 
 
-
-
 # Pie charts to display the proportion of genes in HDRs contributing to each gene set (scaled)
 geneSet_prop <- ws_genes_hdrs_stats %>%
   dplyr::select(strain, class, prop_genes_inHDRs_class, prop_total_ws_genes_inHDRs, gene_set_prop_inHDR) %>%
@@ -842,7 +839,7 @@ pie_df <- geneSet_prop %>%
   dplyr::mutate(
     strain = factor(strain, levels = strain_order),
     `Gene set`  = factor(`Gene set`, levels = c("Core", "Accessory", "Private"))) %>%
-  tidyr::complete(strain, `Gene set`, fill = list(scaled_geneSet_props = 0)) %>%
+  # tidyr::complete(strain, `Gene set`, fill = list(scaled_geneSet_props = 0)) %>%
   dplyr::group_by(strain) %>%
   dplyr::mutate(pie_frac  = scaled_geneSet_props) %>%
   dplyr::ungroup() 
@@ -873,6 +870,105 @@ ggplot(pie_df, aes(x = "", y = pie_frac, fill = `Gene set`), alpha = 0.7) +
 
 
 
+
+
+
+
+
+
+
+# Proportions inside and outside HDRs in an admixture-like display:
+geneSet_prop <- ws_genes_hdrs_stats %>%
+  dplyr::select(strain, class, ws_class_count_inHDR, prop_genes_inHDRs_class, prop_total_ws_genes_inHDRs, gene_set_prop_inHDR, ws_class_count) %>%
+  dplyr::mutate(ws_class_outsideHDRs = ws_class_count - ws_class_count_inHDR,
+                prop_genes_OUTSIDEhdrs_class = ws_class_outsideHDRs / ws_class_count) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(scaling_factor = 1 / gene_set_prop_inHDR,
+                gene_set_prop_OUTSIDEHDR = sum(prop_genes_OUTSIDEhdrs_class),
+                saling_factor_OUTSIDE = 1 / gene_set_prop_OUTSIDEHDR) %>%
+  dplyr::mutate(scaled_geneSet_props = prop_genes_inHDRs_class * scaling_factor,
+                scaled_geneSet_props_NONHDR = prop_genes_OUTSIDEhdrs_class * saling_factor_OUTSIDE) %>%
+  dplyr::ungroup()
+
+# Order the pies (facets) by lowest to greatest proportion of WS genes in HDRs
+strain_order <- geneSet_prop %>%
+  dplyr::filter(class == "private") %>%
+  dplyr::arrange(desc(scaled_geneSet_props))%>%   # ascending: smallest -> largest
+  dplyr::distinct(strain) %>%
+  dplyr::pull(strain)
+
+# Prep data for pies (ensure all 3 classes exist per strain)
+hdr_nonHDR_prop_geneset <- geneSet_prop %>%
+  dplyr::rename(`Gene set` = class) %>%
+  dplyr::mutate(`Gene set` = ifelse(`Gene set` == "core","Core",
+                                    ifelse(`Gene set` == "accessory", "Accessory", "Private"))) %>%
+  dplyr::mutate(
+    strain = factor(strain, levels = strain_order),
+    `Gene set`  = factor(`Gene set`, levels = c("Core", "Accessory", "Private"))) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(pie_frac  = scaled_geneSet_props) %>%
+  dplyr::ungroup() 
+
+hdr <- ggplot(data = hdr_nonHDR_prop_geneset) +
+  geom_col(aes(x = strain, y = pie_frac, fill = `Gene set`), width = 1, color = 'black') +
+  scale_fill_manual(values = c(
+    "Core" = "green4",
+    "Accessory" = "#DB6333",
+    "Private" = "magenta3"
+  )) +
+  theme(
+    axis.text.x = element_blank(),
+    legend.position = 'none',
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    plot.margin = margin(l = 40, r = 40, t = 10),
+    axis.text.y = element_text(size = 16, color = 'black')
+  ) +
+  scale_y_continuous(expand = c(0,0), breaks = c(0.25, 0.5, 0.75, 1)) 
+hdr
+
+
+nonhdr <- ggplot(data = hdr_nonHDR_prop_geneset) +
+  geom_col(aes(x = strain, y = scaled_geneSet_props_NONHDR, fill = `Gene set`), width = 1, color = 'black') +
+  scale_fill_manual(values = c(
+    "Core" = "green4",
+    "Accessory" = "#DB6333",
+    "Private" = "magenta3"
+  )) +
+  theme(
+    axis.text.x = element_blank(),
+    legend.position = 'none',
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    plot.margin = margin(l = 40, r = 40, b = 10),
+    axis.text.y = element_text(size = 16, color = 'black')
+  ) +
+  scale_y_continuous(expand = c(0,0))
+nonhdr
+
+aligned <- cowplot::align_plots(hdr, nonhdr, align = "v", axis = "lr")
+
+# Each panel should be no more than 2.5in high and 6in wide!!!!!!!!!!!!!!! - into panels A) and B)
+cowplot::plot_grid(cowplot::plot_grid(
+  aligned[[1]],aligned[[2]],
+  nrow = 2) + draw_label("Relative contribution to each gene set", x=0, y=0.5, vjust= 1.5, angle=90, size = 20, color = 'black', fontface = 'bold') +
+    draw_label("Genes in HDRs", x=0.997, y=0.75, vjust= 1.5, angle=270, size = 20, color = 'black', fontface = 'bold') +
+    draw_label("Genes not in HDRs", x=0.997, y=0.25, vjust= 1.5, angle=270, size = 20, color = 'black', fontface = 'bold'))
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Average proportion of WS genes in each gene set among all wild strains
 geneSet_prop_average <- ws_genes_hdrs_stats %>%
   dplyr::select(strain,class,ws_class_count,ws_class_count_inHDR) %>%
@@ -888,9 +984,10 @@ geneSet_prop_average <- ws_genes_hdrs_stats %>%
 
 # In the entire pangenome:
 hdr_genes_pangenome <- ws_genes_hdrs_stats %>%
-  dplyr::select(strain,class,ws_class_count,ws_class_count_inHDR) %>%
+  dplyr::select(strain,class,ws_class_count,ws_class_count_inHDR, ws_total_gene_count) %>%
   dplyr::summarise(total_genes = sum(ws_class_count),
-                   total_hdr_genes = sum(ws_class_count_inHDR)) %>%
+                   total_hdr_genes = sum(ws_class_count_inHDR),
+                   av_genes_WSs = mean(ws_total_gene_count)) %>%
   dplyr::mutate(prop = total_hdr_genes / total_genes * 100)
 ### 6.50 %
 # In the entire pangenome - by class:
