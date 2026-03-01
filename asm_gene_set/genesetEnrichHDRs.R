@@ -752,11 +752,15 @@ strain_order0 <- prop_genes_in_hdrs %>% dplyr::pull(strain)
   
 final_prop_gs_final <- ws_genes_hdrs_stats %>%
   dplyr::left_join(span_ws_hdrs, by = "strain") %>%
-  dplyr::select(strain,class,ws_class_count_inHDR, ws_total_gene_count, span_hdrs) %>%
+  dplyr::select(strain,class,ws_class_count_inHDR, ws_total_gene_count, span_hdrs, prop_genes_inHDRs_class, prop_total_ws_genes_inHDRs, gene_set_prop_inHDR) %>%
   dplyr::mutate(prop_gene_class_inHDR = (ws_class_count_inHDR / ws_total_gene_count) * 100,
                 span_hdrs = span_hdrs / 1e6) %>%
   dplyr::group_by(strain) %>%
-  dplyr::mutate(total_prop = sum(prop_gene_class_inHDR)) %>%
+  dplyr::mutate(total_prop = sum(prop_gene_class_inHDR),
+                scaling_factor = 1 / gene_set_prop_inHDR,
+                scaled_geneSet_props = prop_genes_inHDRs_class * scaling_factor,
+                scaled_geneSet_props_final = prop_total_ws_genes_inHDRs * scaled_geneSet_props,
+                test = sum(scaled_geneSet_props_final)) %>%
   dplyr::ungroup() %>%
   dplyr::arrange(desc(total_prop), desc(class)) %>%
   dplyr::rename(`Gene set` = class) %>%
@@ -764,7 +768,7 @@ final_prop_gs_final <- ws_genes_hdrs_stats %>%
                                     ifelse(`Gene set` == "accessory", "Accessory", "Private"))) %>%
   dplyr::mutate(
     strain = factor(strain, levels = strain_order0),
-    `Gene set`  = factor(`Gene set`, levels = c("Private", "Accessory", "Core"))) 
+    `Gene set`  = factor(`Gene set`, levels = c("Core", "Accessory", "Private"))) 
 
 ggplot(data = final_prop_gs_final) + 
   geom_col(aes(x = strain, y = prop_gene_class_inHDR, fill = `Gene set`)) +
@@ -786,6 +790,33 @@ ggplot(data = final_prop_gs_final) +
   labs(y = "Proportion of WS genes in HDRs (%)") +
   scale_y_continuous(name = "Proportion of WS genes in HDRs (%)", 
                      sec.axis = sec_axis(~. / 1, name = "Total WS HDR span (Mb)"), expand = expansion(mult = c(0, .05))) 
+
+########### For paper!!! ##################
+ggplot(data = final_prop_gs_final) + 
+  geom_col(aes(x = strain, y = scaled_geneSet_props_final * 100, fill = `Gene set`)) +
+  geom_point(aes(x = strain, y = span_hdrs), color = "black", size = 2) +
+  geom_line( data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6) , group = 1), color = "black", linewidth = 1) +
+  scale_fill_manual(values = c(
+    "Core" = "green4",
+    "Accessory" = "#DB6333",
+    "Private" = "magenta3"
+  )) +
+  theme(
+    axis.title.x = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    legend.position = "inside",
+    legend.position.inside = c(0.85,0.85),
+    legend.title = element_text(size = 20, color = 'black'),
+    legend.text = element_text(size = 18, color = 'black'),
+    axis.text.x = element_text(size = 12, color= 'black', angle = 60, hjust = 1),
+    axis.title.y = element_text(size = 24, color = 'black', face = 'bold'),
+    axis.text.y = element_text(size = 18, color = 'black'),
+    plot.margin = margin(t = 5, b = 5, l = 5, r = 5)) +
+  labs(y = "Proportion of WS genes in HDRs (%)") +
+  scale_y_continuous(name = "Proportion of WS genes in HDRs (%)",
+                     sec.axis = sec_axis(~. / 1, name = "Total wild strain HDRs span (Mb)"), expand = expansion(mult = c(0, .05)))
+
 
 
 
