@@ -621,6 +621,8 @@ all_relations_private <- private_ortho_count %>%
 all_relations <- all_relations_pre %>%
   dplyr::bind_rows(all_relations_private)
 
+# write.table(all_relations, "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/ws_HDR_liftover/OG_relations_matrix_count.tsv",  sep = '\t', quote = F, col.names = T, row.names = F)
+
 private_freq = (1/(length(strainCol_c2_u)))
 
 class <- all_relations %>%
@@ -644,8 +646,11 @@ long_class <- all_class %>%
     values_to = "gene",
     values_drop_na = TRUE) %>%
   tidyr::separate_rows(gene, sep = ",\\s*") %>%
-  dplyr::select(strain, gene, class) %>%
+  dplyr::select(strain, Orthogroup, gene, class) %>%
   dplyr::mutate(gene = sub("\\.[^.]*$", "", gene))
+
+# write.table(long_class, "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/ws_HDR_liftover/all_genes_class_OGs.tsv",  sep = '\t', quote = F, col.names = T, row.names = F)
+
 
 # Loading in all genes in pangenome
 genes_strain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142_140WSs_andCGC1_longestIsoGenes.tsv", col_names = c("seqid","source", "type", "start", "end", "score", "strand", "phase", "attributes", "strain")) %>% dplyr::filter(strain != "ECA396")
@@ -661,13 +666,13 @@ genes_class <- all_genes_strain %>%
   dplyr::left_join(long_class, by = c("gene","strain"))
 
 
-
 # ======================================================================================================================================================================================== #
 # Pulling WS genes that are in lifted-over WS HDRs #
 # ======================================================================================================================================================================================== #
 # Prepping input of WS HDRs and WS genes
 ws_hdrs <- data.table::as.data.table(all_calls_WS_HDRs %>% dplyr::select(strain, contig, ws_hdr_start, ws_hdr_end) %>% dplyr::rename(start = ws_hdr_start, end = ws_hdr_end))
-ws_genes <- genes_class %>% dplyr::select(strain, seqid, start, end, gene, class) %>% dplyr::filter(strain != "N2" & strain != "CGC1") %>% dplyr::rename(contig = seqid) %>% data.table::as.data.table()
+ws_genes <- genes_class %>% dplyr::select(strain, seqid, start, end, gene, Orthogroup, class) %>% dplyr::filter(strain != "N2" & strain != "CGC1") %>% dplyr::rename(contig = seqid) %>% data.table::as.data.table()
+
 
 # Setting the keys for foverlaps
 data.table::setkey(ws_hdrs, strain, contig, start, end)
@@ -693,6 +698,15 @@ ws_genes_hdrs_stats <- ws_genes_hdrs %>%
   dplyr::mutate(ws_class_count_inHDR = n()) %>%
   dplyr::ungroup() %>%
   dplyr::distinct(strain, class, ws_class_count_inHDR)
+
+
+# Identifying OGs that HDR genes are in
+# ws_hdr_genes_og_class <- ws_genes_hdrs %>%
+  # dplyr::filter(!is.na(start)) %>%
+  # dplyr::distinct(strain, gene, Orthogroup, class)
+
+# write.table(ws_hdr_genes_og_class, "/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/ws_HDR_liftover/hdr_genes_OG_class.tsv",  sep = '\t', quote = F, col.names = T, row.names = F)
+
 
 # Number of genes in each gene set in HDRs compared to entire gene set
 # ws_genes_class <- ws_genes_hdrs_stats %>%
