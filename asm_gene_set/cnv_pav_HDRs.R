@@ -136,10 +136,10 @@ plot_df_norm <- cnv_pav_results_df %>%
                 stat = metric %>%
                   stringr::str_remove("_inHDRs?$") %>%
                   stringr::str_remove("_nonHDRs?$"),
-                stat = ifelse(stat == "one_to_one","one-to-one", 
+                stat = ifelse(stat == "one_to_one","n-to-n", 
                               ifelse(stat == "single_copy_OGs", "single-copy OGs",
                                      ifelse(stat == "OG_count", "OGs", stat))),
-                stat = factor(stat, levels = c("CNV","PAV","one-to-one","single-copy OGs","OGs"))) %>%
+                stat = factor(stat, levels = c("CNV","PAV","n-to-n","single-copy OGs","OGs"))) %>%
   dplyr::filter(stat != "OGs")
 
 
@@ -172,7 +172,7 @@ ggplot(plot_df_norm, aes(x = stat, y = value, fill = region)) +
 
 # Paired Wilcoxon signed-rank test
 wilcox_results <- plot_df_norm %>%
-  group_by(stat) %>%
+  dplyr::group_by(stat) %>%
   wilcox_test(value ~ region, paired = TRUE) %>%
   adjust_pvalue(method = "BH") %>% # Benjamini-Hochberg correction
   add_significance()
@@ -188,13 +188,13 @@ ggplot(plot_df_norm, aes(x = stat, y = value, fill = region)) +
   geom_boxplot(outlier.size = 0.6, width = 0.7, position = position_dodge(width = 0.75), outlier.shape = NA, alpha = 0.5) +
   geom_point(position = position_jitterdodge(jitter.width = 0.5, dodge.width = 0.75), size = 1.25) +
   scale_fill_manual(values = c("HDR" = "red", "non-HDR" = "blue")) +
-  stat_pvalue_manual(wilcox_results, label = "p.adj.signif", x = "stat", y.position = "y.position", inherit.aes = FALSE) +
+  stat_pvalue_manual(wilcox_results, label = "p.adj.signif", x = "stat", y.position = "y.position", inherit.aes = FALSE, color = 'black', size = 8) +
   scale_y_log10() +
   labs(y = "Orthogroup count", fill = "Region") +
   theme_bw() +
   theme(
     axis.title.x = element_blank(),
-    axis.text.x = element_text(size = 26, color = 'black', face = 'bold'),
+    axis.text.x = element_text(size = 26, color = 'black'),
     panel.grid.major.x = element_blank(),
     legend.box.background = element_rect(color = "black", size = 1),
     legend.position  = 'inside',
@@ -203,5 +203,17 @@ ggplot(plot_df_norm, aes(x = stat, y = value, fill = region)) +
     legend.key.size = unit(1.5, "cm"),
     legend.text = element_text(size = 24, color = 'black'),
     axis.text.y = element_text(size = 18, color = 'black'),
-    axis.title.y = element_text(size = 26, color = 'black', face = 'bold')
-  ) 
+    axis.title.y = element_text(size = 26, color = 'black')
+  )  +
+  scale_x_discrete(labels = c(
+    "CNV" = "CNV",
+    "PAV" = "PAV",
+    "n-to-n" = expression(italic(n) * "-to-" * italic(n)),
+    "single-copy OGs" = "single-copy OGs"
+  ))
+  # scale_x_discrete(labels = c(
+  #   "CNV" = expression(bold("CNV")),
+  #   "PAV" = expression(bold("PAV")),
+  #   "n-to-n" = expression(bold(italic(n) * "-to-" * italic(n))),
+  #   "single-copy OGs" = expression(bold("single-copy OGs"))
+  # ))
