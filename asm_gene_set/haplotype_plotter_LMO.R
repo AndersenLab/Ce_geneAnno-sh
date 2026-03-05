@@ -34,8 +34,13 @@ library(stringr)
 
 # want <- c("N2","MY16","CB4856")
 # want <- c("N2","CB4856","AB1","CB4852","ECA248","ECA251","JU311","JU346","JU394","MY16","ECA259","PX179","RC301","MY1")
-want <- c("N2", "NIC2", "CB4852","JU394","CGC1", "JU782", "ECA2952","ECA1493","ECA3088","XZ1516","ECA1851")
+# want <- c("N2", "NIC2", "CB4852","JU394","CGC1", "JU782", "ECA2952","ECA1493","ECA3088","XZ1516","ECA1851")
   
+# For fungi pheromone trapping of C. elegans
+want <- c("MY1","JU1212","ED3040","N2","JU360","NIC252","NIC265","JU2522","NIC277","JT11398","MY23","BRC20067","ED3073","NIC255","NIC236","ECA251","JU2464","NIC166","JU1213","ED3077","NIC207","MY10",
+          "DL226","AB1","NIC199","JU2519","JU1586","NIC266","JU1409","JU1530","EG4725","NIC1","JU323","JU830","PB303","ED3017","DL200","JU2007","JU1200","NIC3","LKC34","CB4856","CX11276","JU1088","ED3052","JU1172",
+          "KR314","NIC275","MY16","EG4349","QG2075","NIC2","JU311","CB4854","JU1581","JU1440","ECA246","JU310","DL238","JU775","NIC242","ED3005","CX11271","JU367","JU1400",
+          "NIC274", "JU258", "JU393", "JU1246", "NIC271", "TWN2542")
   
 #read all pairwise genome coordinate comparisons
 # transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/nucmer_runs/115_WI_transformed_coords_FIXED.tsv",col_names = F) # REPLACE
@@ -74,10 +79,17 @@ colnames(orthos) <- strainCol_c2
 
 
 # Erik interval
-hdr_chrom = "V"
-hdr_start_pos = 8810000  
-hdr_end_pos = 8910000
+# hdr_chrom = "V"
+# hdr_start_pos = 8810000  
+# hdr_end_pos = 8910000
 
+# Fungi trapping
+hdr_chrom = "IV"
+# hdr_start_pos = 17060000
+# hdr_end_pos = 17300000 
+# narrowed around str-268
+hdr_start_pos = 17097450
+hdr_end_pos = 17196265
 
 
 
@@ -682,8 +694,10 @@ g_count <- length(unique(N2_ad_corr$Parent))
 # desired_order <- c("DL238", "JU310", "CB4852", "JU311", "MY2693", "MY23", "ED3049") # DL238 has the highest fraction of Dauer
 # desired_order <- c("DL238", "JU310", "CB4852", "JU311", "MY2693") # DL238 has the highest fraction of Dauer
 # desired_order <- want %>% rev() # for diacetyl
-desired_order <- c("N2", "ECA3088", "ECA1851","ECA1493","XZ1516", "ECA2952", "JU782","JU394","CB4852","NIC2","CGC1")
-
+# desired_order <- c("N2", "ECA3088", "ECA1851","ECA1493","XZ1516", "ECA2952", "JU782","JU394","CB4852","NIC2","CGC1")
+desired_order <- want <- c("NIC274", "JU258", "JU393", "JU1246", "NIC271", "TWN2542","MY1","JU1212","ED3040","N2","JU360","NIC252","NIC265","JU2522","NIC277","JT11398","MY23","BRC20067","ED3073","NIC255","NIC236","ECA251","JU2464","NIC166","JU1213","ED3077","NIC207","MY10",
+                           "DL226","AB1","NIC199","JU2519","JU1586","NIC266","JU1409","JU1530","EG4725","NIC1","JU323","JU830","PB303","ED3017","DL200","JU2007","JU1200","NIC3","LKC34","CB4856","CX11276","JU1088","ED3052","JU1172",
+                           "KR314","NIC275","MY16","EG4349","QG2075","NIC2","JU311","CB4854","JU1581","JU1440","ECA246","JU310","DL238","JU775","NIC242","ED3005","CX11271","JU367","JU1400")
 
 WI_ad <- boundGenes %>% 
   dplyr::filter(!STRAIN=="N2") %>%
