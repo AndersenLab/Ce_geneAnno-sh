@@ -41,6 +41,7 @@ want <- c("MY1","JU1212","ED3040","N2","JU360","NIC252","NIC265","JU2522","NIC27
           "DL226","AB1","NIC199","JU2519","JU1586","NIC266","JU1409","JU1530","EG4725","NIC1","JU323","JU830","PB303","ED3017","DL200","JU2007","JU1200","NIC3","LKC34","CB4856","CX11276","JU1088","ED3052","JU1172",
           "KR314","NIC275","MY16","EG4349","QG2075","NIC2","JU311","CB4854","JU1581","JU1440","ECA246","JU310","DL238","JU775","NIC242","ED3005","CX11271","JU367","JU1400",
           "NIC274", "JU258", "JU393", "JU1246", "NIC271", "TWN2542")
+want <- c("N2","JU258")
   
 #read all pairwise genome coordinate comparisons
 # transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/nucmer_runs/115_WI_transformed_coords_FIXED.tsv",col_names = F) # REPLACE
@@ -86,7 +87,7 @@ colnames(orthos) <- strainCol_c2
 # Fungi trapping
 hdr_chrom = "IV"
 # hdr_start_pos = 17060000
-# hdr_end_pos = 17300000 
+# hdr_end_pos = 17300000
 # narrowed around str-268
 hdr_start_pos = 17097450
 hdr_end_pos = 17196265
@@ -256,6 +257,28 @@ ggplot(hap_coords) +
         # axis.text = element_blank(),
         # axis.ticks = element_blank(),
         legend.position = 'none') 
+
+
+ggplot(hap_coords %>% dplyr::filter(HIFI == "ptg000157l" | HIFI == "ptg000060l")) + 
+  # geom_rect(xmin=hap_start/1e6,xmax=hap_end/1e6,ymin=-Inf,ymax=Inf,fill="lightgrey")+
+  annotate("rect", xmin=17144109 / 1e6, xmax=17150971/1e6, ymin=-Inf, ymax=Inf, fill = "orange", alpha = 0.7) +
+  geom_segment(aes(x=S1/1e6,xend=E1/1e6,y=S2/1e6,yend=E2/1e6,color=HIFI), size = 1.5) +
+  scale_color_manual(values = c("ptg000157l" = "blue","ptg000060l" = "red")) +
+  facet_wrap(~REF,scales = 'free') +
+  xlab("N2 chromosome position (Mb)") +
+  ylab("JU258 contig position (Mb)") +
+  theme(panel.background = element_blank(),
+        panel.border = element_rect(fill=NA),
+        strip.text = element_text(size = 22, color = 'black'),
+        axis.text = element_text(size = 18, color = 'black'),
+        axis.title = element_text(size = 20, color = 'black'),
+        # axis.text = element_blank(),
+        # axis.ticks = element_blank(),
+        legend.position = 'none') +
+  coord_cartesian(ylim = c(0.0, 0.45))
+
+
+
 
 #keep only the contig with the largest extent of alignment with the REF HDR
 tigFilt <- hap_coords %>% 
