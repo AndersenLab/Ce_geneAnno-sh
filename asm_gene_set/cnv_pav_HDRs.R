@@ -224,7 +224,7 @@ all_plt <- ggplot(plot_df_norm, aes(x = stat, y = value, fill = region)) +
   scale_fill_manual(values = c("HDR" = "red", "non-HDR" = "blue")) +
   stat_pvalue_manual(wilcox_results, label = "p.adj.signif", x = "stat", y.position = "y.position", inherit.aes = FALSE, color = 'black', size = 8) +
   scale_y_log10() +
-  labs(y = "Normalized orthogroup count", fill = "Region", title = "ALL ORTHOGROUPS") +
+  labs(y = "Proportion of orthogroups", fill = "Region", title = "ALL ORTHOGROUPS") +
   theme_bw() +
   theme(
     axis.title.x = element_blank(),
@@ -233,7 +233,7 @@ all_plt <- ggplot(plot_df_norm, aes(x = stat, y = value, fill = region)) +
     legend.box.background = element_rect(color = "black", linewidth = 1),
     legend.position  = 'inside',
     panel.border = element_rect(color = 'black', fill =NA),
-    legend.position.inside = c(0.945, 0.945),
+    legend.position.inside = c(0.95, 0.945),
     legend.title = element_blank(),
     legend.key.size = unit(1.5, "cm"),
     plot.title = element_text(size = 20, color = 'black', face = 'bold', hjust = 0.5),
@@ -324,7 +324,7 @@ gpcrs_plt <- ggplot(plot_df_norm_gpcrs, aes(x = stat, y = value, fill = region))
   scale_fill_manual(values = c("HDR" = "red", "non-HDR" = "blue")) +
   stat_pvalue_manual(wilcox_results_gp, label = "p.adj.signif", x = "stat", y.position = "y.position", inherit.aes = FALSE, color = 'black', size = 8) +
   scale_y_log10() +
-  labs(y = "Normalized orthogroup count", fill = "Region", title = "GPCRs") +
+  labs(y = "Proportional orthogroup count", fill = "Region", title = "GPCRs") +
   theme_bw() +
   theme(
     axis.title.x = element_blank(),
@@ -418,7 +418,7 @@ fbox_plt <- ggplot(plot_df_norm_fbox, aes(x = stat, y = value, fill = region)) +
   scale_fill_manual(values = c("HDR" = "red", "non-HDR" = "blue")) +
   stat_pvalue_manual(wilcox_results_final, label = "p.adj.signif", x = "stat", y.position = "y.position", inherit.aes = FALSE, color = 'black', size = 8) +
   scale_y_log10() +
-  labs(y = "Normalized orthogroup count", fill = "Region", title = "F-box") +
+  labs(y = "Proportional orthogroup count", fill = "Region", title = "F-box") +
   theme_bw() +
   theme(
     axis.title.x = element_blank(),
@@ -516,7 +516,7 @@ lectins_plt <- ggplot(plot_df_norm_lectin, aes(x = stat, y = value, fill = regio
   scale_fill_manual(values = c("HDR" = "red", "non-HDR" = "blue")) +
   stat_pvalue_manual(wilcox_results_ct, label = "p.adj.signif", x = "stat", y.position = "y.position", inherit.aes = FALSE, color = 'black', size = 8) +
   scale_y_log10() +
-  labs(y = "Normalized orthogroup count", fill = "Region", title = "C-type lectins") +
+  labs(y = "Proportional orthogroup count", fill = "Region", title = "C-type lectins") +
   theme_bw() +
   theme(
     axis.title.x = element_blank(),
@@ -545,10 +545,127 @@ lectins_plt
 
 
 
+
+### C-type lectins ############################################
+ws_cyto <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/ws_HDR_liftover/140_IPR_cytochromeP450.tsv") %>% dplyr::mutate(cyto = TRUE) # see line 1664 in orthogroup_vis.R
+
+cyto_ws_hdr_ogs <- ws_hdr_ogs %>% dplyr::left_join(ws_cyto, by = c("strain","gene")) %>% dplyr::filter(cyto == TRUE)
+
+all_ws_cyto_OGs <- all_ws_genes_class_og %>% dplyr::left_join(ws_cyto, by = c("strain","gene")) %>% dplyr::filter(cyto == TRUE) %>% dplyr::distinct(Orthogroup) %>% dplyr::pull()
+
+cyto_all_relations <- all_relations %>% dplyr::filter(Orthogroup %in% all_ws_cyto_OGs)
+
+
+# Running orthogroup enrichment
+og_enrich_results_cyto <- OG_enrichment(cyto_ws_hdr_ogs, strains, cyto_all_relations, sc_ogs)
+
+
+#### Calculating stats and adding to plot: 
+# Paired Wilcoxon signed-rank test
+plot_df_norm_cyto <- og_enrich_results_cyto %>%
+  dplyr::rename(inHDR_OG_count = HDR_OG_count) %>%
+  dplyr::mutate(
+    dplyr::across(dplyr::matches("inHDR"), ~ .x / inHDR_OG_count),
+    dplyr::across(dplyr::matches("nonHDR"), ~ .x / nonHDR_OG_count)) %>%
+  tidyr::pivot_longer(
+    cols = -strain,
+    names_to = "metric",
+    values_to = "value") %>%
+  dplyr::mutate(region = case_when(
+    stringr::str_detect(metric, "nonHDR") ~ "non-HDR",
+    stringr::str_detect(metric, "HDR") ~ "HDR",
+    TRUE ~ NA)) %>%
+  dplyr::filter(!is.na(region)) %>%
+  dplyr::mutate(region = factor(region, levels = c("HDR", "non-HDR")),
+                metric = ifelse(metric == "inHDR_OG_count", "OG_count",
+                                ifelse(metric == "nonHDR_OG_count", "OG_count", metric)),
+                stat = metric %>%
+                  stringr::str_remove("_inHDRs?$") %>%
+                  stringr::str_remove("_nonHDRs?$"),
+                stat = ifelse(stat == "one_to_one","n-to-n",
+                              ifelse(stat == "single_copy_OGs", "single-copy OGs",
+                                     ifelse(stat == "OG_count", "OGs", stat))),
+                stat = factor(stat, levels = c("CNV","PAV","n-to-n","single-copy OGs","OGs"))) %>%
+  dplyr::filter(stat != "OGs")
+
+wilcox_results_cyto <- plot_df_norm_cyto  %>%
+  dplyr::group_by(stat) %>%
+  wilcox_test(value ~ region, paired = TRUE) %>%
+  adjust_pvalue(method = "BH") %>% # Benjamini-Hochberg correction
+  add_significance()
+
+y_pos_cyto <- plot_df_norm_cyto %>%
+  dplyr::group_by(stat) %>%
+  dplyr::summarise(y.position = max(value, na.rm = TRUE) * 1.3, .groups = "drop")
+
+wilcox_results_ct <- wilcox_results_cyto %>%
+  dplyr::left_join(y_pos_cyto, by = "stat")
+
+cytos_plt <- ggplot(plot_df_norm_cyto, aes(x = stat, y = value, fill = region)) +
+  geom_boxplot(outlier.size = 0.6, width = 0.7, position = position_dodge(width = 0.75), outlier.shape = NA, alpha = 0.5) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.5, dodge.width = 0.75), size = 1.25) +
+  scale_fill_manual(values = c("HDR" = "red", "non-HDR" = "blue")) +
+  stat_pvalue_manual(wilcox_results_ct, label = "p.adj.signif", x = "stat", y.position = "y.position", inherit.aes = FALSE, color = 'black', size = 8) +
+  scale_y_log10() +
+  labs(y = "Proportional orthogroup count", fill = "Region", title = "Cytochrome P450s") +
+  theme_bw() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(size = 26, color = 'black'),
+    panel.grid.major.x = element_blank(),
+    legend.box.background = element_rect(color = "black", size = 1),
+    legend.position  = 'inside',
+    panel.border = element_rect(color = 'black', fill = NA),
+    legend.position.inside = c(0.945, 0.945),
+    legend.title = element_blank(),
+    plot.title = element_text(size = 20, color = 'black', face = 'bold', hjust = 0.5),
+    legend.key.size = unit(1.5, "cm"),
+    legend.text = element_text(size = 24, color = 'black'),
+    axis.text.y = element_text(size = 18, color = 'black'),
+    axis.title.y = element_text(size = 26, color = 'black', face = 'bold')
+  )  +
+  scale_x_discrete(labels = c(
+    "CNV" = expression(bold("CNV")),
+    "PAV" = expression(bold("PAV")),
+    "n-to-n" = expression(bold(bolditalic(n) * "-to-" * bolditalic(n))),
+    "single-copy OGs" = expression(bold("single-copy OGs"))
+  )) 
+cytos_plt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 all_stats <- og_enrich_results_GPCRs %>% dplyr::mutate(type = "GPCRs") %>%
   dplyr::bind_rows((og_enrich_results %>% dplyr::mutate(type = "ALL"))) %>%
   dplyr::bind_rows((og_enrich_results_FBOX %>% dplyr::mutate(type = "FBOX"))) %>%
   dplyr::bind_rows((og_enrich_results_LECTIN %>% dplyr::mutate(type = "C_type_lectins"))) %>% 
+  dplyr::bind_rows((og_enrich_results_cyto %>% dplyr::mutate(type = "Cytochrome_P450s"))) %>% 
   dplyr::group_by(type) %>%
   dplyr::mutate(mean_CNV_inHDR = mean(CNV_inHDR),
                 mean_PAV_inHDR = mean(PAV_inHDR),
@@ -568,7 +685,7 @@ plt_all_stats <- all_stats %>% dplyr::select(mean_CNV_inHDR, mean_PAV_inHDR, mea
 
 ggplot(data = plt_all_stats) +
   geom_col(aes(x = metric, y = value, fill = type), position = "dodge") +
-  scale_fill_manual(values = c("ALL" = "orange", "GPCRs" = "olivedrab", "FBOX" = "firebrick", "C_type_lectins" = "steelblue")) +
+  scale_fill_manual(values = c("ALL" = "black", "GPCRs" = "olivedrab", "FBOX" = "firebrick", "C_type_lectins" = "steelblue", "Cytochrome_P450s" = "orange")) +
   scale_y_log10(expand = c(0,0)) +
   theme_bw() +
   theme(
