@@ -685,8 +685,8 @@ finalfinal <- ggplot() +
   scale_fill_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
   # density scaled by counts (absolute abundance)
   geom_density(data = plt_data, aes(x = mid_mb, y = after_stat(count), color = Class), adjust = 0.5, linewidth = 0.9, position = "identity", show.legend = FALSE) +
-  geom_text(data = class_labels_final, aes(x = x, y = y, label = Class), hjust = 1.1, fontface = "bold", size = 4, inherit.aes = FALSE) +
-  geom_text(data = density_label_final, aes(x = x, y = y, label = label), vjust = -3, fontface = "bold", size = 5, inherit.aes = FALSE, angle = 90) +
+  geom_text(data = class_labels_final, aes(x = x, y = y, label = Class), hjust = 1.1, fontface = "bold", size = 6, inherit.aes = FALSE) +
+  geom_text(data = density_label_final, aes(x = x, y = y, label = label), vjust = -2.5, fontface = "bold", size = 8.3, inherit.aes = FALSE, angle = 90) +
   scale_color_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
   facet_wrap(~ seqid, scales = "free_x", ncol = 3) +
   # reserve room below zero for the lanes
@@ -698,16 +698,17 @@ finalfinal <- ggplot() +
   theme(
     panel.background = element_blank(),
     panel.border = element_rect(fill = NA, color = "black"),
+    strip.text = element_text(size = 14, color = 'black'),
     # strip.background = element_blank(),
-    axis.title.x = element_text(size = 14, face = "bold"),
-    axis.text = element_text(size =10, color = 'black'),
-    axis.text.x  = element_text(size = 12),
+    axis.title.x = element_text(size = 22, face = "bold"),
+    # axis.text = element_text(size =10, color = 'black'),
+    axis.text = element_text(size = 14, color = 'black'),
     panel.spacing=unit(2, "lines"),
     # axis.title.y = element_text(size = 14, face = "bold"),
     axis.title.y = element_blank(),
     legend.position = 'none',
-    axis.text.y  = element_text(size = 12),
-    plot.margin  = margin(l = 70, r = 5, t = 5, b = 5))
+    # axis.text.y  = element_text(size = 14),
+    plot.margin  = margin(l = 75, r = 5, t = 5, b = 5))
 finalfinal
 
 bw_by_class <- plt_data %>%
@@ -800,8 +801,8 @@ finalfinal <- ggplot() +
   scale_fill_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
   # density scaled by counts (absolute abundance)
   geom_density(data = plt_data, aes(x = mid_mb, y = after_stat(count), color = Class), adjust = 0.5, linewidth = 0.9, position = "identity", show.legend = FALSE) +
-  geom_text(data = class_labels_final, aes(x = x, y = y, label = Class), hjust = 1.1, fontface = "bold", size = 4, inherit.aes = FALSE) +
-  geom_text(data = density_label_final, aes(x = x, y = y, label = label), vjust = -3, fontface = "bold", size = 5, inherit.aes = FALSE, angle = 90) +
+  geom_text(data = class_labels_final, aes(x = x, y = y, label = Class), hjust = 1.1, fontface = "bold", size = 6, inherit.aes = FALSE) +
+  geom_text(data = density_label_final, aes(x = x, y = y, label = label), vjust = -2.5, fontface = "bold", size = 8.3, inherit.aes = FALSE, angle = 90) +
   scale_color_manual(values = c(accessory="#DB6333", private="magenta3", core="green4")) +
   facet_wrap(~ seqid, scales = "free_x", ncol = 3) +
   # reserve room below zero for the lanes
@@ -813,16 +814,17 @@ finalfinal <- ggplot() +
   theme(
     panel.background = element_blank(),
     panel.border = element_rect(fill = NA, color = "black"),
+    strip.text = element_text(size = 14, color = 'black'),
     # strip.background = element_blank(),
-    axis.title.x = element_text(size = 14, face = "bold"),
-    axis.text = element_text(size =10, color = 'black'),
-    axis.text.x  = element_text(size = 12),
+    axis.title.x = element_text(size = 22, face = "bold"),
+    # axis.text = element_text(size =10, color = 'black'),
+    axis.text = element_text(size = 14, color = 'black'),
     panel.spacing=unit(2, "lines"),
     # axis.title.y = element_text(size = 14, face = "bold"),
     axis.title.y = element_blank(),
     legend.position = 'none',
-    axis.text.y  = element_text(size = 12),
-    plot.margin  = margin(l = 70, r = 5, t = 5, b = 5))
+    # axis.text.y  = element_text(size = 14),
+    plot.margin  = margin(l = 75, r = 5, t = 5, b = 5))
 finalfinal
 
 
@@ -1064,8 +1066,8 @@ pan_rarefact <- ggplot() +
   theme(
     panel.background = element_blank(),
     panel.border = element_rect(fill = NA, color = "black"),
-    axis.title = element_text(size = 18, face = "bold"),
-    axis.text = element_text(size =14, color = 'black')) +
+    axis.title = element_text(size = 26, face = "bold"),
+    axis.text = element_text(size =18, color = 'black')) +
   coord_cartesian(ylim = c(0,60000))
     # legend.position = 'none')
 pan_rarefact

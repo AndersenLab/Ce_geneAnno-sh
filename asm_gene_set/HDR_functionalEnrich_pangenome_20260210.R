@@ -790,15 +790,15 @@ plot_IPR_all_diff <- ggplot(diff) +
   scale_y_continuous(breaks = diff$plotpoint, labels = diff$IPR_description, name = "", expand = c(0.02,0.02)) +
   scale_shape_manual(values = c("Core" = 21, "Accessory" = 22, "Private" = 24)) +
   scale_fill_gradient(low = "yellow", high = "red", breaks = c(round(min(-log10(diff$FDR_p.adjust))), round((max(-log10(diff$FDR_p.adjust)) + min(-log10(diff$FDR_p.adjust))) / 2), round(max(-log10(diff$FDR_p.adjust))))) +
-  scale_size_continuous(range = c(1, 10), name = "Fold enrichment", breaks = pretty(diff$enrich_ratio, n = 4)) +
+  scale_size_continuous(range = c(2, 10), name = "Fold enrichment", breaks = pretty(diff$enrich_ratio, n = 4)) +
   coord_cartesian(xlim = c(0, 12000)) +
-  theme(axis.text.x = element_text(size=8, color='black'),
-        axis.text.y = element_text(size=10, color='black'),
-        axis.title = element_text(size=10, color='black', face = 'bold'),
-        plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
-        # plot.title = element_blank(),
-        legend.title = element_text(size = 13, color='black', hjust = 1),
-        legend.text = element_text(size = 12, color='black', hjust = 1),
+  theme(axis.text.x = element_text(size=18, color='black'),
+        axis.text.y = element_text(size=20.5, color='black'),
+        axis.title = element_text(size=26, color='black', face = 'bold'),
+        # plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+        plot.title = element_blank(),
+        legend.title = element_text(size = 24, color='black', hjust = 1),
+        legend.text = element_text(size = 22, color='black', hjust = 1),
         legend.position = "inside",
         legend.position.inside = c(0.8, 0.2),
         legend.direction = "horizontal", legend.box = "vertical",
@@ -810,7 +810,7 @@ plot_IPR_all_diff <- ggplot(diff) +
         panel.grid = element_blank(),
         panel.background = element_blank(),
         panel.border = element_rect(fill = NA),
-        plot.margin = margin(b = 5, t = 10, r = 10, l = 22, unit = "pt")) +
+        plot.margin = margin(b = 5, t = 10, r = 25, l = 2, unit = "pt")) +
   guides(
     fill = guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 10, barheight = 2),
     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE),

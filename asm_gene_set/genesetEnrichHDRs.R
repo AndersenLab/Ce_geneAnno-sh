@@ -754,9 +754,9 @@ ggplot(data = prop_genes_in_hdrs) +
     panel.border = element_rect(color = 'black', fill = NA),
     panel.background = element_blank(),
     axis.text.x = element_text(size = 13.5, color= 'black', angle = 60, hjust = 1),
-    axis.title.y = element_text(size = 24, color = 'black', face = 'bold'),
-    axis.text.y = element_text(size = 18, color = 'black'),
-    plot.margin = margin(t = 5, b = 5, l = 5, r = 5)) +
+    axis.title.y = element_text(size = 30, color = 'black', face = 'bold'),
+    axis.text.y = element_text(size = 26, color = 'black'),
+    plot.margin = margin(t = 8, b = 5, l = 5, r = 5)) +
   labs(y = "Proportion of wild strain genes in HDRs (%)") +
   scale_y_continuous(name = "Proportion of wild strain genes in HDRs (%)", 
                      sec.axis = sec_axis(~. / 1 ,name = "Total wild strain HDRs span (Mb)"), expand = expansion(mult = c(0, .05))) 
@@ -937,7 +937,7 @@ hdr <- ggplot(data = hdr_nonHDR_prop_geneset) +
     axis.title.x = element_blank(),
     axis.title.y = element_blank(),
     plot.margin = margin(l = 40, r = 40, t = 10),
-    axis.text.y = element_text(size = 16, color = 'black')
+    axis.text.y = element_text(size = 22, color = 'black')
   ) +
   scale_y_continuous(expand = c(0,0), breaks = c(0.25, 0.5, 0.75, 1)) 
 hdr
@@ -957,7 +957,7 @@ nonhdr <- ggplot(data = hdr_nonHDR_prop_geneset) +
     axis.title.x = element_blank(),
     axis.title.y = element_blank(),
     plot.margin = margin(l = 40, r = 40, b = 10),
-    axis.text.y = element_text(size = 16, color = 'black')
+    axis.text.y = element_text(size = 22, color = 'black')
   ) +
   scale_y_continuous(expand = c(0,0))
 nonhdr
@@ -967,9 +967,9 @@ aligned <- cowplot::align_plots(hdr, nonhdr, align = "v", axis = "lr")
 # Each panel should be no more than 2.5in high and 6in wide!!!!!!!!!!!!!!! - into panels A) and B)
 cowplot::plot_grid(cowplot::plot_grid(
   aligned[[1]],aligned[[2]],
-  nrow = 2) + draw_label("Relative contribution to each gene set", x=0, y=0.5, vjust= 1.5, angle=90, size = 20, color = 'black', fontface = 'bold') +
-    draw_label("Genes in HDRs", x=0.997, y=0.75, vjust= 1.5, angle=270, size = 20, color = 'black', fontface = 'bold') +
-    draw_label("Genes not in HDRs", x=0.997, y=0.25, vjust= 1.5, angle=270, size = 20, color = 'black', fontface = 'bold'))
+  nrow = 2) + draw_label("Relative contribution to each gene set", x=-0.005, y=0.5, vjust= 1.5, angle=90, size = 32, color = 'black', fontface = 'bold') +
+    draw_label("Genes in HDRs", x=0.9999, y=0.75, vjust= 1.5, angle=270, size = 32, color = 'black', fontface = 'bold') +
+    draw_label("Genes not in HDRs", x=0.9999, y=0.25, vjust= 1.5, angle=270, size = 32, color = 'black', fontface = 'bold'))
 
 
 
