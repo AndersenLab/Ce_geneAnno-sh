@@ -909,7 +909,7 @@ ggplot() +
     panel.grid = element_blank(),
     panel.border = element_rect(fill = NA),
     plot.title = element_text(size = 24, color = 'black', face = 'bold', hjust = 0.5)) +
-  coord_cartesian(xlim = c(6.281940, 8)) +s
+  coord_cartesian(xlim = c(6.281940, 8)) +
   scale_x_continuous(expand = c(0,0)) +
   scale_y_continuous(expand = c(0,0.01)) +
   ggtitle("Largest inversion on CHROM IV") +
@@ -1698,9 +1698,16 @@ add_value_track(del_bin_freq, col = "red",  ylim = c(0, 1), track_height = 0.08,
 add_value_track(ins_bin_freq, col = "blue", ylim = c(0, 1), track_height = 0.08, type = "line", add_loess = FALSE, span = 0.2)
 add_value_track(inv_bin_freq, col = "gold3", ylim = c(0, 1), track_height = 0.08, type = "line", add_loess = FALSE, span = 0.2)
 
-lgd <- Legend(title = "Tracks",labels = c("Genes per 50 kb","HDRs","SNPs per kb","DEL frequency","INS frequency","INV frequency"),
-              type = "lines",legend_gp = gpar(col = c("#00BFC4","grey40","#DB6333","red","blue","gold3"),
-              lwd = c(3, 3, 3, 3, 3, 3)),
+# lgd <- Legend(title = "Tracks",labels = c("Genes per 50 kb","HDRs","SNPs per kb","DEL frequency","INS frequency","INV frequency"),
+#               type = "lines",legend_gp = gpar(col = c("#00BFC4","grey40","#DB6333","red","blue","gold3"),
+#               lwd = c(3, 3, 3, 3, 3, 3)),
+#               labels_gp = gpar(fontsize = 14),
+#               title_gp  = gpar(fontsize = 16, fontface = "bold"))
+
+# Legend with no gene track
+lgd <- Legend(title = "Tracks",labels = c("HDRs","SNPs per kb","DEL frequency","INS frequency","INV frequency"),
+              type = "lines",legend_gp = gpar(col = c("grey40","#DB6333","red","blue","gold3"),
+                                              lwd = c(3, 3, 3, 3, 3)),
               labels_gp = gpar(fontsize = 14),
               title_gp  = gpar(fontsize = 16, fontface = "bold"))
 
