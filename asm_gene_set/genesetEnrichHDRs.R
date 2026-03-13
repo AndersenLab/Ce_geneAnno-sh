@@ -935,7 +935,7 @@ hdr <- ggplot(data = hdr_nonHDR_prop_geneset) +
     legend.position = 'none',
     axis.ticks.x = element_blank(),
     axis.title.x = element_blank(),
-    axis.title.y = element_blank(),
+    axis.title = element_blank(),
     plot.margin = margin(l = 40, r = 40, t = 10),
     axis.text.y = element_text(size = 22, color = 'black')
   ) +
@@ -970,6 +970,8 @@ cowplot::plot_grid(cowplot::plot_grid(
   nrow = 2) + draw_label("Relative contribution to each gene set", x=-0.005, y=0.5, vjust= 1.5, angle=90, size = 32, color = 'black', fontface = 'bold') +
     draw_label("Genes in HDRs", x=0.9999, y=0.75, vjust= 1.5, angle=270, size = 32, color = 'black', fontface = 'bold') +
     draw_label("Genes not in HDRs", x=0.9999, y=0.25, vjust= 1.5, angle=270, size = 32, color = 'black', fontface = 'bold'))
+
+
 
 
 

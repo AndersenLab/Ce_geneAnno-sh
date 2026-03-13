@@ -1051,25 +1051,32 @@ priv_summary <- priv_final %>%
 pan_rarefact <- ggplot() +
   # Pangenome
   geom_errorbar(data = pan_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
-  geom_point(data = pan_summary, aes(x = n_strains, y = mean_core), color = 'blue', size = 3) +
+  geom_point(data = pan_summary, aes(x = n_strains, y = mean_core, color = "Pangenome"), size = 3) +
   # Core
   geom_errorbar(data = core_summary, aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), width = 0.5) +
-  geom_point(data = core_summary, aes(x = n_strains, y = mean_core), color = 'green4', size = 3) +
-  # Accessory
+  geom_point(data = core_summary, aes(x = n_strains, y = mean_core, color = "Core"), size = 3) +
+  # # Accessory
   geom_errorbar(data = accessory_summary, aes(x = n_strains, ymin = mean_accessory - sd_accessory, ymax = mean_accessory + sd_accessory), width = 0.5) +
-  geom_point(data = accessory_summary, aes(x = n_strains, y = mean_accessory), color = '#DB6333', size = 3) +
-  # Private
+  geom_point(data = accessory_summary, aes(x = n_strains, y = mean_accessory, color = "Accessory"), size = 3) +
+  # # Private
   geom_errorbar(data = priv_summary, aes(x = n_strains, ymin = mean_priv - sd_priv, ymax = mean_priv + sd_priv), width = 0.5) +
-  geom_point(data = priv_summary, aes(x = n_strains, y = mean_priv), color = 'magenta3', size = 3) +
+  geom_point(data = priv_summary, aes(x = n_strains, y = mean_priv, color = "Private"), size = 3) +
   # geom_ribbon(aes(x = n_strains, ymin = mean_core - sd_core, ymax = mean_core + sd_core), alpha = 0.2) +
-  labs(x = "Genomes", y = "Orthogroups") +
+  scale_color_manual(
+    values = c("Pangenome" = "blue", "Core" = "green4", "Accessory" = "#DB6333", "Private" = "magenta3"),
+    limits = c("Pangenome", "Core", "Accessory", "Private")  # controls order
+  ) +
+  guides(color = guide_legend(override.aes = list(size = 7))) +  labs(x = "Genomes", y = "Orthogroups") +
   theme(
     panel.background = element_blank(),
     panel.border = element_rect(fill = NA, color = "black"),
     axis.title = element_text(size = 26, face = "bold"),
+    legend.position = 'inside',
+    legend.position.inside = c(0.12,0.9),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 26, color = 'black'),
     axis.text = element_text(size =18, color = 'black')) +
-  coord_cartesian(ylim = c(0,60000))
-    # legend.position = 'none')
+  coord_cartesian(ylim = c(0,60000)) 
 pan_rarefact
 
 # ggsave("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/plots/pan_core_rarefaction.png", pan_rarefact, width = 14, height = 12, dpi = 600)
