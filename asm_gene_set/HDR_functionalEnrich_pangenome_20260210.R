@@ -406,7 +406,7 @@ ggplot(data = ipr_desc_most_strain_2 %>% dplyr::mutate(strain = factor(strain, l
 
 #==============================================================================================================================================================================================================================#
 
-# INTERPROSCAN enrichment test - all pangenes as background
+# INTERPROSCAN enrichment test - all pangenome as background
 
 #==============================================================================================================================================================================================================================#
 ################################################# PRIVATE PANGENOME ##############################################################
@@ -825,20 +825,49 @@ plot_IPR_all_diff
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #==============================================================================================================================================================================================================================#
 
-# INTERPROSCAN (Gene Ontology) - all pangene as background
+# INTERPROSCAN (Gene Ontology) - all pangenome as background
 
 #==============================================================================================================================================================================================================================#
+### private pangenome!! ###
 go_ipr <- all_ipr %>%
   dplyr::filter(!is.na(GO) & GO != "-") %>%
   tidyr::separate_rows(GO, sep="\\|") %>%
   dplyr::filter(GO != "") %>%
   dplyr::distinct(tran, GO) %>% 
-  dplyr::mutate(GO = str_remove_all(GO, "\\s*\\([^)]*\\)") |> str_squish())
-
-### Now with only arms as the background, not the entire genome
-IPR_GO_bckgrd_arms <- unique(go_ipr$tran) 
+  dplyr::mutate(GO = str_remove_all(GO, "\\s*\\([^)]*\\)") |> str_squish()) %>%
+  dplyr::mutate(tran = sub("\\.[^.]*$", "", tran))
+  
+IPR_GO_bckgrd <- unique(go_ipr$tran) 
 
 # how_many_HDR_GO_arm_genes <- go_ipr_arms %>% dplyr::filter(QX1410 %in% HD_gene_vector) # 2,105
 
@@ -854,10 +883,10 @@ merged_ont <- go_ipr %>%
 
 # BP
 enGO_HDR_merged_BP <- clusterProfiler::enricher(
-  gene = all_priv_list,
+  gene = ws_hdr_priv_genes,
   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(GO,tran),
   TERM2NAME = GO_annotations %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(TERM,TERM_NAME),
-  universe = IPR_GO_bckgrd_arms,
+  universe = IPR_GO_bckgrd,
   pvalueCutoff = 0.05,
   pAdjustMethod = "BH",
   qvalueCutoff = 0.05)
@@ -905,17 +934,17 @@ plot_GO_BP <- ggplot(enGO_HDR_merged_plot_BP) +
   guides(
     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-  labs(title = "Enriched GO:BP terms for genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
+  labs(title = "Enriched GO:BP terms for private genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
 plot_GO_BP
 
 
 
 # MF
 enGO_HDR_merged_MF <- clusterProfiler::enricher(
-  gene = all_priv_list,
+  gene = ws_hdr_priv_genes,
   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(GO,tran),
   TERM2NAME = GO_annotations %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(TERM,TERM_NAME),
-  universe = IPR_GO_bckgrd_arms,
+  universe = IPR_GO_bckgrd,
   pvalueCutoff = 0.05,
   pAdjustMethod = "BH",
   qvalueCutoff = 0.05,
@@ -962,7 +991,7 @@ plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
   guides(
     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-  labs(title = "Enriched GO:MF terms for genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
+  labs(title = "Enriched GO:MF terms for private genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
 plot_GO_MF
 
 
@@ -972,34 +1001,13 @@ plot_GO_MF
 
 
 ########################################### ACCESSORY PANGENOME GO ENRICHMENT ##########################################################
-go_ipr <- all_ipr %>%
-  dplyr::filter(!is.na(GO) & GO != "-") %>%
-  tidyr::separate_rows(GO, sep="\\|") %>%
-  dplyr::filter(GO != "") %>%
-  dplyr::distinct(tran, GO) %>% 
-  dplyr::mutate(GO = str_remove_all(GO, "\\s*\\([^)]*\\)") |> str_squish())
-
-### Now with only arms as the background, not the entire genome
-IPR_GO_bckgrd_arms <- unique(go_ipr$tran) 
-
-# how_many_HDR_GO_arm_genes <- go_ipr_arms %>% dplyr::filter(QX1410 %in% HD_gene_vector) # 2,105
-
-GO_annotations <- AnnotationDbi::select(GO.db,
-                                        keys=unique(go_ipr$GO),
-                                        columns = c("TERM", "DEFINITION", "ONTOLOGY"),
-                                        keytype="GOID") %>%
-  dplyr::rename(TERM = GOID, TERM_NAME = TERM)
-
-merged_ont <- go_ipr %>%
-  dplyr::left_join(GO_annotations, by = c("GO" = "TERM")) %>%
-  dplyr::filter(!is.na(TERM_NAME))
 
 # BP
 enGO_HDR_merged_BP <- clusterProfiler::enricher(
-  gene = all_acc_list,
+  gene = ws_hdr_acc_genes,
   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(GO,tran),
   TERM2NAME = GO_annotations %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(TERM,TERM_NAME),
-  universe = IPR_GO_bckgrd_arms,
+  universe = IPR_GO_bckgrd,
   pvalueCutoff = 0.05,
   pAdjustMethod = "BH",
   qvalueCutoff = 0.05)
@@ -1048,14 +1056,14 @@ plot_GO_BP <- ggplot(enGO_HDR_merged_plot_BP) +
   guides(
     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-  labs(title = "Enriched GO:BP terms for accessory pangenome",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
+  labs(title = "Enriched GO:BP terms for accessory genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
 plot_GO_BP
 
 
 
 # MF
 enGO_HDR_merged_MF <- clusterProfiler::enricher(
-  gene = all_acc_list,
+  gene = ws_hdr_acc_genes,
   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(GO,tran),
   TERM2NAME = GO_annotations %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(TERM,TERM_NAME),
   universe = IPR_GO_bckgrd_arms,
@@ -1106,7 +1114,7 @@ plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
   guides(
     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-  labs(title = "Enriched GO:MF terms for accessory pangenome",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
+  labs(title = "Enriched GO:MF terms for accessory genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
 plot_GO_MF
 
 
@@ -1116,18 +1124,6 @@ plot_GO_MF
 
 
 ########################################### CORE PANGENOME GO ENRICHMENT ##########################################################
-go_ipr <- all_ipr %>%
-  dplyr::filter(!is.na(GO) & GO != "-") %>%
-  tidyr::separate_rows(GO, sep="\\|") %>%
-  dplyr::filter(GO != "") %>%
-  dplyr::distinct(tran, GO) %>% 
-  dplyr::mutate(GO = str_remove_all(GO, "\\s*\\([^)]*\\)") |> str_squish())
-
-### Now with only arms as the background, not the entire genome
-IPR_GO_bckgrd_arms <- unique(go_ipr$tran) 
-
-# how_many_HDR_GO_arm_genes <- go_ipr_arms %>% dplyr::filter(QX1410 %in% HD_gene_vector) # 2,105
-
 GO_annotations <- AnnotationDbi::select(GO.db,
                                         keys=unique(go_ipr$GO),
                                         columns = c("TERM", "DEFINITION", "ONTOLOGY"),
@@ -1140,10 +1136,10 @@ merged_ont <- go_ipr %>%
 
 # BP
 enGO_HDR_merged_BP <- clusterProfiler::enricher(
-  gene = all_core_list,
+  gene = ws_hdr_core_genes,
   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(GO,tran),
   TERM2NAME = GO_annotations %>% dplyr::filter(ONTOLOGY == "BP") %>% dplyr::select(TERM,TERM_NAME),
-  universe = IPR_GO_bckgrd_arms,
+  universe = IPR_GO_bckgrd,
   pvalueCutoff = 0.05,
   pAdjustMethod = "BH",
   qvalueCutoff = 0.05)
@@ -1194,17 +1190,17 @@ plot_GO_BP <- ggplot(enGO_HDR_merged_plot_BP) +
   guides(
     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-  labs(title = "Enriched GO:BP terms for core pangenome",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
+  labs(title = "Enriched GO:BP terms for core genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
 plot_GO_BP
 
 
 
 # MF
 enGO_HDR_merged_MF <- clusterProfiler::enricher(
-  gene = all_core_list,
+  gene = ws_hdr_core_genes,
   TERM2GENE = merged_ont %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(GO,tran),
   TERM2NAME = GO_annotations %>% dplyr::filter(ONTOLOGY == "MF") %>% dplyr::select(TERM,TERM_NAME),
-  universe = IPR_GO_bckgrd_arms,
+  universe = IPR_GO_bckgrd,
   pvalueCutoff = 0.05,
   pAdjustMethod = "BH",
   qvalueCutoff = 0.05,
@@ -1220,8 +1216,8 @@ enGO_HDR_merged_plot <- as.data.table(enGO_HDR_merged_MF@result) %>%
   dplyr::mutate(EnrichRatio = (hdr_gene_term / hdr_gene_hit) / (bgd_term / bgd_hit)) %>%
   dplyr::arrange(desc(p.adjust)) %>%
   dplyr::filter(p.adjust < 0.05) %>%
-  dplyr::mutate(plotpoint = dplyr::row_number()) %>%
-  dplyr::mutate(Description = gsub("oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen","oxidoreductase activity (1)", Description))
+  dplyr::mutate(plotpoint = dplyr::row_number()) #%>%
+  # dplyr::mutate(Description = gsub("oxidoreductase activity, acting on paired donors, with incorporation or reduction of molecular oxygen","oxidoreductase activity (1)", Description))
 
 plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
   geom_vline(xintercept = -log10(0.05), color='blue', linewidth=0.4) +
@@ -1251,5 +1247,40 @@ plot_GO_MF <- ggplot(enGO_HDR_merged_plot) +
   guides(
     fill =  guide_colourbar(nrow=1, order = 1, title.position = "top", force = TRUE, barwidth = 5, barheight = 0.3),
     size = guide_legend(nrow=1, order = 2, title.position = "top", title.hjust = 1, force = TRUE)) +
-  labs(title = "Enriched GO:MF terms for core pangenome",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
+  labs(title = "Enriched GO:MF terms for core genes in HDRs",  x = expression(-log[10]~"(corrected p-value)"), size = "Fold enrichment", fill = "Gene count")
 plot_GO_MF
+
+
+
+
+
+
+
+
+
+#############################################################################
+# Most enriched terms among all gene sets
+#############################################################################
+# BP
+
+
+
+
+# MF
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

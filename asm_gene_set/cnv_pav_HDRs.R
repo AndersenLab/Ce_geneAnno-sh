@@ -269,7 +269,8 @@ all_plt_noscOG <- ggplot(plot_df_norm %>% dplyr::filter(stat != "single-copy OGs
   theme(
     axis.title.x = element_blank(),
     axis.text.x = element_text(size = 32, color = 'black'),
-    panel.grid.major.x = element_blank(),
+    # panel.grid.major.x = element_blank(),
+    panel.grid = element_blank(),
     legend.box.background = element_rect(color = "black", linewidth = 1),
     legend.position  = 'inside',
     panel.border = element_rect(color = 'black', fill =NA),
@@ -290,7 +291,9 @@ all_plt_noscOG <- ggplot(plot_df_norm %>% dplyr::filter(stat != "single-copy OGs
   scale_x_discrete(labels = c(
     "CNV" = expression(bold("CNV")),
     "PAV" = expression(bold("PAV")),
-    "n-to-n" = expression(bold(bolditalic(n) * "-to-" * bolditalic(n)))))
+    "n-to-n" = expression(bold(bolditalic(n) * "-to-" * bolditalic(n))))) +
+  coord_cartesian(ylim = c(-0.0001, 1.0001))
+  
 all_plt_noscOG
 
 
@@ -714,7 +717,7 @@ all_plt_class <- ggplot(final_cnv_pav_geneclass, aes(x = stat, y = value, fill =
   theme(
     axis.title.x = element_blank(),
     axis.text.x = element_text(size = 26, color = 'black'),
-    panel.grid.major.x = element_blank(),
+    panel.grid = element_blank(),
     legend.box.background = element_rect(color = "black", size = 1),
     # legend.position  = 'inside',
     panel.border = element_rect(color = 'black', fill = NA),
