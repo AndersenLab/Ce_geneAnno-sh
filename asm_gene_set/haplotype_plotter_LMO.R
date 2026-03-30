@@ -34,14 +34,14 @@ library(stringr)
 
 # want <- c("N2","MY16","CB4856")
 # want <- c("N2","CB4856","AB1","CB4852","ECA248","ECA251","JU311","JU346","JU394","MY16","ECA259","PX179","RC301","MY1")
-# want <- c("N2", "NIC2", "CB4852","JU394","CGC1", "JU782", "ECA2952","ECA1493","ECA3088","XZ1516","ECA1851")
+want <- c("N2", "NIC2", "CB4852","JU394","CGC1", "JU782", "ECA2952","ECA1493","ECA3088","XZ1516","ECA1851")
   
 # For fungi pheromone trapping of C. elegans
-want <- c("MY1","JU1212","ED3040","N2","JU360","NIC252","NIC265","JU2522","NIC277","JT11398","MY23","BRC20067","ED3073","NIC255","NIC236","ECA251","JU2464","NIC166","JU1213","ED3077","NIC207","MY10",
-          "DL226","AB1","NIC199","JU2519","JU1586","NIC266","JU1409","JU1530","EG4725","NIC1","JU323","JU830","PB303","ED3017","DL200","JU2007","JU1200","NIC3","LKC34","CB4856","CX11276","JU1088","ED3052","JU1172",
-          "KR314","NIC275","MY16","EG4349","QG2075","NIC2","JU311","CB4854","JU1581","JU1440","ECA246","JU310","DL238","JU775","NIC242","ED3005","CX11271","JU367","JU1400",
-          "NIC274", "JU258", "JU393", "JU1246", "NIC271", "TWN2542")
-want <- c("N2","JU258")
+# want <- c("MY1","JU1212","ED3040","N2","JU360","NIC252","NIC265","JU2522","NIC277","JT11398","MY23","BRC20067","ED3073","NIC255","NIC236","ECA251","JU2464","NIC166","JU1213","ED3077","NIC207","MY10",
+#           "DL226","AB1","NIC199","JU2519","JU1586","NIC266","JU1409","JU1530","EG4725","NIC1","JU323","JU830","PB303","ED3017","DL200","JU2007","JU1200","NIC3","LKC34","CB4856","CX11276","JU1088","ED3052","JU1172",
+#           "KR314","NIC275","MY16","EG4349","QG2075","NIC2","JU311","CB4854","JU1581","JU1440","ECA246","JU310","DL238","JU775","NIC242","ED3005","CX11271","JU367","JU1400",
+#           "NIC274", "JU258", "JU393", "JU1246", "NIC271", "TWN2542")
+# want <- c("N2","JU258")
   
 #read all pairwise genome coordinate comparisons
 # transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/nucmer_runs/115_WI_transformed_coords_FIXED.tsv",col_names = F) # REPLACE
@@ -79,18 +79,18 @@ strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.prot
 colnames(orthos) <- strainCol_c2
 
 
-# Erik interval
-# hdr_chrom = "V"
-# hdr_start_pos = 8810000  
-# hdr_end_pos = 8910000
+# Erik interval for Antony
+hdr_chrom = "V"
+hdr_start_pos = 8810000
+hdr_end_pos = 8910000
 
 # Fungi trapping
-hdr_chrom = "IV"
+# hdr_chrom = "IV"
 # hdr_start_pos = 17060000
 # hdr_end_pos = 17300000
 # narrowed around str-268
-hdr_start_pos = 17097450
-hdr_end_pos = 17196265
+# hdr_start_pos = 17097450
+# hdr_end_pos = 17196265
 
 
 
@@ -259,23 +259,23 @@ ggplot(hap_coords) +
         legend.position = 'none') 
 
 
-ggplot(hap_coords %>% dplyr::filter(HIFI == "ptg000157l" | HIFI == "ptg000060l")) + 
-  # geom_rect(xmin=hap_start/1e6,xmax=hap_end/1e6,ymin=-Inf,ymax=Inf,fill="lightgrey")+
-  annotate("rect", xmin=17144109 / 1e6, xmax=17150971/1e6, ymin=-Inf, ymax=Inf, fill = "orange", alpha = 0.7) +
-  geom_segment(aes(x=S1/1e6,xend=E1/1e6,y=S2/1e6,yend=E2/1e6,color=HIFI), size = 1.5) +
-  scale_color_manual(values = c("ptg000157l" = "blue","ptg000060l" = "red")) +
-  facet_wrap(~REF,scales = 'free') +
-  xlab("N2 chromosome position (Mb)") +
-  ylab("JU258 contig position (Mb)") +
-  theme(panel.background = element_blank(),
-        panel.border = element_rect(fill=NA),
-        strip.text = element_text(size = 22, color = 'black'),
-        axis.text = element_text(size = 18, color = 'black'),
-        axis.title = element_text(size = 20, color = 'black'),
-        # axis.text = element_blank(),
-        # axis.ticks = element_blank(),
-        legend.position = 'none') +
-  coord_cartesian(ylim = c(0.0, 0.45))
+# ggplot(hap_coords %>% dplyr::filter(HIFI == "ptg000157l" | HIFI == "ptg000060l")) + 
+#   # geom_rect(xmin=hap_start/1e6,xmax=hap_end/1e6,ymin=-Inf,ymax=Inf,fill="lightgrey")+
+#   annotate("rect", xmin=17144109 / 1e6, xmax=17150971/1e6, ymin=-Inf, ymax=Inf, fill = "orange", alpha = 0.7) +
+#   geom_segment(aes(x=S1/1e6,xend=E1/1e6,y=S2/1e6,yend=E2/1e6,color=HIFI), size = 1.5) +
+#   scale_color_manual(values = c("ptg000157l" = "blue","ptg000060l" = "red")) +
+#   facet_wrap(~REF,scales = 'free') +
+#   xlab("N2 chromosome position (Mb)") +
+#   ylab("JU258 contig position (Mb)") +
+#   theme(panel.background = element_blank(),
+#         panel.border = element_rect(fill=NA),
+#         strip.text = element_text(size = 22, color = 'black'),
+#         axis.text = element_text(size = 18, color = 'black'),
+#         axis.title = element_text(size = 20, color = 'black'),
+#         # axis.text = element_blank(),
+#         # axis.ticks = element_blank(),
+#         legend.position = 'none') +
+#   coord_cartesian(ylim = c(0.0, 0.45))
 
 
 
@@ -717,10 +717,10 @@ g_count <- length(unique(N2_ad_corr$Parent))
 # desired_order <- c("DL238", "JU310", "CB4852", "JU311", "MY2693", "MY23", "ED3049") # DL238 has the highest fraction of Dauer
 # desired_order <- c("DL238", "JU310", "CB4852", "JU311", "MY2693") # DL238 has the highest fraction of Dauer
 # desired_order <- want %>% rev() # for diacetyl
-# desired_order <- c("N2", "ECA3088", "ECA1851","ECA1493","XZ1516", "ECA2952", "JU782","JU394","CB4852","NIC2","CGC1")
-desired_order <- want <- c("NIC274", "JU258", "JU393", "JU1246", "NIC271", "TWN2542","MY1","JU1212","ED3040","N2","JU360","NIC252","NIC265","JU2522","NIC277","JT11398","MY23","BRC20067","ED3073","NIC255","NIC236","ECA251","JU2464","NIC166","JU1213","ED3077","NIC207","MY10",
-                           "DL226","AB1","NIC199","JU2519","JU1586","NIC266","JU1409","JU1530","EG4725","NIC1","JU323","JU830","PB303","ED3017","DL200","JU2007","JU1200","NIC3","LKC34","CB4856","CX11276","JU1088","ED3052","JU1172",
-                           "KR314","NIC275","MY16","EG4349","QG2075","NIC2","JU311","CB4854","JU1581","JU1440","ECA246","JU310","DL238","JU775","NIC242","ED3005","CX11271","JU367","JU1400")
+desired_order <- c("N2", "ECA3088", "ECA1851","ECA1493","XZ1516", "ECA2952", "JU782","JU394","CB4852","NIC2","CGC1")
+# desired_order <- want <- c("NIC274", "JU258", "JU393", "JU1246", "NIC271", "TWN2542","MY1","JU1212","ED3040","N2","JU360","NIC252","NIC265","JU2522","NIC277","JT11398","MY23","BRC20067","ED3073","NIC255","NIC236","ECA251","JU2464","NIC166","JU1213","ED3077","NIC207","MY10",
+#                            "DL226","AB1","NIC199","JU2519","JU1586","NIC266","JU1409","JU1530","EG4725","NIC1","JU323","JU830","PB303","ED3017","DL200","JU2007","JU1200","NIC3","LKC34","CB4856","CX11276","JU1088","ED3052","JU1172",
+#                            "KR314","NIC275","MY16","EG4349","QG2075","NIC2","JU311","CB4854","JU1581","JU1440","ECA246","JU310","DL238","JU775","NIC242","ED3005","CX11271","JU367","JU1400")
 
 WI_ad <- boundGenes %>% 
   dplyr::filter(!STRAIN=="N2") %>%
@@ -955,6 +955,57 @@ all_hap_bg <- ggplot() +
 all_hap_bg
 
 # ======================================================================================================================= #
+
+
+
+# 
+# all_hap_bg <- ggplot() +
+#   geom_segment(data = hlines, 
+#                aes(x = boundStart - shift, xend = boundEnd - shift, y = y_pos, yend = y_pos)) +
+#   geom_polygon(data = trapezium_polys, 
+#                aes(x = x, y = y, group = group, fill = alias)) +
+#   geom_rect(data = plot_ad %>% dplyr::mutate(alias=ifelse(is.na(alias),"Unknown gene",as.character(alias))),
+#             aes(xmin = start, xmax = end, ymin = y_pos + 0.2, ymax = y_pos - 0.2, fill = alias),color = "black") +
+#   # geom_segment(
+#   #   data = plot_ad_segments,
+#   #   aes(x = x_start, xend = x_end, y = y_seg, yend = y_seg, color = seg_color),
+#   #   linewidth = 0.5,
+#   #   inherit.aes = FALSE
+#   # ) +
+#   scale_y_continuous(
+#     expand = c(0.01, 0),
+#     breaks = hlines$y_pos,
+#     labels = hlines$STRAIN
+#   ) +
+#   scale_x_continuous(expand = c(0.01, 0), labels = function(x) x / 1000) +
+#   scale_fill_manual(values = final_colors,
+#                     breaks = names(final_colors)) +
+#   scale_color_identity()  +
+#   #scale_color_manual(values = c("+"="black","-"="red")) +
+#   labs(fill="Reference \ngene")+
+#   xlab("Physical distance (kb)") +
+#   theme(
+#     panel.background = element_blank(),
+#     axis.title = element_blank(),
+#     axis.text= element_text(size = 12, color = 'black'),  # adjust size as needed
+#     axis.ticks.y = element_blank(),
+#     axis.line.x = element_line(),
+#     axis.title.x = element_text(color = 'black', size  = 12),
+#     # legend.position = 'none'
+#     legend.position = "right",
+#     # legend.position = 'inside',
+#     # legend.position.right = c(0.9, 0.5),
+#     legend.direction = "horizontal",
+#     legend.key.size = unit(0.4, "lines"),
+#     legend.text = element_text(size = 11),
+#     legend.title = element_text(size = 11)) +
+#   guides(fill = guide_legend(nrow = 16, byrow = TRUE))
+# all_hap_bg
+# 
+# 
+# ### Saving a PDF for Antony.....
+# ggsave("/vast/eande106/projects/Lance/THESIS_WORK/misc/Antony_haplotypes.pdf", all_hap_bg, width = 7.5, height = 7, dpi = 600)
+
 
 
 
