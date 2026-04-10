@@ -4,11 +4,9 @@
 #SBATCH -t 8:00:00
 #SBATCH -N 1
 #SBATCH -n 12
-#SBATCH --output=busco.oe
-#SBATCH --job-name="busco"
 
-source activate busco
+source activate /data/eande106/software/conda_envs/busco
 
 mkdir -p busco
 
-busco -i $file -c 12 -m genome -l /vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/busco_downloads/lineages/nematoda_odb10/ -o busco/genome/${file%.*}.CORECCTED.busco -c 12
+busco -i $file -c 12 -m genome -l /vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/busco_downloads/lineages/nematoda_odb10/ --out_path busco -c 12

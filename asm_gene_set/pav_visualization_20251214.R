@@ -697,6 +697,290 @@ conservedINV
 
 
 
+# ======================================================================================================================================================================================== #
+# SV count correlating with SNP count
+# ======================================================================================================================================================================================== #
+sv_strain_count <- filt_calls %>% dplyr::distinct(strain,sv_type,type_count) %>% dplyr::group_by(strain) %>% dplyr::mutate(all_sv_count = sum(type_count)) %>% dplyr::distinct(strain,all_sv_count) %>%
+  dplyr::filter(strain != "CGC1")
+
+sv_strain_type_count <- filt_calls %>% dplyr::distinct(strain,sv_type,type_count) %>%
+  dplyr::filter(strain != "CGC1")
+  
+founders <- c("AB1","CB4852","CB4856","ECA248","ECA251","ECA259","JU311","JU346","JU394","MY1","MY16","PX179","RC301")
+
+snps_per_strain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/misc/henrique_lab/140_strains_ALT_SNP_count.tsv", col_names = c("strain","snp_count"))
+
+sv_snp_strains <- sv_strain_count %>% dplyr::left_join(snps_per_strain, by = "strain") %>%
+  dplyr::mutate(founder = ifelse(strain %in% founders, T, F))
+
+sv_snp_strains_pivoted <- sv_snp_strains %>%
+  tidyr::pivot_longer(
+    cols = c(all_sv_count, snp_count),
+    names_to = "variant_type",
+    values_to = "count"
+  ) %>%
+  dplyr::mutate(variant_type = ifelse(variant_type == "snp_count", "SNPs (1e1)", "SVs")) %>%
+  dplyr::mutate(count_adjusted = ifelse(variant_type == "SNPs (1e1)", count / 1e1, count))
+
+# Bar plots of SV and SNP count for each strain
+ggplot(sv_snp_strains_pivoted, aes(x = reorder(strain, -count_adjusted), y = count_adjusted, fill = variant_type, color = founder)) + 
+  geom_col(position = "dodge", linewidth = 1) +
+  scale_fill_manual(values = c("SNPs (1e1)" = "seagreen", "SVs" = "orange")) +
+  scale_color_manual(values = c("TRUE" = "black", "FALSE" = "white")) +
+  labs(y = "Variant count", fill = "Variant type", color = "Founder") +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    panel.grid.major = element_line(color = 'gray80'),
+    panel.grid.major.x = element_blank(),
+    legend.position = "inside",
+    legend.position.inside = c(0.8, 0.8),
+    legend.title = element_text(size = 20, color = 'black'),
+    legend.text = element_text(size = 20, color = 'black'),
+    axis.title.x = element_blank(),
+    axis.text = element_text(size = 16, color = 'black'),
+    axis.text.x = element_text(color = 'black', size = 13, angle = 60, hjust = 1),
+    axis.title.y = element_text(size = 24, color = 'black')
+  ) +
+  scale_y_continuous(expand = c(0, 0))
+
+## Strains that seem to have an inflation of SVs calls in relation to SNPs
+sv_more <- sv_snp_strains_pivoted %>% dplyr::group_by(strain) %>%
+  dplyr::filter(
+    count_adjusted[variant_type == "SVs"] > count_adjusted[variant_type == "SNPs (1e1)"]
+  ) %>%
+  dplyr::ungroup()
+
+ggplot(sv_more, aes(x = reorder(strain, -count_adjusted), y = count_adjusted, fill = variant_type, color = founder)) + 
+  geom_col(position = "dodge", linewidth = 1) +
+  scale_fill_manual(values = c("SNPs (1e1)" = "seagreen", "SVs" = "orange")) +
+  scale_color_manual(values = c("TRUE" = "black", "FALSE" = "white")) +
+  labs(y = "Variant count", fill = "Variant type", color = "Founder") +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    panel.grid.major = element_line(color = 'gray80'),
+    panel.grid.major.x = element_blank(),
+    legend.position = "inside",
+    legend.position.inside = c(0.8, 0.8),
+    legend.title = element_text(size = 20, color = 'black'),
+    legend.text = element_text(size = 20, color = 'black'),
+    axis.title.x = element_blank(),
+    axis.text = element_text(size = 16, color = 'black'),
+    axis.text.x = element_text(color = 'black', size = 23),
+    axis.title.y = element_text(size = 24, color = 'black')
+  ) +
+  scale_y_continuous(expand = c(0, 0))
+
+# Correlation plot of SV count with SNP count with founder strains colored differently than the rest
+### All SVs
+sv_snp_strains <- sv_snp_strains %>% dplyr::arrange(snp_count) %>% dplyr::mutate(strain = factor(strain, levels = strain)) %>%
+  dplyr::rename(Founder = founder)
+
+label_strains <- c("JU346")
+
+model <- lm(snp_count ~ all_sv_count, data = sv_snp_strains)
+
+# View summary (slope, intercept, R-squared)
+summary(model)
+
+# Extract slope and intercept
+coef(model)
+
+slope <- round(coef(model)[2], 1)
+r_squared <- round(summary(model)$r.squared, 3)
+
+ggplot(sv_snp_strains, aes(x = all_sv_count, y = snp_count)) +
+  geom_point(aes(shape = Founder, fill = Founder), size = 5) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", linetype = "dashed", alpha = 0.2) + # minimizes the sum of squared residuals, or ordinary least squares
+  annotate("text", x = 6000, y = 3.5e5, 
+           label = paste0("slope = ", slope, "\nR² = ", r_squared),
+           size = 8, hjust = 0) +
+  geom_text(data = sv_snp_strains %>% dplyr::filter(strain %in% label_strains),
+            aes(label = strain),
+            nudge_y = -10000, size = 5) +
+  scale_shape_manual(values = c("TRUE" = 24, "FALSE" = 21)) +
+  scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "black")) +
+  labs(x = "SV count", y = "SNP count") +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    panel.grid.major = element_line(color = 'gray80'),
+    panel.grid.major.x = element_blank(),
+    legend.position = "inside",
+    legend.position.inside = c(0.2, 0.8),
+    legend.title = element_text(size = 20, color = 'black'),
+    legend.text = element_text(size = 20, color = 'black'),
+    axis.text = element_text(color = 'black', size = 18),
+    axis.title = element_text(size = 24, color = 'black'))
+
+
+### DELs
+sv_strain_type_count_DEL <- sv_strain_type_count %>% dplyr::filter(sv_type == "DEL") %>% dplyr::left_join(snps_per_strain, by = "strain") %>%
+  dplyr::mutate(Founder = ifelse(strain %in% founders, T, F))
+
+label_strains <- c("JU346")
+
+model <- lm(snp_count ~ type_count, data = sv_strain_type_count_DEL)
+
+# View summary (slope, intercept, R-squared)
+summary(model)
+
+# Extract slope and intercept
+coef(model)
+
+slope <- round(coef(model)[2], 1)
+r_squared <- round(summary(model)$r.squared, 3)
+
+ggplot(sv_strain_type_count_DEL, aes(x = type_count, y = snp_count)) +
+  geom_point(aes(shape = Founder, fill = Founder), size = 5) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", linetype = "dashed", alpha = 0.2) + # minimizes the sum of squared residuals, or ordinary least squares
+  annotate("text", x = 3000, y = 3.5e5, 
+           label = paste0("slope = ", slope, "\nR² = ", r_squared),
+           size = 8, hjust = 0) +
+  geom_text(data = sv_strain_type_count_DEL %>% dplyr::filter(strain %in% label_strains),
+            aes(label = strain),
+            nudge_y = -10000, size = 5) +
+  scale_shape_manual(values = c("TRUE" = 24, "FALSE" = 21)) +
+  scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "black")) +
+  labs(x = "SV count", y = "SNP count") +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    panel.grid.major = element_line(color = 'gray80'),
+    panel.grid.major.x = element_blank(),
+    legend.position = "inside",
+    legend.position.inside = c(0.2, 0.8),
+    legend.title = element_text(size = 20, color = 'black'),
+    legend.text = element_text(size = 20, color = 'black'),
+    axis.text = element_text(color = 'black', size = 18),
+    axis.title = element_text(size = 24, color = 'black'))
+
+
+
+### INSs
+sv_strain_type_count_INS <- sv_strain_type_count %>% dplyr::filter(sv_type == "INS") %>% dplyr::left_join(snps_per_strain, by = "strain") %>%
+  dplyr::mutate(Founder = ifelse(strain %in% founders, T, F))
+
+label_strains <- c("JU346")
+
+model <- lm(snp_count ~ type_count, data = sv_strain_type_count_INS)
+
+# View summary (slope, intercept, R-squared)
+summary(model)
+
+# Extract slope and intercept
+coef(model)
+
+slope <- round(coef(model)[2], 1)
+r_squared <- round(summary(model)$r.squared, 3)
+
+ggplot(sv_strain_type_count_INS, aes(x = type_count, y = snp_count)) +
+  geom_point(aes(shape = Founder, fill = Founder), size = 5) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", linetype = "dashed", alpha = 0.2) + # minimizes the sum of squared residuals, or ordinary least squares
+  annotate("text", x = 3000, y = 3.5e5, 
+           label = paste0("slope = ", slope, "\nR² = ", r_squared),
+           size = 8, hjust = 0) +
+  geom_text(data = sv_strain_type_count_INS %>% dplyr::filter(strain %in% label_strains),
+            aes(label = strain),
+            nudge_y = -10000, size = 5) +
+  scale_shape_manual(values = c("TRUE" = 24, "FALSE" = 21)) +
+  scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "black")) +
+  labs(x = "SV count", y = "SNP count") +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    panel.grid.major = element_line(color = 'gray80'),
+    panel.grid.major.x = element_blank(),
+    legend.position = "inside",
+    legend.position.inside = c(0.2, 0.8),
+    legend.title = element_text(size = 20, color = 'black'),
+    legend.text = element_text(size = 20, color = 'black'),
+    axis.text = element_text(color = 'black', size = 18),
+    axis.title = element_text(size = 24, color = 'black'))
+
+
+
+### INVs
+sv_snp_strains <- sv_snp_strains %>% dplyr::arrange(snp_count) %>% dplyr::mutate(strain = factor(strain, levels = strain)) %>%
+  dplyr::rename(Founder = founder)
+
+label_strains <- c("JU346")
+
+model <- lm(snp_count ~ all_sv_count, data = sv_snp_strains)
+
+# View summary (slope, intercept, R-squared)
+summary(model)
+
+# Extract slope and intercept
+coef(model)
+
+slope <- round(coef(model)[2], 1)
+r_squared <- round(summary(model)$r.squared, 3)
+
+ggplot(sv_snp_strains, aes(x = all_sv_count, y = snp_count)) +
+  geom_point(aes(shape = Founder, fill = Founder), size = 5) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", linetype = "dashed", alpha = 0.2) + # minimizes the sum of squared residuals, or ordinary least squares
+  annotate("text", x = 6000, y = 3.5e5, 
+           label = paste0("slope = ", slope, "\nR² = ", r_squared),
+           size = 8, hjust = 0) +
+  geom_text(data = sv_snp_strains %>% dplyr::filter(strain %in% label_strains),
+            aes(label = strain),
+            nudge_y = -10000, size = 5) +
+  scale_shape_manual(values = c("TRUE" = 24, "FALSE" = 21)) +
+  scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "black")) +
+  labs(x = "SV count", y = "SNP count") +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA),
+    panel.background = element_blank(),
+    panel.grid.major = element_line(color = 'gray80'),
+    panel.grid.major.x = element_blank(),
+    legend.position = "inside",
+    legend.position.inside = c(0.2, 0.8),
+    legend.title = element_text(size = 20, color = 'black'),
+    legend.text = element_text(size = 20, color = 'black'),
+    axis.text = element_text(color = 'black', size = 18),
+    axis.title = element_text(size = 24, color = 'black'))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
