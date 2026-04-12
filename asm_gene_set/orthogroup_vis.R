@@ -16,6 +16,7 @@ library(clusterProfiler) ## BiocManager::install("clusterProfiler") # need this 
 library(enrichplot)
 library(ggtree)
 library(patchwork)
+library(ggrepel)
 
 
 # ======================================================================================================================================================================================== #
@@ -427,7 +428,37 @@ genes_allHOGs
 all_genes_class_count <- sum_genes %>%
   dplyr::group_by(class) %>%
   dplyr::summarise(n_genes = sum(total_genes)) %>%
-  dplyr::ungroup()
+  dplyr::ungroup() %>%
+  dplyr::mutate(total = sum(n_genes)) %>%
+  dplyr::mutate(prop = (n_genes / total) * 100) %>%
+  dplyr::mutate(class = ifelse(class == 'accessory',"Accessory",
+                               ifelse(class == "private","Private",
+                                      ifelse(class == "core", "Core", class))))
+
+
+### Pie chart of gene set proportion in pangenome
+ggplot(all_genes_class_count, aes(x = 1, y = prop, fill = class)) +
+    geom_col(width = 1, color = "black", alpha = 0.5) +
+    coord_polar(theta = "y") +
+    scale_fill_manual(values = c(
+      "Core" = "green4",
+      "Accessory" = "#DB6333",
+      "Private" = "magenta3")) +
+    theme_void() +
+    theme(
+      legend.position = "none",
+      plot.title = element_text(size = 40, color = 'black', hjust = 0.5, vjust = -8)) +
+    geom_label(
+      data = subset(all_genes_class_count, class == "Core"),
+      aes(x = 0.98, y = 32, label = paste0(round(prop,1), "% (", scales::comma(n_genes), ")")), size = 10) +
+    geom_label(
+      data = subset(all_genes_class_count, class == "Accessory"),
+      aes(x = 1.0, y = 80, label = paste0(round(prop,1), "% (", scales::comma(n_genes), ")")), size = 10) +
+    geom_label(
+      data = subset(all_genes_class_count, class == "Private"),
+      aes(x = 1.2, y = 0, label = paste0(round(prop,1), "% (", scales::comma(n_genes), ")")), size = 10) +
+  labs(title = "Proportion of genes in pangenome")
+
 
 
 

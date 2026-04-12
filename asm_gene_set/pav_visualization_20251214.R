@@ -878,7 +878,7 @@ r_squared <- round(summary(model)$r.squared, 3)
 ggplot(sv_strain_type_count_INS, aes(x = type_count, y = snp_count)) +
   geom_point(aes(shape = Founder, fill = Founder), size = 5) +
   geom_smooth(method = "lm", se = TRUE, color = "blue", linetype = "dashed", alpha = 0.2) + # minimizes the sum of squared residuals, or ordinary least squares
-  annotate("text", x = 3000, y = 3.5e5, 
+  annotate("text", x = 3500, y = 3.5e5, 
            label = paste0("slope = ", slope, "\nR² = ", r_squared),
            size = 8, hjust = 0) +
   geom_text(data = sv_strain_type_count_INS %>% dplyr::filter(strain %in% label_strains),
@@ -902,12 +902,12 @@ ggplot(sv_strain_type_count_INS, aes(x = type_count, y = snp_count)) +
 
 
 ### INVs
-sv_snp_strains <- sv_snp_strains %>% dplyr::arrange(snp_count) %>% dplyr::mutate(strain = factor(strain, levels = strain)) %>%
-  dplyr::rename(Founder = founder)
+sv_strain_type_count_INV <- sv_strain_type_count %>% dplyr::filter(sv_type == "INV") %>% dplyr::left_join(snps_per_strain, by = "strain") %>%
+  dplyr::mutate(Founder = ifelse(strain %in% founders, T, F))
 
 label_strains <- c("JU346")
 
-model <- lm(snp_count ~ all_sv_count, data = sv_snp_strains)
+model <- lm(snp_count ~ type_count, data = sv_strain_type_count_INV)
 
 # View summary (slope, intercept, R-squared)
 summary(model)
@@ -918,13 +918,13 @@ coef(model)
 slope <- round(coef(model)[2], 1)
 r_squared <- round(summary(model)$r.squared, 3)
 
-ggplot(sv_snp_strains, aes(x = all_sv_count, y = snp_count)) +
+ggplot(sv_strain_type_count_INV, aes(x = type_count, y = snp_count)) +
   geom_point(aes(shape = Founder, fill = Founder), size = 5) +
   geom_smooth(method = "lm", se = TRUE, color = "blue", linetype = "dashed", alpha = 0.2) + # minimizes the sum of squared residuals, or ordinary least squares
-  annotate("text", x = 6000, y = 3.5e5, 
+  annotate("text", x = 55, y = 3.5e5, 
            label = paste0("slope = ", slope, "\nR² = ", r_squared),
            size = 8, hjust = 0) +
-  geom_text(data = sv_snp_strains %>% dplyr::filter(strain %in% label_strains),
+  geom_text(data = sv_strain_type_count_INV %>% dplyr::filter(strain %in% label_strains),
             aes(label = strain),
             nudge_y = -10000, size = 5) +
   scale_shape_manual(values = c("TRUE" = 24, "FALSE" = 21)) +
@@ -941,6 +941,7 @@ ggplot(sv_snp_strains, aes(x = all_sv_count, y = snp_count)) +
     legend.text = element_text(size = 20, color = 'black'),
     axis.text = element_text(color = 'black', size = 18),
     axis.title = element_text(size = 24, color = 'black'))
+
 
 
 
