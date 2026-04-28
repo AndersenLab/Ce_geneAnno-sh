@@ -34,7 +34,8 @@ library(stringr)
 
 # want <- c("N2","MY16","CB4856")
 # want <- c("N2","CB4856","AB1","CB4852","ECA248","ECA251","JU311","JU346","JU394","MY16","ECA259","PX179","RC301","MY1")
-want <- c("N2", "NIC2", "CB4852","JU394","CGC1", "JU782", "ECA2952","ECA1493","ECA3088","XZ1516","ECA1851")
+# want <- c("N2", "NIC2", "CB4852","JU394","CGC1", "JU782", "ECA2952","ECA1493","ECA3088","XZ1516","ECA1851")
+want <- c("N2","JU310","MY2693")
   
 # For fungi pheromone trapping of C. elegans
 # want <- c("MY1","JU1212","ED3040","N2","JU360","NIC252","NIC265","JU2522","NIC277","JT11398","MY23","BRC20067","ED3073","NIC255","NIC236","ECA251","JU2464","NIC166","JU1213","ED3077","NIC207","MY10",
@@ -79,10 +80,15 @@ strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.prot
 colnames(orthos) <- strainCol_c2
 
 
+# Etta's interval
+hdr_chrom = "III"
+hdr_start_pos = 4297
+hdr_end_pos = 2577431
+
 # Erik interval for Antony
-hdr_chrom = "V"
-hdr_start_pos = 8810000
-hdr_end_pos = 8910000
+# hdr_chrom = "V"
+# hdr_start_pos = 8810000
+# hdr_end_pos = 8910000
 
 # Fungi trapping
 # hdr_chrom = "IV"
@@ -375,7 +381,7 @@ tigTrim <- tigFilt2 %>%
 
 ggplot(tigTrim) +
   geom_rect(xmin=hap_start/1e6,xmax=hap_end/1e6,ymin=-Inf,ymax=Inf,fill="lightgrey")+
-  geom_segment(aes(x=S1/1e6,xend=E1/1e6,y=S2/1e6,yend=E2/1e6,color=HIFI)) +
+  geom_segment(aes(x=S1/1e6,xend=E1/1e6,y=S2/1e6,yend=E2/1e6,color=HIFI), size = 2) +
   facet_wrap(~STRAIN,scales = 'free') +
   xlab("N2 genome position (Mb)") +
   ylab("WILD contig position (Mb)") +
@@ -717,10 +723,11 @@ g_count <- length(unique(N2_ad_corr$Parent))
 # desired_order <- c("DL238", "JU310", "CB4852", "JU311", "MY2693", "MY23", "ED3049") # DL238 has the highest fraction of Dauer
 # desired_order <- c("DL238", "JU310", "CB4852", "JU311", "MY2693") # DL238 has the highest fraction of Dauer
 # desired_order <- want %>% rev() # for diacetyl
-desired_order <- c("N2", "ECA3088", "ECA1851","ECA1493","XZ1516", "ECA2952", "JU782","JU394","CB4852","NIC2","CGC1")
+# desired_order <- c("N2", "ECA3088", "ECA1851","ECA1493","XZ1516", "ECA2952", "JU782","JU394","CB4852","NIC2","CGC1")
 # desired_order <- want <- c("NIC274", "JU258", "JU393", "JU1246", "NIC271", "TWN2542","MY1","JU1212","ED3040","N2","JU360","NIC252","NIC265","JU2522","NIC277","JT11398","MY23","BRC20067","ED3073","NIC255","NIC236","ECA251","JU2464","NIC166","JU1213","ED3077","NIC207","MY10",
 #                            "DL226","AB1","NIC199","JU2519","JU1586","NIC266","JU1409","JU1530","EG4725","NIC1","JU323","JU830","PB303","ED3017","DL200","JU2007","JU1200","NIC3","LKC34","CB4856","CX11276","JU1088","ED3052","JU1172",
 #                            "KR314","NIC275","MY16","EG4349","QG2075","NIC2","JU311","CB4854","JU1581","JU1440","ECA246","JU310","DL238","JU775","NIC242","ED3005","CX11271","JU367","JU1400")
+desired_order <- c("N2", "JU310", "MY2693")
 
 WI_ad <- boundGenes %>% 
   dplyr::filter(!STRAIN=="N2") %>%
@@ -945,13 +952,13 @@ all_hap_bg <- ggplot() +
     axis.ticks.y = element_blank(),
     axis.line.x = element_line(),
     axis.title.x = element_text(color = 'black', size  = 14),
-    # legend.position = 'none'
-    legend.position = "right",
-    legend.direction = "horizontal",
-    legend.key.size = unit(0.4, "lines"),
-    legend.text = element_text(size = 16),
-    legend.title = element_text(size = 16)) +
-  guides(fill = guide_legend(nrow = 6, byrow = TRUE))
+    legend.position = 'none') +
+    # legend.position = "right",
+    # legend.direction = "horizontal",
+    # legend.key.size = unit(0.4, "lines"),
+    # legend.text = element_text(size = 16),
+    # legend.title = element_text(size = 16)) +
+  guides(fill = guide_legend(nrow = 10, byrow = TRUE))
 all_hap_bg
 
 # ======================================================================================================================= #

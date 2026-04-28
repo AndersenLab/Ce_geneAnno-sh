@@ -1,6 +1,5 @@
 library(plyr) # ALWAYS LOAD BEFORE DPLYR
 library(readr)
-library(org.Ce.eg.db)
 library(dplyr)
 library(ggplot2)
 library(stringr)
