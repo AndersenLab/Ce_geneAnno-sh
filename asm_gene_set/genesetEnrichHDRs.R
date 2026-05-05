@@ -746,14 +746,14 @@ prop_genes_in_hdrs <- ws_genes_hdrs_stats %>%
 
 # Plotting stats of WS genes in HDRs 
 ggplot(data = prop_genes_in_hdrs) + 
-  geom_col(aes(x = strain, y = prop_total_ws_genes_inHDRs * 100), fill = 'chocolate4') +
-  geom_point(data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6)), color = "green", size = 5) +
-  geom_line( data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6) , group = 1), color = "green", linewidth = 1) +
+  geom_col(aes(x = strain, y = prop_total_ws_genes_inHDRs * 100), fill = 'gray45', color = 'black') +
+  geom_point(data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6)), color = "black", size = 5) +
+  geom_line( data = span_ws_hdrs, aes(x = strain, y = (span_hdrs / 1e6) , group = 1), color = "black", linewidth = 1) +
   theme(
     axis.title.x = element_blank(),
     panel.border = element_rect(color = 'black', fill = NA),
     panel.background = element_blank(),
-    axis.text.x = element_text(size = 13.5, color= 'black', angle = 60, hjust = 1),
+    axis.text.x = element_text(size = 13, color= 'black', angle = 60, hjust = 1),
     axis.title.y = element_text(size = 30, color = 'black', face = 'bold'),
     axis.text.y = element_text(size = 26, color = 'black'),
     plot.margin = margin(t = 8, b = 5, l = 5, r = 5)) +

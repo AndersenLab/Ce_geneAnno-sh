@@ -560,7 +560,7 @@ contrib <- ggplot(df_percent, aes(x = percent, y = strain, fill = class)) +
   labs(x = "Percent of genes", fill = "Gene set") +
   scale_x_continuous(expand = c(0, 0)) +
   theme(
-    axis.text.y = element_text(size = 7.5, color = 'black'),
+    axis.text.y = element_text(size = 7, color = 'black'),
     axis.title.y = element_blank(),
     axis.text.x = element_text(size = 19, color = 'black'),
     axis.title.x = element_text(size = 22, color = 'black', face = 'bold'),
