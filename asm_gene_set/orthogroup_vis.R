@@ -706,7 +706,7 @@ class_labels_final <- plt_data %>% dplyr::distinct(Class) %>% dplyr::mutate(y = 
                                                                                        ifelse(Class == "accessory", -41, -61)), x = -Inf)
 class_labels_final <- tidyr::crossing(class_labels_final, seqid = left_facets)
 
-density_label <- plt_data %>% dplyr::mutate(label = "Gene count density") %>% dplyr::mutate(x = -Inf, y = 100) %>% dplyr::select(label,x,y)
+density_label <- plt_data %>% dplyr::mutate(label = "Gene density") %>% dplyr::mutate(x = -Inf, y = 100) %>% dplyr::select(label,x,y)
 density_label_final <- tidyr::crossing(density_label, seqid = left_facets)
 
 finalfinal <- ggplot() +
@@ -728,7 +728,7 @@ finalfinal <- ggplot() +
   theme(
     panel.background = element_blank(),
     panel.border = element_rect(fill = NA, color = "black"),
-    strip.text = element_text(size = 14, color = 'black'),
+    strip.text = element_text(size = 18, color = 'black'),
     # strip.background = element_blank(),
     axis.title.x = element_text(size = 22, face = "bold"),
     # axis.text = element_text(size =10, color = 'black'),

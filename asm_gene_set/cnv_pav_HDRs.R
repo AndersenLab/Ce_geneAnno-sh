@@ -268,7 +268,7 @@ all_plt_noscOG <- ggplot(plot_df_norm %>% dplyr::filter(stat != "single-copy OGs
   theme_bw() +
   theme(
     axis.title.x = element_blank(),
-    axis.text.x = element_text(size = 32, color = 'black'),
+    axis.text.x = element_text(size = 28, color = 'black'),
     # panel.grid.major.x = element_blank(),
     panel.grid = element_blank(),
     legend.box.background = element_rect(color = "black", linewidth = 1),
@@ -289,11 +289,10 @@ all_plt_noscOG <- ggplot(plot_df_norm %>% dplyr::filter(stat != "single-copy OGs
   #   "single-copy OGs" = "single-copy OGs"
   # ))
   scale_x_discrete(labels = c(
-    "CNV" = expression(bold("CNV")),
-    "PAV" = expression(bold("PAV")),
+    "CNV" = expression(bold("copy-number variant (CNV)")),
+    "PAV" = expression(bold("presence-absence variant (PAV)")),
     "n-to-n" = expression(bold(bolditalic(n) * "-to-" * bolditalic(n))))) +
-  coord_cartesian(ylim = c(-0.0001, 1.0001))
-  
+  coord_cartesian(ylim = c(-0.0001, 1.0001)) 
 all_plt_noscOG
 
 
@@ -365,7 +364,7 @@ gpcrs_plt <- ggplot(plot_df_norm_gpcrs, aes(x = stat, y = value, fill = region))
   scale_fill_manual(values = c("HDR" = "red", "non-HDR" = "blue")) +
   stat_pvalue_manual(wilcox_results_gp, label = "p.adj.signif", x = "stat", y.position = "y.position", inherit.aes = FALSE, color = 'black', size = 8) +
   scale_y_log10() +
-  labs(y = "Proportional orthogroup count", fill = "Region", title = "GPCRs") +
+  labs(y = "Proportion of orthogroups", fill = "Region", title = "GPCRs") +
   theme_bw() +
   theme(
     axis.title.x = element_blank(),
@@ -712,7 +711,7 @@ all_plt_class <- ggplot(final_cnv_pav_geneclass, aes(x = stat, y = value, fill =
   stat_pvalue_manual(concatenated_stats, label = "p.adj.signif", x = "stat", y.position = "y.position", inherit.aes = FALSE, color = 'black', size = 8) +
   # scale_y_log10() +
   facet_wrap(~gene_class, nrow = 1) +
-  labs(y = "Proportional orthogroup count", fill = "Region") +
+  labs(y = "Proportion of orthogroups", fill = "Region") +
   theme_bw() +
   theme(
     axis.title.x = element_blank(),

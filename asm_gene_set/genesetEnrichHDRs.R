@@ -972,12 +972,26 @@ cowplot::plot_grid(cowplot::plot_grid(
     draw_label("Genes not in HDRs", x=0.9999, y=0.25, vjust= 1.5, angle=270, size = 32, color = 'black', fontface = 'bold'))
 
 
-
-
-
-
-
-
+############### Only HDR! #########################################
+ggplot(data = hdr_nonHDR_prop_geneset) +
+  geom_col(aes(x = strain, y = pie_frac, fill = `Gene set`), width = 1, color = 'black') +
+  scale_fill_manual(values = c(
+    "Core" = "green4",
+    "Accessory" = "#DB6333",
+    "Private" = "magenta3"
+  )) +
+  theme(
+    axis.text.x = element_blank(),
+    legend.position = 'none',
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 26, color = 'black', face = 'bold'),
+    plot.margin = margin(l = 10, r = 10, t = 20, b = 20),
+    axis.text.y = element_text(size = 22, color = 'black')
+  ) +
+  scale_y_continuous(expand = c(0,0)) +
+  labs(y = "Relative fraction of gene set in HDRs")
+###################################################################
 
 
 
