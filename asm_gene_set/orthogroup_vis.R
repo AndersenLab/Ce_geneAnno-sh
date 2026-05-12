@@ -459,7 +459,69 @@ ggplot(all_genes_class_count, aes(x = 1, y = prop, fill = class)) +
   labs(title = "Proportion of genes in pangenome")
 
 
+# ======================================================================================================================================================================================== #
+# Average number of non-reference genes in each strain
+# ======================================================================================================================================================================================== #
+all_relations_clean <- all_relations %>% dplyr::rename_with(~ gsub("_count", "", .x)) %>% dplyr::select(-Orthogroup)
 
+names <- colnames(all_relations_clean %>% dplyr::select(-N2))
+
+nonRefGenes = as.data.frame(matrix(ncol = 3, nrow = 141))
+colnames(nonRefGenes) <- c("strain","nonREF_genes",'nonREF_Orthogroups')
+
+for (i in 1:length(names)) {
+  soi <- names[i]
+  print(paste0("On strain: ", soi, ". ", i, "/141."))
+  
+  nonRefGenes[i,1] = soi
+  
+  non_ref <- all_relations_clean %>% dplyr::select(N2, .data[[soi]]) %>% dplyr::filter(is.na(N2) & !is.na(.data[[soi]])) %>% dplyr::select(.data[[soi]]) %>% sum(na.rm = TRUE) 
+  
+  nonRefGenes[i,2] = non_ref
+  
+  non_ref_og <- all_relations_clean %>% dplyr::select(N2, .data[[soi]]) %>% dplyr::filter(is.na(N2) & !is.na(.data[[soi]])) %>% nrow()
+  
+  nonRefGenes[i,3] = non_ref_og
+  
+}
+
+
+nonRefGenes_long <- nonRefGenes %>%
+  pivot_longer(
+    cols = c(nonREF_genes, nonREF_Orthogroups),
+    names_to = "metric",
+    values_to = "count"
+  )
+
+label_df_top <- nonRefGenes_long %>%
+  dplyr::filter(metric == "nonREF_genes")  %>% 
+  dplyr::arrange(desc(count)) %>% dplyr::slice_head(n = 10)
+
+label_df_bottom <- nonRefGenes_long %>%
+  dplyr::filter(metric == "nonREF_genes") %>% 
+  dplyr::arrange(count) %>% dplyr::slice_head(n = 10)
+
+labels_df <- label_df_top %>% dplyr::bind_rows(label_df_bottom)
+
+
+ggplot(nonRefGenes_long, aes(x = metric, y = count)) +
+  geom_boxplot(aes(fill = metric), outlier.size = 0.6, width = 0.7, outlier.shape = NA, alpha = 0.5) +
+  geom_line(aes(group = strain), alpha = 0.3) +
+  geom_point(aes(group = strain),size = 1.5, alpha = 0.6) +
+  geom_text_repel(data = labels_df, aes(label = strain), size = 4, max.overlaps = 100) +
+  labs(y = "Count") +
+  scale_fill_manual(values = c("nonREF_genes" = "purple", "nonREF_Orthogroups" = "blue")) +
+  theme(
+    panel.background = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 16, color = 'black'),
+    axis.text.y = element_text(size = 14, color = 'black'),
+    axis.text.x = element_text(size = 16, color = 'black')
+  )
+
+# test <- all_relations_clean %>% dplyr::select(N2, CGC1) %>% dplyr::filter(is.na(N2) & !is.na(CGC1))
 
 # ======================================================================================================================================================================================== #
 # PLOTTING HORIZONTAL BAR PLOTS FOR THE PROPORTION OF GENES THAT ARE CLASSIFIED AS EACH GENE SET IN STRAIN
