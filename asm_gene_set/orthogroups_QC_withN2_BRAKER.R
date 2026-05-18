@@ -338,6 +338,54 @@ cowplot::plot_grid(
   nrow = 2)
 
 
+all_wb_sizes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.CDS.nuclear.cleaned.gff3", col_names = c("chrom","source","type","start","end","score","strand","phase","attribute")) %>%
+  dplyr::select(-c(source,score,strand,phase,X10)) %>%
+  dplyr::group_by(attribute) %>%
+  dplyr::mutate(cds_span = end - start) %>%
+  dplyr::group_by(attribute) %>%
+  dplyr::mutate(cds_total_span = sum(cds_span)) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(attribute, cds_total_span) %>%
+  dplyr::rename(gene = attribute) %>%
+  dplyr::mutate(source = "All N2 genes")
+
+
+n2_wb_sizes <- wb_1031 %>% dplyr::filter(type == 'CDS') %>%
+  dplyr::mutate(cds_span = end - start) %>%
+  dplyr::group_by(gene) %>%
+  dplyr::mutate(cds_total_span = sum(cds_span)) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(gene, cds_total_span) %>%
+  dplyr::mutate(source = "N2 WB specific (not in N2 BRAKER)") %>%
+  dplyr::bind_rows(all_wb_sizes) %>%
+  dplyr::group_by(source) %>%
+  dplyr::mutate(average_size = mean(cds_total_span)) %>%
+  dplyr::ungroup()
+
+average_sizes = n2_wb_sizes %>%
+  dplyr::distinct(source, average_size)
+
+ggplot(n2_wb_sizes) + 
+  geom_histogram(aes(x = cds_total_span / 1e3, fill = source), bins = 500) +
+  scale_fill_manual(values = c("All N2 genes" = "blue", "N2 WB specific (not in N2 BRAKER)" = "black")) +
+  geom_text(data = average_sizes, 
+            aes(x = 7, y = c(800, 700), label = paste0("Mean for ", source, ": ", round(average_size / 1e3, 2), " kb")), 
+            size = 5, hjust = 0) +  
+  theme(
+    panel.background = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.ticks = element_blank(),
+    legend.position = 'inside',
+    legend.text = element_text(size = 18, color = 'black'),
+    legend.position.inside = c(0.8,0.8),
+    axis.text = element_text(size = 14, color = 'black'),
+    axis.title = element_text(size = 16, color = 'black')) +
+  scale_y_continuous(expand = c(0,0)) +
+  scale_x_continuous(expand = c(0,0)) +
+  labs(x = "CDS span (kb)", y = "Count", fill = "") +
+  coord_cartesian(xlim = c(0,10))
+
+
 
 # N2 BRAKER specific (not found in N2 WormBase)
 pav_N2_BRAKER_ogs <- all_relations %>% dplyr::select(Orthogroup, N2 = N2_count, N2_BRAKER = N2_BRAKER_count) %>% dplyr::mutate(both_na = ifelse(is.na(N2) & is.na(N2_BRAKER), TRUE, FALSE)) %>%
