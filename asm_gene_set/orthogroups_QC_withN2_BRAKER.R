@@ -407,8 +407,8 @@ all_relations_clean <- all_relations %>% dplyr::rename_with(~ gsub("_count", "",
   
 names_all <- colnames(all_relations_clean %>% dplyr::select(-N2, -Orthogroup))
   
-nonRefGenes = as.data.frame(matrix(ncol = 3, nrow = 141))
-colnames(nonRefGenes) <- c("strain","N2_specific_genes",'N2_specific_Orthogroups')
+refgenes = as.data.frame(matrix(ncol = 3, nrow = 141))
+colnames(v) <- c("strain","N2_specific_genes",'N2_specific_Orthogroups')
 
 OG_list <- list()
   
@@ -416,21 +416,21 @@ for (i in 1:length(names_all)) {
     soi <- names_all[i]
     print(paste0("On strain: ", soi, ". ", i, "/142."))
     
-    nonRefGenes[i,1] = soi
+    refgenes[i,1] = soi
     
     non_ref <- all_relations_clean %>% dplyr::select(N2, .data[[soi]]) %>% dplyr::filter(!is.na(N2) & is.na(.data[[soi]])) %>% dplyr::select(N2) %>% sum(na.rm = TRUE) 
     
-    nonRefGenes[i,2] = non_ref
+    refgenes[i,2] = non_ref
     
     non_ref_og_count <- all_relations_clean %>% dplyr::select(N2, .data[[soi]]) %>% dplyr::filter(!is.na(N2) & is.na(.data[[soi]])) %>% nrow()
     non_ref_og <- all_relations_clean %>% dplyr::select(Orthogroup, N2, .data[[soi]]) %>% dplyr::filter(!is.na(N2) & is.na(.data[[soi]])) %>% dplyr::pull(Orthogroup)
     OG_list[[i]] <- non_ref_og
     
-    nonRefGenes[i,3] = non_ref_og_count
+    refgenes[i,3] = non_ref_og_count
     
 }
   
-nonRefGenes_long <- nonRefGenes %>%
+nonRefGenes_long <- refgenes %>%
   pivot_longer(
     cols = c(N2_specific_genes, N2_specific_Orthogroups),
     names_to = "metric",
@@ -505,7 +505,113 @@ n2_specific_genes <- cowplot::plot_grid(
   nrow = 2,
   rel_heights = c(6,1))
 n2_specific_genes
+
+
+
+#######################################################################################################################################
+### Looking at non-N2 ###
+#######################################################################################################################################
+nonRefGenes = as.data.frame(matrix(ncol = 3, nrow = 141))
+colnames(nonRefGenes) <- c("strain","nonN2_genes",'nonN2_Orthogroups')
+
+OG_list <- list()
+
+for (i in 1:length(names_all)) {
+  soi <- names_all[i]
+  print(paste0("On strain: ", soi, ". ", i, "/141."))
   
+  nonRefGenes[i,1] = soi
+  
+  non_ref <- all_relations_clean %>% dplyr::select(N2, .data[[soi]]) %>% dplyr::filter(is.na(N2) & !is.na(.data[[soi]])) %>% dplyr::select(.data[[soi]]) %>% sum(na.rm = TRUE) 
+  
+  nonRefGenes[i,2] = non_ref
+  
+  non_ref_og_count <- all_relations_clean %>% dplyr::select(N2, .data[[soi]]) %>% dplyr::filter(is.na(N2) & !is.na(.data[[soi]])) %>% nrow()
+  non_ref_og <- all_relations_clean %>% dplyr::select(Orthogroup, N2, .data[[soi]]) %>% dplyr::filter(is.na(N2) & !is.na(.data[[soi]])) %>% dplyr::pull(Orthogroup)
+  OG_list[[i]] <- non_ref_og
+  
+  nonRefGenes[i,3] = non_ref_og_count
+  
+}
+
+nonRefGenes_long_n2 <- nonRefGenes %>%
+  pivot_longer(
+    cols = c(nonN2_genes, nonN2_Orthogroups),
+    names_to = "metric",
+    values_to = "count"
+  )
+
+label_df_top_n2 <- nonRefGenes_long_n2 %>%
+  dplyr::filter(metric == "nonN2_genes")  %>% 
+  dplyr::arrange(desc(count)) %>% dplyr::slice_head(n = 10)
+
+label_df_bottom_n2 <- nonRefGenes_long_n2 %>%
+  dplyr::filter(metric == "nonN2_genes") %>% 
+  dplyr::arrange(count) %>% dplyr::slice_head(n = 10)
+
+labels_df_n2 <- label_df_top_n2 %>% dplyr::bind_rows(label_df_bottom_n2)
+
+n2 <- ggplot(nonRefGenes_long_n2, aes(x = metric, y = count)) +
+  geom_boxplot(aes(fill = metric), outlier.size = 0.6, width = 0.7, outlier.shape = NA, alpha = 0.5) +
+  geom_line(aes(group = strain), alpha = 0.3) +
+  geom_point(aes(group = strain),size = 1.5, alpha = 0.6) +
+  geom_text_repel(data = labels_df_n2, aes(label = strain), size = 4, max.overlaps = 100) +
+  labs(y = "Count") +
+  scale_fill_manual(values = c("nonN2_genes" = "gray70", "nonN2_Orthogroups" = "gray30")) +
+  theme(
+    panel.background = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 16, color = 'black'),
+    axis.text.y = element_text(size = 14, color = 'black'),
+    axis.text.x = element_text(size = 16, color = 'black')) +
+  coord_cartesian(ylim = c(800,5500))
+n2
+
+# Looking at the proportion in each gene set
+OG_vector_N2 <- unique(unlist(OG_list))
+
+OG_classes <- all_relations %>%
+  dplyr::mutate(across(2:(ncol(.)), ~ ifelse(. >= 1, 1, .))) %>%
+  dplyr::mutate(sum = rowSums(across(-1, ~ ., .names = NULL), na.rm = TRUE)) %>%
+  dplyr::mutate(freq = (sum / length(strainCol_c2_u))) %>%
+  dplyr::mutate(
+    class = case_when(
+      freq == 1 ~ "core",
+      freq > private_freq & freq < 1 ~ "accessory",
+      freq == private_freq ~ "private",
+      TRUE ~ "undefined"
+    )
+  ) %>% dplyr::select(Orthogroup, class) %>%
+  dplyr::filter(Orthogroup %in% OG_vector_N2)
+
+OG_propN2 <- OG_classes %>%
+  dplyr::count(class, name = "class_count") %>%
+  dplyr::mutate(prop = class_count / sum(class_count) * 100) %>%
+  dplyr::mutate(class = factor(class, levels = c("accessory", "private"))) %>%
+  dplyr::mutate(source = "N2")
+
+n2_prop <- ggplot(OG_propN2, aes(x = prop, y = "", fill = class)) +
+  geom_col(position = "stack", width = 0.5, color = "black") +
+  scale_fill_manual(values = c("accessory" = "#DB6333", "private" = "magenta3")) +
+  labs(x = "Proportion (%)", y = NULL, fill = "Gene set") +
+  theme(
+    panel.background = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = 'black', fill = NA),
+    axis.title.x = element_text(size = 20, color = 'black'),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_text(size = 16, color = 'black'),
+    axis.text.y = element_text(size = 14, color = 'black'),
+    axis.text.x = element_text(size = 16, color = 'black'))
+  
+
+cowplot::plot_grid(
+  n2, n2_prop,
+  nrow = 2,
+  rel_heights = c(6,1))
+
   
   
   
