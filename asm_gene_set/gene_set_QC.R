@@ -14,7 +14,8 @@ genes_sets <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_an
 
 gff <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/140_CDS_features.tsv", col_names = c("type","start","end","strain","gene")) %>% dplyr::filter(strain != "ECA396") %>%
   dplyr::select(-type) 
-
+eca741 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/ECA741_CDS_features.tsv", col_names = c("type","start","end","strain","gene")) %>% dplyr::select(-type)
+gff <- gff %>% dplyr::bind_rows(eca741)
 
 # Calculating coding sequence length for all genes in each gene set
 all_genes_gff <- gff %>%
@@ -34,7 +35,7 @@ all_genes_sets <- all_genes_gff %>%
 
 ggplot(all_genes_sets) + 
   geom_histogram(aes(x = gene_length, fill = class), alpha = 0.3, bins = 500) + 
-  scale_fill_manual(values = c("core (1314)" = "green4", "accessory (935)" = "#DB6333", "private (1073)" = "magenta3")) +
+  scale_fill_manual(values = c("core (1314)" = "green4", "accessory (935)" = "#DB6333", "private (1074)" = "magenta3")) +
   theme(
     panel.background = element_blank(),
     panel.border = element_rect(color = "black", fill = NA),
@@ -47,25 +48,6 @@ ggplot(all_genes_sets) +
   labs(x = "Coding length", y = "Gene count", fill = "Gene set") +
   scale_y_log10(expand = c(0,0)) +
   scale_x_continuous(expand = c(0,0))
-
-# Looking at the smallest genes....
-small <- all_genes_sets %>%
-  dplyr::select(-avg_gene_length) %>%
-  dplyr::mutate(class = ifelse(grepl("core",class),"core", 
-                               ifelse(grepl('accessory', class), "accessory", "private"))) %>%
-  dplyr::filter(gene_length <= 100) %>%
-  dplyr::group_by(class) %>%
-  dplyr::mutate(small_count = n()) %>%
-  dplyr::distinct(class, small_count)
-
-smallest <- all_genes_sets %>%
-  dplyr::select(-avg_gene_length) %>%
-  dplyr::mutate(class = ifelse(grepl("core",class),"core", 
-                               ifelse(grepl('accessory', class), "accessory", "private"))) %>%
-  dplyr::filter(gene_length <= 100) %>%
-  dplyr::group_by(class) %>%
-  dplyr::arrange(gene_length) %>%
-  dplyr::slice_head(n = 20)
 
 
 # Looking at the number of exons and number of genes for each gene set
@@ -243,8 +225,163 @@ ggplot(data = gene_exon_count_plt_final, aes(x = strain, y = count)) +
 
 
 
+#######################################################################################################################################
+# Distribution of CDS length for BRAKER-predicted genes in the pangenome and N2 WormBase genes
+#######################################################################################################################################
+strains142 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/assembly-nf/all_assemblies_sheet/142_correct.tsv", col_names = "strain")  %>% dplyr::pull()
+
+ws_se <- gff %>%
+  dplyr::group_by(gene, strain) %>%
+  dplyr::mutate(num_exons = n()) %>%
+  dplyr::ungroup() %>%
+  # dplyr::filter(num_exons == 1) %>%
+  dplyr::mutate(cds_length = end - start) %>%
+  dplyr::group_by(gene,strain) %>%
+  dplyr::mutate(total_CDS_length = sum(cds_length)) 
+
+cgc1_single_exon_genes <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/CGC1_CDS_features.tsv", col_names = c("type","start","end","strain","gene")) %>% dplyr::select(-type) %>%
+  dplyr::group_by(gene) %>%
+  dplyr::mutate(num_exons = n()) %>%
+  dplyr::ungroup() %>%
+  # dplyr::filter(num_exons == 1) %>%
+  dplyr::mutate(cds_length = end - start) %>%
+  dplyr::group_by(gene,strain) %>%
+  dplyr::mutate(total_CDS_length = sum(cds_length)) 
+  
+
+n2_se <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.CDS.nuclear.cleaned.gff3", 
+                           col_names = c("chrom", "source", "type", "start", "end", "score", "strand", "phase", "gene", "strain")) %>%
+  dplyr::select(type,start,end,strain,gene) %>% 
+  dplyr::group_by(gene) %>%
+  dplyr::mutate(num_exons = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(cds_length = end - start) %>%
+  dplyr::group_by(gene) %>%
+  dplyr::mutate(total_CDS_length = sum(cds_length)) %>%
+  dplyr::ungroup() %>%
+  dplyr::select(-type, start, end, strain, gene, num_exons, cds_length,total_CDS_length)
+
+ALL_genes_CDSs <- ws_se %>% dplyr::bind_rows(cgc1_single_exon_genes, n2_se) %>% #%>% dplyr::mutate(check = strain %in% strains142)
+  dplyr::mutate(source = ifelse(strain == "N2", "WormBase N2", "BRAKER"))
+
+# ggplot(ALL_single_ex) +
+#   geom_histogram(aes(x=cds_length, fill = source), bins = 500, alpha = 0.5) +
+#   scale_fill_manual(values = c("WormBase N2" = "#DB6333", "BRAKER" = "blue")) +
+#   theme(
+#     panel.background = element_blank(),
+#     legend.title = element_text(size = 18, color = 'black'),
+#     legend.text = element_text(size = 14, color = 'black'),
+#     panel.border = element_rect(color = "black", fill = NA),
+#     axis.text = element_text(size = 16, color = "black"),
+#     axis.title = element_text(size = 20, color = 'black'),
+#     legend.position = "top") +
+#   labs(fill = "") +
+#   scale_y_log10(expand = expansion(mult = c(0,0.01))) +
+#   scale_x_continuous(expand = c(0,0))
 
 
+# Looking at the smallest genes....
+small <- all_genes_sets %>%
+  dplyr::select(-avg_gene_length) %>%
+  dplyr::mutate(class = ifelse(grepl("core", class),"core", 
+                               ifelse(grepl('accessory', class), "accessory", "private"))) %>%
+  dplyr::filter(gene_length <= 100) %>%
+  dplyr::group_by(class) %>%
+  dplyr::mutate(small_count = n()) %>%
+  dplyr::distinct(class, small_count)
+
+smallest <- all_genes_sets %>%
+  dplyr::select(-avg_gene_length) %>%
+  dplyr::mutate(class = ifelse(grepl("core",class),"core", 
+                               ifelse(grepl('accessory', class), "accessory", "private"))) %>%
+  dplyr::filter(gene_length <= 100) %>%
+  dplyr::group_by(class) %>%
+  dplyr::arrange(gene_length) %>%
+  dplyr::slice_head(n = 20) %>%
+  dplyr::ungroup() %>%
+  dplyr::left_join(ALL_genes_CDSs %>% dplyr::select(gene,strain,num_exons,total_CDS_length), by = c("gene","strain")) %>%
+  dplyr::distinct()
+
+# test <- gff %>% dplyr::filter(gene == "g18175" & strain == "ECA1202") %>% 
+#   dplyr::mutate(span = end - start) %>%
+#   dplyr::mutate(gene_length = sum(span))
+
+
+gene_size_dist <- ALL_genes_CDSs %>%
+  dplyr::select(strain,gene,num_exons,total_CDS_length) %>%
+  dplyr::left_join(genes_sets, by = c("gene","strain")) %>%
+  dplyr::distinct() %>%
+  dplyr::filter(num_exons <= 10) #%>% # captured > 75% of the pangenome
+  dplyr::distinct() ############################ IS THIS NEEDED?
+
+gene_size_dist_plt <- gene_size_dist %>%
+  dplyr::mutate(CDS_bin = cut(total_CDS_length, 
+                       breaks = c(0, 100, 500, 1000, 2000, 3000, 4000, 5000, 
+                                  6000, 8000, 10000, 15000, Inf),
+                       labels = c("0-100", "100-500", "500-1k", "1k-2k", "2k-3k", 
+                                  "3k-4k", "4k-5k", "5k-6k", "6k-8k", 
+                                  "8k-10k", "10k-15k", ">15k")))
+
+# Core
+plt_data_core <- gene_size_dist_plt %>% dplyr::filter(class == "core") %>%
+  dplyr::group_by(num_exons, CDS_bin) %>%
+  dplyr::summarise(count = n(), .groups = "drop")
+
+core_plt <- ggplot(plt_data_core, aes(x = factor(num_exons), y = CDS_bin, fill = count)) +
+  geom_tile(color = "white", linewidth = 0.1) +
+  facet_wrap(~class, nrow = 1) +
+  scale_fill_viridis_c(name = "Number of\ngenes", 
+                       option = "viridis",
+                       na.value = "white") +
+  labs(x = "Number of exons",
+       y = "Total CDS length (bp)") +
+  theme(
+    axis.text = element_text(size = 14, color = 'black'),
+    strip.text = element_text(face = "bold", color = 'black', size = 20),
+    axis.title = element_text(size = 16, color = 'black')
+  )
+
+# Accessory
+plt_data_acc <- gene_size_dist_plt %>% dplyr::filter(class == "accessory") %>%
+  dplyr::group_by(num_exons, CDS_bin) %>%
+  dplyr::summarise(count = n(), .groups = "drop")
+
+acc_plt <- ggplot(plt_data_acc, aes(x = factor(num_exons), y = CDS_bin, fill = count)) +
+  geom_tile(color = "white", linewidth = 0.1) +
+  facet_wrap(~class, nrow = 1) +
+  scale_fill_viridis_c(name = "Number of\ngenes", 
+                       option = "viridis",
+                       na.value = "white") +
+  labs(x = "Number of exons",
+       y = "Total CDS length (bp)") +
+  theme(
+    axis.text = element_text(size = 14, color = 'black'),
+    strip.text = element_text(face = "bold", color = 'black', size = 20),
+    axis.title = element_text(size = 16, color = 'black')
+  )
+
+# Private
+plt_data_priv <- gene_size_dist_plt %>% dplyr::filter(class == "private") %>%
+  dplyr::group_by(num_exons, CDS_bin) %>%
+  dplyr::summarise(count = n(), .groups = "drop")
+
+priv_plt <- ggplot(plt_data_priv, aes(x = factor(num_exons), y = CDS_bin, fill = count)) +
+  geom_tile(color = "white", linewidth = 0.1) +
+  facet_wrap(~class, nrow = 1) +
+  scale_fill_viridis_c(name = "Number of\ngenes", 
+                       option = "viridis",
+                       na.value = "white") +
+  labs(x = "Number of exons",
+       y = "Total CDS length (bp)") +
+  theme(
+    axis.text = element_text(size = 14, color = 'black'),
+    strip.text = element_text(face = "bold", color = 'black', size = 20),
+    axis.title = element_text(size = 16, color = 'black')
+  )
+
+cowplot::plot_grid(
+  core_plt, acc_plt, priv_plt,
+  nrow = 1)
 
 
 

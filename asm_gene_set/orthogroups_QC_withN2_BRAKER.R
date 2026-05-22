@@ -398,6 +398,7 @@ N2_BRAKER_specific_genes_private <- private_OGs %>% dplyr::select(Orthogroup, N2
 final_N2_BRAKER_specific <- N2_BRAKER_specific_genes %>% dplyr::bind_rows(N2_BRAKER_specific_genes_private) %>% dplyr::select(-Orthogroup) %>%
   tidyr::separate_rows(N2_BRAKER, sep = ", ") # 3,492 genes
 
+# write.table(final_N2_BRAKER_specific, "/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/withN2_BRAKER_orthofinder_run/N2_BRAKER_specific_noN2wormBase.tsv", row.names = F, quote = F, col.names = F)
 
 
 #######################################################################################################################################
