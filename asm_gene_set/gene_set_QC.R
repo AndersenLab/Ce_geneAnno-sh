@@ -302,6 +302,31 @@ smallest <- all_genes_sets %>%
   dplyr::left_join(ALL_genes_CDSs %>% dplyr::select(gene,strain,num_exons,total_CDS_length), by = c("gene","strain")) %>%
   dplyr::distinct()
 
+largest <- all_genes_sets %>%
+  dplyr::select(-avg_gene_length) %>%
+  dplyr::mutate(class = ifelse(grepl("core",class),"core", 
+                               ifelse(grepl('accessory', class), "accessory", "private"))) %>%
+  # dplyr::filter(gene_length <= 100) %>%
+  dplyr::group_by(class) %>%
+  dplyr::arrange(desc(gene_length)) %>%
+  dplyr::slice_head(n = 20) %>%
+  dplyr::ungroup() %>%
+  dplyr::left_join(ALL_genes_CDSs %>% dplyr::select(gene,strain,num_exons,total_CDS_length), by = c("gene","strain")) %>%
+  dplyr::distinct()
+
+largest_single_exon <- all_genes_sets %>%
+  dplyr::select(-avg_gene_length) %>%
+  dplyr::mutate(class = ifelse(grepl("core",class),"core", 
+                               ifelse(grepl('accessory', class), "accessory", "private"))) %>%
+  # dplyr::filter(gene_length <= 100) %>%
+  dplyr::left_join(ALL_genes_CDSs %>% dplyr::select(gene,strain,num_exons,total_CDS_length), by = c("gene","strain")) %>% 
+  dplyr::filter(num_exons == 1) %>%
+  dplyr::group_by(class) %>%
+  dplyr::arrange(desc(gene_length)) %>%
+  dplyr::slice_head(n = 20) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct()
+
 # test <- gff %>% dplyr::filter(gene == "g18175" & strain == "ECA1202") %>% 
 #   dplyr::mutate(span = end - start) %>%
 #   dplyr::mutate(gene_length = sum(span))
@@ -309,10 +334,9 @@ smallest <- all_genes_sets %>%
 
 gene_size_dist <- ALL_genes_CDSs %>%
   dplyr::select(strain,gene,num_exons,total_CDS_length) %>%
-  dplyr::left_join(genes_sets, by = c("gene","strain")) %>%
+  dplyr::left_join(genes_sets %>% dplyr::mutate(gene = gsub("transcript_","",gene)), by = c("gene","strain")) %>%
   dplyr::distinct() %>%
-  dplyr::filter(num_exons <= 10) #%>% # captured > 75% of the pangenome
-  dplyr::distinct() ############################ IS THIS NEEDED?
+  dplyr::filter(num_exons <= 10) # captured > 75% of the pangenome
 
 gene_size_dist_plt <- gene_size_dist %>%
   dplyr::mutate(CDS_bin = cut(total_CDS_length, 
@@ -322,10 +346,12 @@ gene_size_dist_plt <- gene_size_dist %>%
                                   "3k-4k", "4k-5k", "5k-6k", "6k-8k", 
                                   "8k-10k", "10k-15k", ">15k")))
 
+### JUST WILD STRAINS ###
 # Core
-plt_data_core <- gene_size_dist_plt %>% dplyr::filter(class == "core") %>%
+plt_data_core <- gene_size_dist_plt %>% dplyr::filter(class == "core" & strain != "N2") %>%
   dplyr::group_by(num_exons, CDS_bin) %>%
-  dplyr::summarise(count = n(), .groups = "drop")
+  dplyr::summarise(count = n(), .groups = "drop") %>%
+  dplyr::mutate(class = "core")
 
 core_plt <- ggplot(plt_data_core, aes(x = factor(num_exons), y = CDS_bin, fill = count)) +
   geom_tile(color = "white", linewidth = 0.1) +
@@ -336,15 +362,19 @@ core_plt <- ggplot(plt_data_core, aes(x = factor(num_exons), y = CDS_bin, fill =
   labs(x = "Number of exons",
        y = "Total CDS length (bp)") +
   theme(
+    panel.background = element_blank(),
+    legend.text = element_text(size = 12, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
     axis.text = element_text(size = 14, color = 'black'),
     strip.text = element_text(face = "bold", color = 'black', size = 20),
     axis.title = element_text(size = 16, color = 'black')
   )
 
 # Accessory
-plt_data_acc <- gene_size_dist_plt %>% dplyr::filter(class == "accessory") %>%
+plt_data_acc <- gene_size_dist_plt %>% dplyr::filter(class == "accessory" & strain != "N2") %>%
   dplyr::group_by(num_exons, CDS_bin) %>%
-  dplyr::summarise(count = n(), .groups = "drop")
+  dplyr::summarise(count = n(), .groups = "drop")  %>%
+  dplyr::mutate(class = "accessory")
 
 acc_plt <- ggplot(plt_data_acc, aes(x = factor(num_exons), y = CDS_bin, fill = count)) +
   geom_tile(color = "white", linewidth = 0.1) +
@@ -355,15 +385,20 @@ acc_plt <- ggplot(plt_data_acc, aes(x = factor(num_exons), y = CDS_bin, fill = c
   labs(x = "Number of exons",
        y = "Total CDS length (bp)") +
   theme(
+    panel.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.text = element_text(size = 12, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
     axis.text = element_text(size = 14, color = 'black'),
     strip.text = element_text(face = "bold", color = 'black', size = 20),
     axis.title = element_text(size = 16, color = 'black')
   )
 
 # Private
-plt_data_priv <- gene_size_dist_plt %>% dplyr::filter(class == "private") %>%
+plt_data_priv <- gene_size_dist_plt %>% dplyr::filter(class == "private" & strain != "N2") %>%
   dplyr::group_by(num_exons, CDS_bin) %>%
-  dplyr::summarise(count = n(), .groups = "drop")
+  dplyr::summarise(count = n(), .groups = "drop")  %>%
+  dplyr::mutate(class = "private")
 
 priv_plt <- ggplot(plt_data_priv, aes(x = factor(num_exons), y = CDS_bin, fill = count)) +
   geom_tile(color = "white", linewidth = 0.1) +
@@ -374,6 +409,10 @@ priv_plt <- ggplot(plt_data_priv, aes(x = factor(num_exons), y = CDS_bin, fill =
   labs(x = "Number of exons",
        y = "Total CDS length (bp)") +
   theme(
+    panel.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.text = element_text(size = 12, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
     axis.text = element_text(size = 14, color = 'black'),
     strip.text = element_text(face = "bold", color = 'black', size = 20),
     axis.title = element_text(size = 16, color = 'black')
@@ -383,8 +422,81 @@ cowplot::plot_grid(
   core_plt, acc_plt, priv_plt,
   nrow = 1)
 
+### NOW JUST N2
+# Core
+plt_data_core <- gene_size_dist_plt %>% dplyr::filter(class == "core" & strain == "N2") %>%
+  dplyr::group_by(num_exons, CDS_bin) %>%
+  dplyr::summarise(count = n(), .groups = "drop") %>%
+  dplyr::mutate(class = "core")
 
+core_plt_n2 <- ggplot(plt_data_core, aes(x = factor(num_exons), y = CDS_bin, fill = count)) +
+  geom_tile(color = "white", linewidth = 0.1) +
+  facet_wrap(~class, nrow = 1) +
+  scale_fill_viridis_c(name = "Number of\ngenes", 
+                       option = "viridis",
+                       na.value = "white") +
+  labs(x = "Number of exons",
+       y = "Total CDS length (bp)") +
+  theme(
+    panel.background = element_blank(),
+    legend.text = element_text(size = 12, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
+    axis.text = element_text(size = 14, color = 'black'),
+    strip.text = element_text(face = "bold", color = 'black', size = 20),
+    axis.title = element_text(size = 16, color = 'black')
+  )
 
+# Accessory
+plt_data_acc <- gene_size_dist_plt %>% dplyr::filter(class == "accessory" & strain == "N2") %>%
+  dplyr::group_by(num_exons, CDS_bin) %>%
+  dplyr::summarise(count = n(), .groups = "drop")  %>%
+  dplyr::mutate(class = "accessory")
+
+acc_plt_n2 <- ggplot(plt_data_acc, aes(x = factor(num_exons), y = CDS_bin, fill = count)) +
+  geom_tile(color = "white", linewidth = 0.1) +
+  facet_wrap(~class, nrow = 1) +
+  scale_fill_viridis_c(name = "Number of\ngenes", 
+                       option = "viridis",
+                       na.value = "white") +
+  labs(x = "Number of exons",
+       y = "Total CDS length (bp)") +
+  theme(
+    panel.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.text = element_text(size = 12, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
+    axis.text = element_text(size = 14, color = 'black'),
+    strip.text = element_text(face = "bold", color = 'black', size = 20),
+    axis.title = element_text(size = 16, color = 'black')
+  )
+
+# Private
+plt_data_priv <- gene_size_dist_plt %>% dplyr::filter(class == "private" & strain == "N2") %>%
+  dplyr::group_by(num_exons, CDS_bin) %>%
+  dplyr::summarise(count = n(), .groups = "drop")  %>%
+  dplyr::mutate(class = "private")
+
+priv_plt_n2 <- ggplot(plt_data_priv, aes(x = factor(num_exons), y = CDS_bin, fill = count)) +
+  geom_tile(color = "white", linewidth = 0.1) +
+  facet_wrap(~class, nrow = 1) +
+  scale_fill_viridis_c(name = "Number of\ngenes", 
+                       option = "viridis",
+                       na.value = "white") +
+  labs(x = "Number of exons",
+       y = "Total CDS length (bp)") +
+  theme(
+    panel.background = element_blank(),
+    axis.title.y = element_blank(),
+    legend.text = element_text(size = 12, color = 'black'),
+    legend.title = element_text(size = 14, color = 'black'),
+    axis.text = element_text(size = 14, color = 'black'),
+    strip.text = element_text(face = "bold", color = 'black', size = 20),
+    axis.title = element_text(size = 16, color = 'black')
+  )
+
+cowplot::plot_grid(
+  core_plt_n2, acc_plt_n2, priv_plt_n2,
+  nrow = 1)
 
 
 
