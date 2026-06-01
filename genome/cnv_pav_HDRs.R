@@ -295,6 +295,43 @@ all_plt_noscOG <- ggplot(plot_df_norm %>% dplyr::filter(stat != "single-copy OGs
   coord_cartesian(ylim = c(-0.0001, 1.0001)) 
 all_plt_noscOG
 
+cnv_inset <- ggplot(plot_df_norm %>% dplyr::filter(stat != "single-copy OGs"), aes(x = stat, y = value, fill = region)) +
+  geom_boxplot(outlier.size = 0.6, width = 0.7, position = position_dodge(width = 0.75), outlier.shape = NA, alpha = 0.5) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.5, dodge.width = 0.75), size = 1.25) +
+  scale_fill_manual(values = c("HDR" = "red", "non-HDR" = "blue")) +
+  stat_pvalue_manual(wilcox_results %>% dplyr::filter(stat != "single-copy OGs"), label = "p.adj.signif", x = "stat", y.position = "y.position", inherit.aes = FALSE, color = 'black', size = 8) +
+  # scale_y_log10() +
+  labs(y = "Proportion of orthogroups", fill = "Region") +
+  theme_bw() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(size = 28, color = 'black'),
+    # panel.grid.major.x = element_blank(),
+    panel.grid = element_blank(),
+    legend.box.background = element_rect(color = "black", linewidth = 1),
+    legend.position  = 'inside',
+    panel.border = element_rect(color = 'black', fill =NA),
+    legend.position.inside = c(0.9, 0.1),
+    legend.title = element_blank(),
+    legend.key.size = unit(1.5, "cm"),
+    # plot.title = element_text(size = 20, color = 'black', face = 'bold', hjust = 0.5),
+    legend.text = element_text(size = 24, color = 'black'),
+    axis.text.y = element_text(size = 18, color = 'black'),
+    axis.title.y = element_text(size = 32, color = 'black', face = 'bold')
+  )  +
+  # scale_x_discrete(labels = c(
+  #   "CNV" = "CNV",
+  #   "PAV" = "PAV",
+  #   "n-to-n" = expression(italic(n) * "-to-" * italic(n)),
+  #   "single-copy OGs" = "single-copy OGs"
+  # ))
+  scale_x_discrete(labels = c(
+    "CNV" = expression(bold("copy-number variant (CNV)")),
+    "PAV" = expression(bold("presence-absence variant (PAV)")),
+    "n-to-n" = expression(bold(bolditalic(n) * "-to-" * bolditalic(n))))) +
+  coord_cartesian(ylim = c(-0.0001, 0.1)) 
+cnv_inset
+
 
 
 #####################################################################################################
