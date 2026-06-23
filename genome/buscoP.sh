@@ -9,4 +9,4 @@
 
 source activate busco
 
-busco -i $file -c 12 -m prot -l /vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/busco_downloads/lineages/nematoda_odb10/ -o /busco/proteome/$(basename $file .braker.protein.fa).busco -c 12
+busco -i $file -c 12 -m prot -l /vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/busco_downloads/lineages/nematoda_odb10/ --out_path <> -o $(basename $file .braker.protein.fa).busco -c 12

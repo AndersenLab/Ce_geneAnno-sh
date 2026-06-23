@@ -1997,7 +1997,45 @@ rarefact_cyto <- private_cyto %>% dplyr::select(strain, number_priv_cyto) %>% dp
 
 
 
+#################### Looking at nuclear hormone receptors ##############
+pan_nhr <- pan_ipr_cleaned %>% 
+  dplyr::filter(grepl("uclear hormone receptor", IPR_description)) %>%
+  dplyr::distinct(strain,gene) %>%
+  dplyr::group_by(strain) %>%
+  dplyr::mutate(n_nhr = n()) %>%
+  dplyr::ungroup() %>%
+  dplyr::arrange(desc(n_nhr)) 
 
+
+# cleaned_pan_nhr <- pan_nhr %>% dplyr::mutate(gene = sub("\\.[^.]*$", "", gene)) %>% dplyr::select(-n_nhr) %>% dplyr::filter(strain != "N2", strain != "CGC1")
+# write.table(cleaned_pan_lectin,"/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/ws_HDR_liftover/140_IPR_nhr.tsv", quote = F, row.names = F, col.names = T, sep = '\t')
+
+
+plt_nhr <- pan_nhr %>% dplyr::distinct(strain, n_nhr) %>% dplyr::mutate(strain = factor(strain, levels = strain))
+
+ggplot(data = plt_nhr) + 
+  geom_col(aes(x = strain, y = n_nhr), fill = 'violet', color = 'black') + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 14, color = 'black', face = 'bold'),
+    axis.text = element_text(size = 12, color = 'black'),
+    axis.text.x = element_text(size = 12, color = 'black', angle = 60, hjust = 1),
+    panel.background = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA)
+  ) +
+  labs(y = "IPR nuclear hormone receptors count")+
+  scale_y_continuous(expand = c(0,0))
+
+
+# rarefaction
+merged_nhr <- priv_wide %>% dplyr::left_join(pan_nhr, by = "strain") %>% dplyr::mutate(priv_nhr = ifelse(gene.x == gene.y, T, F)) 
+
+private_nhr <- merged_nhr %>% dplyr::filter(priv_nhr == T) %>% dplyr::group_by(strain) %>% dplyr::mutate(number_priv_nhr = n()) %>% dplyr::ungroup() %>% dplyr::arrange(desc(number_priv_nhr))
+
+rarefact_nhr <- private_nhr %>% dplyr::select(strain,number_priv_nhr) %>% dplyr::distinct() %>%
+  dplyr::mutate(iterative_sum = cumsum(number_priv_nhr)) %>%
+  dplyr::mutate(number_genomes = row_number()) %>%
+  dplyr::mutate(number_genomes = factor(number_genomes, levels = number_genomes))
 
 
 
@@ -2009,31 +2047,36 @@ rarefact_extended_lectin <- rarefact_lectin %>% dplyr::bind_rows(tibble(strain =
                                                           number_priv_gpcrs = 0, iterative_sum = max(.$iterative_sum), number_genomes = factor((max(as.numeric(.$number_genomes)) + 1):142)))
 rarefact_extended_cyto <- rarefact_cyto %>% dplyr::bind_rows(tibble(strain = paste0("genome_", (max(as.numeric(.$number_genomes)) + 1):142),
                                                           number_priv_gpcrs = 0, iterative_sum = max(.$iterative_sum), number_genomes = factor((max(as.numeric(.$number_genomes)) + 1):142)))
-
+rarefact_extended_nhr <- rarefact_nhr %>% dplyr::bind_rows(tibble(strain = paste0("genome_", (max(as.numeric(.$number_genomes)) + 1):142),
+                                                                    number_priv_gpcrs = 0, iterative_sum = max(.$iterative_sum), number_genomes = factor((max(as.numeric(.$number_genomes)) + 1):142)))
 
 
 # Rarefaction of all three gene families
-ggplot() +
-  geom_point(data = rarefact_extended_gp, aes(x = number_genomes, y = iterative_sum, color = "GPCRs"), size = 4) +
-  geom_point(data = rarefact_extended_fbox, aes(x = number_genomes, y = iterative_sum, color = "F-box"), size = 4) +
-  geom_point(data = rarefact_extended_lectin, aes(x = number_genomes, y = iterative_sum, color = "C-type lectins"), size = 4) +
-  geom_point(data = rarefact_extended_cyto, aes(x = number_genomes, y = iterative_sum, color = "Cytochrome P450s"), size = 4) + # these are enriched in accessory 
+rarefaction_gene_families <- ggplot() +
+  geom_point(data = rarefact_extended_gp, aes(x = number_genomes, y = iterative_sum, color = "GPCRs"), size = 1) +
+  geom_point(data = rarefact_extended_fbox, aes(x = number_genomes, y = iterative_sum, color = "F-box"), size = 1) +
+  geom_point(data = rarefact_extended_lectin, aes(x = number_genomes, y = iterative_sum, color = "C-type lectins"), size = 1) +
+  geom_point(data = rarefact_extended_cyto, aes(x = number_genomes, y = iterative_sum, color = "Cytochrome P450s"), size = 1) + # these are enriched in core
+  geom_point(data = rarefact_extended_nhr, aes(x = number_genomes, y = iterative_sum, color = "Nuclear hormone receptors"), size = 1) + # these are enriched in core 
   scale_color_manual(values = c("GPCRs" = "olivedrab", "F-box" = "firebrick", 
-                                "C-type lectins" = "steelblue", "Cytochrome P450s" = "orange")) +
+                                "C-type lectins" = "steelblue", "Cytochrome P450s" = "orange", "Nuclear hormone receptors" = "violet")) +
     theme(
     panel.background = element_blank(),
     legend.title = element_blank(),
     legend.box.background = element_rect(color = 'black', fill = NA),
     legend.position = "inside",
-    legend.position.inside = c(0.8,0.5),
-    legend.text = element_text(size = 16, color = 'black'),
+    legend.position.inside = c(0.8,0.4),
+    legend.text = element_text(size = 11, color = 'black'),
     panel.border = element_rect(fill = NA, color = "black"),
-    axis.title = element_text(size = 18, face = "bold"),
-    axis.text = element_text(size =14, color = 'black'),
-    axis.text.x = element_text(size = 14, color = 'black', angle = 60, hjust = 1)) +
+    plot.margin = margin(l = 5, r = 10, t = 5, b = 5),
+    axis.title = element_text(size = 11),
+    axis.text = element_text(size =10, color = 'black'),
+    axis.text.x = element_text(size = 10, color = 'black')) +
+  scale_x_discrete(breaks = c(seq(0, 125, 25), 142)) +
   labs(y = "Number of private genes", x = "Number of genomes")
+rarefaction_gene_families
 
-
+ggsave("../../figures/supplementary/gene_family_rarefaction.png",rarefaction_gene_families, width = 7.5, height = 6, dpi = 600)
 
 
 
