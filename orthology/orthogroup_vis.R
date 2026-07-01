@@ -641,6 +641,49 @@ contrib
 
 
 
+
+# ======================================================================================================================================================================================== #
+# Where are N2 single-copy orthologs distributed along chromosomes?
+# ======================================================================================================================================================================================== #
+sc_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups_SingleCopyOrthologues.txt") %>% dplyr::pull()
+
+
+n2_trans <- N2_gff %>%
+  dplyr::select(chrom = seqid, type, start, end, attributes) %>%
+  dplyr::filter(type == "mRNA") %>%
+  dplyr::mutate(attributes = gsub("ID=transcript:","", attributes), attributes = gsub("Parent=gene:","", attributes)) %>%
+  tidyr::separate(attributes, into = c("gene", "misc"), sep = ";") %>%
+  dplyr::select(-type,-misc)
+
+
+sc_n2 <- ortho_genes_dd %>% dplyr::filter(Orthogroup %in% sc_OGs) %>% dplyr::select(N2) %>%
+  dplyr::mutate(N2 = gsub("transcript_","", N2)) %>%
+  dplyr::rename(gene = N2) %>%
+  dplyr::left_join(n2_trans, by = "gene") %>%
+  dplyr::mutate(mid = (start + end) / 2)
+  
+
+
+ggplot(sc_n2) + 
+  geom_rect(aes(xmin= mid / 1e6 - 0.001, xmax = mid / 1e6 + 0.001, ymin = 0, ymax = 1)) +
+  facet_wrap(~chrom, nrow = 6, scale = "free_x") +
+  theme(
+    panel.background = element_blank(),
+    panel.border = element_rect(color = 'black', fill = NA),
+    strip.text = element_text(size = 22, color = 'black'),
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_text(size = 14, color = 'black'),
+    axis.title.x = element_text(size = 16, color = 'black')) +
+  xlab("N2 genome position (Mb)") +
+  scale_x_continuous(expand = c(0.01,0.01))
+
+
+
+
+
+
 # ======================================================================================================================================================================================== #
 # Pangenome gene set classification of N2 genes enriched in particular N2 genomic loci??
 # ======================================================================================================================================================================================== #

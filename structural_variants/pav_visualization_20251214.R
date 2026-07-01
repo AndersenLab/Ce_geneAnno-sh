@@ -1693,12 +1693,12 @@ inv_freq <- ggplot(inv_bin_plt) +
 inv_freq
 
 
-# all_three <- cowplot::plot_grid(
-#   del_freq, ins_freq, inv_freq,
-#   nrow = 3,
-#   align = "v",
-#   rel_heights = c(1,1,1))
-# all_three
+all_three <- cowplot::plot_grid(
+  del_freq, ins_freq, inv_freq,
+  nrow = 3,
+  align = "v",
+  rel_heights = c(1,1,1))
+all_three
 
 
 
