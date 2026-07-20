@@ -1,7 +1,6 @@
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-library(fuzzyjoin)
 library(purrr)
 library(stringr)
 library(data.table)
@@ -10,16 +9,24 @@ library(cowplot)
 # ======================================================================================================================================================================================== #
 # Loading N0.tsv with transcripts converted to genes and plotting gene set classification #
 # ======================================================================================================================================================================================== #
-ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/orthofinder/N0_0504_genes.tsv")
+ortho_genes_dd <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups.tsv") %>%
+  dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
+# whatever <- ortho_genes_dd %>%
+# dplyr::select(JU1581.braker.longest.protein, N2.longest.protein)
 
 strainCol <- colnames(ortho_genes_dd)
-strainCol_c1 <- gsub(".braker.longest.protein","",strainCol)
-strainCol_c2 <- gsub(".longest.protein","",strainCol_c1)
+ugh <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
+ugh2 <- gsub(".20251014.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh)
+ugh3 <- gsub(".20251124.inbred.blobFiltered.softMasked.braker.longestIso.protein","", ugh2)
+ugh4 <- gsub(".20251012.inbred.onlyONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh3)
+ugh5 <- gsub(".Nov2025.softMasked.braker.longest.protein","", ugh4)
+ugh6 <- gsub(".20251012.inbred.withONT.blobFiltered.softMasked.braker.longestIso.protein","", ugh5)
+strainCol_c2 <- gsub("c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein","N2", ugh6)
 colnames(ortho_genes_dd) <- strainCol_c2
 
 ortho_count <- ortho_genes_dd
 
-strainCol_c2_u <- strainCol_c2[!strainCol_c2 %in% c("OG", "HOG", "Gene Tree Parent Clade")]
+strainCol_c2_u <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
 
 for (i in 1:length(strainCol_c2_u)) {
   print(paste0(i,"out of", length(strainCol_c2_u)))
@@ -29,14 +36,38 @@ for (i in 1:length(strainCol_c2_u)) {
     dplyr::mutate(!!sym(temp_colname) := stringr::str_count(!!sym(strainCol_c2_u[i]),", ") + 1)
 }
 
-all_relations <- ortho_count %>%
-  dplyr::select(HOG, dplyr::contains("_count"))
+all_relations_pre <- ortho_count %>%
+  dplyr::select(Orthogroup, dplyr::contains("_count"))
+
+
+private_OGs <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups_UnassignedGenes.tsv") %>%
+  dplyr::filter(!grepl("MTCE",c_elegans.PRJNA13758.WS283.csq.PCfeaturesOnly.longest.protein))
+
+colnames(private_OGs) <- strainCol_c2
+
+private_cols <- strainCol_c2[!strainCol_c2 %in% c("Orthogroup")]
+
+private_ortho_count <- private_OGs
+for (i in 1:length(private_cols)) {
+  print(paste0(i, " out of ", length(private_cols)))
+  temp_colname <- paste0(private_cols[i], "_count")
+  
+  private_ortho_count <- private_ortho_count %>%
+    dplyr::mutate(!!sym(temp_colname) := ifelse(is.na(!!sym(private_cols[i])), NA, 1))
+}
+
+all_relations_private <- private_ortho_count %>%
+  dplyr::select(Orthogroup, dplyr::contains("_count"))
+
+all_relations <- all_relations_pre %>%
+  dplyr::bind_rows(all_relations_private)
 
 
 # ======================================================================================================================================================================================== #
 # Splitting complex HOGs from 1-to-1s #
 # ======================================================================================================================================================================================== #
-genes_strain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/116_genesOnly_strainRes.tsv", col_names = c("contig","type", "start", "end", "strand", "attributes", "strain")) 
+genes_strain <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142_140WSs_andCGC1_longestIsoGenes.tsv", col_names = c("contig", "source", "type", "start", "end", "score", "strand", "misc", "attributes", "strain")) %>%
+  dplyr::select(contig,type, start, end, strand, attributes, strain) 
 all_genes_strain <- genes_strain %>%
   dplyr::filter(strain != "N2" | grepl("protein_coding", attributes)) %>% 
   dplyr::mutate(attributes = gsub("ID=gene:","", attributes)) %>%
@@ -45,11 +76,11 @@ all_genes_strain <- genes_strain %>%
 
 ws_genes <- all_genes_strain %>% dplyr::filter(strain != "N2") %>% dplyr::select(-type)
 
-nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/nucmer_runs/115_WI_transformed_coords_FIXED.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
+nucmer <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv", col_names = c("N2S","N2E","WSS","WSE","L1","L2","IDY","LENR","LENQ","N2_chr","contig","strain")) %>%
   dplyr::select(-IDY,-LENR)
 
-all_relations_rowid <- all_relations %>% dplyr::rename(rowid = HOG)
-ortho_genes_dd_rowid <- ortho_genes_dd %>% dplyr::rename(rowid = HOG)
+all_relations_rowid <- all_relations %>% dplyr::rename(rowid = Orthogroup)
+ortho_genes_dd_rowid <- ortho_genes_dd %>% dplyr::rename(rowid = Orthogroup)
 
 # Extract rowids for simple and complex HOGs
 simple_rowids <- all_relations_rowid %>% 
