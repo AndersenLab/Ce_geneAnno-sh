@@ -60,7 +60,7 @@ transformed_coords <- transformed_coords %>% dplyr::filter(STRAIN != "ECA396") %
 ## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
 gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142strain_genemRNAfeatures.tsv", col_names = F)
 colnames(gffCat1) <- c("seqid","source","type","start","end","score","strand","phase","attributes","STRAIN")
-gffCat2 <- ape::read.gff("/vast/eande106/projects/Nicolas/gene_models/c.elegans/N2/wormbase/WS283/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
+gffCat2 <- ape::read.gff("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/misc/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
 gffCat <- rbind(gffCat1 %>% dplyr::filter(STRAIN != "ECA396"), gffCat2) %>% 
   dplyr::filter(STRAIN %in% want)
 
