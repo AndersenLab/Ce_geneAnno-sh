@@ -409,7 +409,7 @@ all_relations_clean <- all_relations %>% dplyr::rename_with(~ gsub("_count", "",
 names_all <- colnames(all_relations_clean %>% dplyr::select(-N2, -Orthogroup))
   
 refgenes = as.data.frame(matrix(ncol = 3, nrow = 141))
-colnames(v) <- c("strain","N2_specific_genes",'N2_specific_Orthogroups')
+colnames(refgenes) <- c("strain","N2_specific_genes",'N2_specific_Orthogroups')
 
 OG_list <- list()
   
