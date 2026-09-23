@@ -52,7 +52,7 @@ want <- c("N2", "JU2526", "NIC2", "CGC1","AB1", "ECA1202", "ECA1208", "ECA1228",
 #read all pairwise genome coordinate comparisons
 # transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/nucmer_runs/115_WI_transformed_coords_FIXED.tsv",col_names = F) # REPLACE
 
-## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
+# Read in genome-genome alignments
 transformed_coords <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/synteny_vis/elegans/nucmer_aln_WSs/142_nucmer_ECA741CGC1.tsv",col_names = F) 
 colnames(transformed_coords) <- c("S1","E1","S2","E2","L1","L2","IDY","LENR","LENQ","REF","HIFI","STRAIN") 
 transformed_coords <- transformed_coords %>% dplyr::filter(STRAIN != "ECA396") %>%
@@ -62,7 +62,7 @@ transformed_coords <- transformed_coords %>% dplyr::filter(STRAIN != "ECA396") %
 # gffCat1 <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/annotation/elegans/braker_runs/merged_gff/all_WI_braker.clean.gff", col_names = F) 
 # gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/raw_data/assemblies/elegans/gff/longest_isoform/ALL_GFFs_longestIso.tsv", col_names = F) # need to replace iwth Updated Octover results
 
-## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
+# Read in gene models
 gffCat1 <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/geneAnno-nf/142strain_genemRNAfeatures.tsv", col_names = F)
 colnames(gffCat1) <- c("seqid","source","type","start","end","score","strand","phase","attributes","STRAIN")
 gffCat2 <- ape::read.gff("/vast/eande106/projects/Lance/THESIS_WORK/gene_annotation/processed_data/misc/N2.WBonly.WS283.PConly.gff3") %>% dplyr::mutate(STRAIN="N2")
@@ -72,7 +72,7 @@ gffCat <- rbind(gffCat1 %>% dplyr::filter(STRAIN != "ECA396"), gffCat2) %>%
 #read ortholog relationships among gene models
 # orthos <- readr::read_tsv("/vast/eande106/projects/Nicolas/WI_PacBio_genomes/orthology/elegans/prot_78/OrthoFinder/Results_Mar20/Orthogroups/Orthogroups.tsv")
 
-## NEED TO UPDATE WITH NEWEST PANGENOME STRAIN SET!!!!
+# Read in orthogroups
 orthos <- readr::read_tsv("/vast/eande106/projects/Lance/THESIS_WORK/assemblies/orthology/elegans/orthofinder/64_core/OrthoFinder/Results_Dec07/Orthogroups/Orthogroups.tsv")
 strainCol <- colnames(orthos)
 ugh <- gsub(".20251012.inbred.blobFiltered.softMasked.braker.longestIso.protein","", strainCol)
