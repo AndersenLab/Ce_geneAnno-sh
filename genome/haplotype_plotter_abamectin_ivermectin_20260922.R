@@ -868,7 +868,7 @@ abam_traits_3 <- traits %>% dplyr::select(strain,  `Abamectin_q90.TOF_ctrl-regre
   dplyr::arrange(desc(abam_q90_TOF)) %>%
   dplyr::mutate(
     extreme = "YES") %>%
-  dplyr::ungroup() 
+  dplyr::ungroup()
 
 # Look at phenotype distribution for strains we have
 ggplot(abam_traits_3 %>% dplyr::mutate(abam_gt = factor(abam_gt, levels = c("REF","ALT")))) +
@@ -1060,15 +1060,20 @@ ggplot(tigTrim) +
 # Coloring by REF and ALT
 gt_key <- abam_traits_3 %>% dplyr::filter(extreme == "YES") %>% dplyr::select(STRAIN = strain, abam_gt)
 
-tigTrim_TEST <- tigTrim %>% dplyr::left_join(gt_key, by = "STRAIN")
+tigTrim_TEST <- tigTrim %>% dplyr::left_join(gt_key, by = "STRAIN") %>%
+  dplyr::mutate(S2_plot = ifelse(inv == T, tigsize - E2, S2),
+                E2_plot = ifelse(inv == T, tigsize - S2, E2),
+                St2_plot = ifelse(inv == T, E2_plot, S2_plot),
+                Et2_plot = ifelse(inv == T, S2_plot, E2_plot))  
+# re-orienting contigs so that they display as non -inverted alignments
 strain_order <- tigTrim_TEST %>% dplyr::arrange(desc(abam_gt)) %>% dplyr::distinct(STRAIN) %>% dplyr::pull(STRAIN)
 
 alns <- ggplot(tigTrim_TEST %>% dplyr::mutate(STRAIN = factor(STRAIN, levels = strain_order))) +
   geom_rect(xmin=hap_start/1e6,xmax=hap_end/1e6,ymin=-Inf,ymax=Inf,fill="lightgrey") +
   geom_vline(xintercept = 16198034 / 1e6, color = 'black', linetype = 'dashed') +
-  geom_segment(aes(x=S1/1e6,xend=E1/1e6,y=S2/1e6,yend=E2/1e6,color=abam_gt), size = 2) +
+  geom_segment(aes(x=S1/1e6,xend=E1/1e6,y=St2_plot/1e6,yend=Et2_plot/1e6,color=abam_gt), size = 2) +
   scale_color_manual(values = c("ALT" = "red", "REF" = 'black')) +
-  facet_wrap(~STRAIN,scales = 'free') +
+  facet_wrap(~STRAIN, scales = 'free') +
   xlab("N2 genome position (Mb)") +
   ylab("Wild strain contig position (Mb)") +
   theme(panel.background = element_blank(),
@@ -1635,6 +1640,96 @@ all_hap_bg <- ggplot() +
   guides(fill = guide_legend(title.position = "top", nrow = 18, byrow = TRUE, override.aes = list(size = 9)))
 all_hap_bg
 
+
+# Adjusting to align all orthologous genes
+alt_strains <- tail(want,17) 
+first_del_ext <- c("str-106", "srh-277", "F11A5.9", "glc-1")
+
+plot_ad_aln <- plot_ad %>% 
+  dplyr::mutate(adjust_gene_pos = ifelse(STRAIN %in% alt_strains[alt_strains != "ECA36" &  alt_strains != "N2"], TRUE, FALSE)) %>%
+  dplyr::mutate(start_adj = ifelse(adjust_gene_pos == TRUE & (alias == "glc-1" | alias == "F11A5.9"), start + 12000, start),
+                end_adj = ifelse(adjust_gene_pos == TRUE & (alias == "glc-1" | alias == "F11A5.9"), end + 12000, end)) %>%
+  dplyr::mutate(start_adj = ifelse(adjust_gene_pos == TRUE & (!alias %in% first_del_ext), start + 4000, start_adj),
+                 end_adj = ifelse(adjust_gene_pos == TRUE & (!alias %in% first_del_ext), end + 4000, end_adj)) %>%
+  dplyr::mutate(start_adj = ifelse(STRAIN == "ECA369" & (alias != "str-106" & alias != "srh-277"), start_adj + 6000, start_adj),
+                end_adj = ifelse(STRAIN == "ECA369" & (alias != "str-106" & alias != "srh-277"), end_adj + 6000, end_adj)) %>%
+  dplyr::select(-start,-end)
+
+hlines_adj <- plot_ad_aln %>% dplyr::select(STRAIN, start_adj, end_adj, y_pos) %>% 
+  dplyr::group_by(STRAIN) %>%
+  dplyr::mutate(start = min(start_adj), 
+                end = max(end_adj)) %>%
+  dplyr::ungroup() %>%
+  dplyr::distinct(STRAIN, start, end, y_pos)
+
+# Update the trapeziums
+trapeziums_adj <- dplyr::inner_join(
+  plot_ad_aln, plot_ad_aln,
+  by = "alias",
+  suffix = c("_upper", "_lower"),
+  relationship = "many-to-many") %>% 
+  dplyr::filter(y_pos_upper - y_pos_lower == 1)
+
+# Create trapezium polygons using min/max for x-coordinates so that start/end orientation is corrected.
+trapezium_polys_adj <- trapeziums_adj %>% 
+  dplyr::rowwise() %>%
+  do({
+    # Calculate corrected x coordinates for the upper rectangle
+    x_left_upper <- min(.$start_adj_upper, .$end_adj_upper)
+    x_right_upper <- max(.$start_adj_upper, .$end_adj_upper)
+    
+    # Calculate corrected x coordinates for the lower rectangle
+    x_left_lower <- min(.$start_adj_lower, .$end_adj_lower)
+    x_right_lower <- max(.$start_adj_lower, .$end_adj_lower)
+    
+    data.frame(
+      alias = .$alias,
+      group = paste(.$alias, .$y_pos_upper, sep = "_"),
+      x = c(x_left_upper, x_right_upper, x_right_lower, x_left_lower),
+      y = c(.$y_pos_upper - 0.2,  # bottom edge of the upper rectangle
+            .$y_pos_upper - 0.2,
+            .$y_pos_lower + 0.2,  # top edge of the lower rectangle
+            .$y_pos_lower + 0.2)
+    )
+  }) %>%
+  dplyr::ungroup()
+
+# Also update any other data frames with alias info, e.g. trapezium_polys:
+trapezium_polys_adj <- trapezium_polys_adj %>%
+  dplyr::mutate(alias = factor(alias, levels = ordered_aliases))
+
+# Create the final aligned plot!
+all_hap_bg_aln <- ggplot() +
+  geom_segment(data = hlines_adj,
+               aes(x = start, xend = end, y = y_pos, yend = y_pos)) +
+  geom_polygon(data = trapezium_polys_adj,
+               aes(x = x, y = y, group = group, fill = alias)) +
+  geom_rect(data = plot_ad_aln %>% dplyr::mutate(alias=ifelse(is.na(alias),"Unknown gene",as.character(alias))),
+            aes(xmin = start_adj, xmax = end_adj, ymin = y_pos + 0.2, ymax = y_pos - 0.2, fill = alias),color = "black") +
+  annotate("rect", xmin = -1000, xmax = -100, ymin = 0.7, ymax = 16.3, fill = 'red') +
+  annotate("rect", xmin = -1000, xmax = -100, ymin = 16.7, ymax = 50.3, fill = 'black') +
+  scale_y_continuous(expand = c(0.01, 0), breaks = hlines$y_pos, labels = hlines$STRAIN) +
+  annotate("text", x = 14180, y = 49.8, label = "*", size = 12, color = "black") +
+  scale_x_continuous(expand = c(0.01, 0),labels = function(x) x / 1000) +
+  scale_fill_manual(values = final_colors, breaks = names(final_colors)) +
+  scale_color_identity()  +
+  labs(fill="Reference\ngene")+
+  xlab("Physical distance (kb)") +
+  theme(
+    panel.background = element_blank(),
+    axis.title = element_blank(),
+    axis.text= element_text(size = 12, color = 'black'), 
+    axis.ticks.y = element_blank(),
+    axis.line.x = element_line(),
+    axis.title.x = element_text(color = 'black', size  = 14),
+    # legend.position = 'none',
+    legend.position = "right",
+    legend.direction = "horizontal",
+    legend.key.size = unit(0.4, "lines"),
+    legend.text = element_text(size = 16),
+    legend.title = element_text(size = 16)) +
+  guides(fill = guide_legend(title.position = "top", nrow = 18, byrow = TRUE, override.aes = list(size = 9)))
+all_hap_bg_aln
 
 
 
