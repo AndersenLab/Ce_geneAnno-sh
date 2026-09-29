@@ -1657,8 +1657,8 @@ plot_ad_aln <- plot_ad %>%
 
 hlines_adj <- plot_ad_aln %>% dplyr::select(STRAIN, start_adj, end_adj, y_pos) %>% 
   dplyr::group_by(STRAIN) %>%
-  dplyr::mutate(start = min(start_adj), 
-                end = max(end_adj)) %>%
+  dplyr::mutate(start = min(start_adj, na.rm = TRUE), 
+                end = max(end_adj, na.rm = TRUE)) %>%
   dplyr::ungroup() %>%
   dplyr::distinct(STRAIN, start, end, y_pos)
 
